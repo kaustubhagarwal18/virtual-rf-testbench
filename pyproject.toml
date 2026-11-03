@@ -1,0 +1,84 @@
+[project]
+name = "virtual-rf-testbench"
+version = "0.1.0"
+description = "Automated RF test bench against simulated SCPI instruments, with failure triage"
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Kaustubh Agarwal" }]
+requires-python = ">=3.13,<3.14"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["simulators", "drivers"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = [
+    "E", "W",  # pycodestyle
+    "F",       # pyflakes
+    "I",       # import order
+    "B",       # bugbear
+    "UP",      # pyupgrade
+    "SIM",     # simplify
+    "C90",     # complexity
+    "D",       # docstrings
+    "N",       # naming
+    "PL",      # pylint rules
+    "RUF",     # ruff-specific
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+files = ["simulators", "drivers", "tests"]
+
+[tool.pylint.main]
+py-version = "3.13"
+jobs = 0
+
+[tool.pylint.format]
+max-line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--strict-markers", "--cov", "--cov-report=term-missing"]
+markers = [
+    "smoke: fast checks that the bench is alive",
+    "regression: the full measurement suite",
+    "negative: bad commands and error handling",
+]
+
+[tool.coverage.run]
+source = ["simulators", "drivers"]
+branch = true
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv"]
+
+[tool.codespell]
+skip = "uv.lock,.venv,.git"
+
+[dependency-groups]
+dev = [
+    "bandit[toml]>=1.9.4",
+    "codespell>=2.4.3",
+    "mypy>=2.4.1",
+    "pre-commit>=4.7.0",
+    "pylint>=4.1.3",
+    "pytest>=9.2.0",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.17.3",
+]

@@ -53,6 +53,28 @@ Early development. The first milestone is the simulated instruments, their Pytho
 and the first bench tests, running on Docker Compose. Setup instructions will be added here as
 each part starts working.
 
+## Development
+
+You need [uv](https://docs.astral.sh/uv/) and `make`. uv installs Python 3.13 for the project,
+so it doesn't matter which Python your system has.
+
+```
+make setup
+make lint
+make test
+```
+
+| Command | What it does |
+|---|---|
+| `make setup` | Installs Python 3.13 and the dependencies, and installs the pre-commit hooks |
+| `make lint` | Runs ruff, mypy (strict), pylint, bandit and codespell |
+| `make fmt` | Formats the code and applies safe lint fixes |
+| `make test` | Runs the tests and fails if coverage is below 80% |
+| `make clean` | Removes the virtual environment and tool caches |
+
+The pre-commit hooks run `make lint` before every commit, so the same checks run locally and
+in CI.
+
 ## License
 
 [MIT](LICENSE)
