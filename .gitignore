@@ -1,0 +1,43 @@
+# Secrets
+.env
+.env.*
+!.env.example
+secrets/
+
+# Python build and tool output
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Bench run output
+results/
+reports/
+
+# Terraform and cluster state
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+kubeconfig
+*.kubeconfig
+
+# Model weights
+models/
+*.gguf
+*.safetensors
+*.bin
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/
