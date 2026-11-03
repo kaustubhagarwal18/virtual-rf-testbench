@@ -74,5 +74,7 @@ jobs:
             "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${archive}"
           echo "${GITLEAKS_SHA256}  ${archive}" | sha256sum --check --strict
           tar -xzf "$archive" gitleaks
-      - name: Scan the full git history for secrets
-        run: ./gitleaks git --redact --verbose .
+      - name: Scan the full git history for secrets, including merge commits
+        run: >-
+          ./gitleaks git --redact --verbose
+          --log-opts="--full-history --all --diff-filter=tuxdb --diff-merges=first-parent" .

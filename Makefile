@@ -19,13 +19,14 @@ lint:
 	uv run mbake format --check Makefile
 
 fmt:
-	uv run ruff format .
 	uv run ruff check --fix-only .
+	uv run ruff format .
 	uv run mbake format Makefile
 
 test:
 	uv run pytest --cov-fail-under=80
 
 clean:
+	-uv run --no-sync pre-commit uninstall
 	rm -rf .venv .pytest_cache .mypy_cache .ruff_cache .coverage coverage.xml htmlcov
 	find . -name __pycache__ -type d -prune -exec rm -rf {} +

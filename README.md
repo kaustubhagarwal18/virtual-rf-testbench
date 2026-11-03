@@ -71,7 +71,7 @@ make test
 | `make lint` | Runs ruff, mypy (strict), pylint, pydoclint (docstring Args, Returns and Raises), bandit and codespell, and checks the Makefile's syntax and formatting with mbake |
 | `make fmt` | Formats the code and the Makefile, and applies safe lint fixes |
 | `make test` | Runs the tests and fails if coverage is below 80% |
-| `make clean` | Removes the virtual environment and tool caches |
+| `make clean` | Removes the virtual environment, the tool caches and the pre-commit hook; `make setup` restores them |
 
 The pre-commit hooks run `make lint` before every commit, so the same checks run locally and
 in CI.
@@ -84,7 +84,7 @@ GitHub Actions runs on every pull request and on every push to `main`:
 |---|---|
 | Lint | Every pre-commit hook on all files: trailing whitespace, final newlines, YAML and TOML syntax, large files, merge conflict markers, then `make lint` |
 | Test (Python 3.13) | `make test`, including the 80% coverage floor |
-| Secret scan | gitleaks 8.30.1 over the full git history; the download is checksum-verified |
+| Secret scan | gitleaks 8.30.1 over the full git history, including merge commits; the download is checksum-verified |
 
 Actions are pinned to commit SHAs, and dependencies install from `uv.lock` exactly
 (`uv sync --locked`).

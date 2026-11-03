@@ -13,7 +13,7 @@ LEVEL_UNITS: Mapping[str, float] = {"DBM": 1.0}
 """Level units and their multipliers to dBm."""
 
 _NUMBER_WITH_UNIT = re.compile(
-    r"\s*(?P<number>[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)\s*(?P<unit>[A-Za-z]+)?\s*"
+    r"\s*(?P<number>[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)\s*(?P<unit>[A-Za-z]+)?\s*"
 )
 
 

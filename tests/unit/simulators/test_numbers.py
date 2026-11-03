@@ -1,5 +1,7 @@
 """Tests for reading SCPI numbers with units."""
 
+import time
+
 import pytest
 
 from simulators.common.errors import ScpiCommandError, ScpiErrorCode
@@ -48,3 +50,13 @@ def test_values_too_large_for_a_float_are_out_of_range(text: str) -> None:
     with pytest.raises(ScpiCommandError) as raised:
         parse_number(text, FREQUENCY_UNITS)
     assert raised.value.error.code == ScpiErrorCode.DATA_OUT_OF_RANGE
+
+
+def test_long_malformed_input_is_rejected_quickly() -> None:
+    """A long malformed parameter fails fast, so it can't freeze the instrument."""
+    time_limit_s = 0.5
+    started = time.perf_counter()
+    with pytest.raises(ScpiCommandError) as raised:
+        parse_number("1" * 10_000 + "!", FREQUENCY_UNITS)
+    assert raised.value.error.code == ScpiErrorCode.DATA_TYPE_ERROR
+    assert time.perf_counter() - started < time_limit_s
