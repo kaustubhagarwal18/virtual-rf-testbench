@@ -15,10 +15,13 @@ lint:
 	uv run pydoclint $(PACKAGES)
 	uv run bandit -q -c pyproject.toml -r $(PACKAGES)
 	uv run codespell
+	uv run mbake validate Makefile
+	uv run mbake format --check Makefile
 
 fmt:
 	uv run ruff format .
 	uv run ruff check --fix-only .
+	uv run mbake format Makefile
 
 test:
 	uv run pytest --cov-fail-under=80

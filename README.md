@@ -3,6 +3,7 @@
 An automated RF test bench that runs regression tests against simulated instruments, plus an
 assistant that says whether a failure came from the firmware, the bench or the test.
 
+[![CI](https://github.com/kaustubhagarwal18/virtual-rf-testbench/actions/workflows/ci.yml/badge.svg)](https://github.com/kaustubhagarwal18/virtual-rf-testbench/actions/workflows/ci.yml)
 ![Python 3.13](https://img.shields.io/badge/python-3.13-blue)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 ![Status: early development](https://img.shields.io/badge/status-early%20development-orange)
@@ -67,13 +68,26 @@ make test
 | Command | What it does |
 |---|---|
 | `make setup` | Installs Python 3.13 and the dependencies, and installs the pre-commit hooks |
-| `make lint` | Runs ruff, mypy (strict), pylint, pydoclint (docstring Args, Returns and Raises), bandit and codespell |
-| `make fmt` | Formats the code and applies safe lint fixes |
+| `make lint` | Runs ruff, mypy (strict), pylint, pydoclint (docstring Args, Returns and Raises), bandit and codespell, and checks the Makefile's syntax and formatting with mbake |
+| `make fmt` | Formats the code and the Makefile, and applies safe lint fixes |
 | `make test` | Runs the tests and fails if coverage is below 80% |
 | `make clean` | Removes the virtual environment and tool caches |
 
 The pre-commit hooks run `make lint` before every commit, so the same checks run locally and
 in CI.
+
+### Continuous integration
+
+GitHub Actions runs on every pull request and on every push to `main`:
+
+| Job | What it checks |
+|---|---|
+| Lint | Every pre-commit hook on all files: trailing whitespace, final newlines, YAML and TOML syntax, large files, merge conflict markers, then `make lint` |
+| Test (Python 3.13) | `make test`, including the 80% coverage floor |
+| Secret scan | gitleaks 8.30.1 over the full git history; the download is checksum-verified |
+
+Actions are pinned to commit SHAs, and dependencies install from `uv.lock` exactly
+(`uv sync --locked`).
 
 ## License
 
