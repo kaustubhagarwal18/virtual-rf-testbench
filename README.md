@@ -67,7 +67,7 @@ make test
 | Command | What it does |
 |---|---|
 | `make setup` | Installs Python 3.13 and the dependencies, and installs the pre-commit hooks |
-| `make lint` | Runs ruff, mypy (strict), pylint, bandit and codespell |
+| `make lint` | Runs ruff, mypy (strict), pylint, pydoclint (docstring Args, Returns and Raises), bandit and codespell |
 | `make fmt` | Formats the code and applies safe lint fixes |
 | `make test` | Runs the tests and fails if coverage is below 80% |
 | `make clean` | Removes the virtual environment and tool caches |

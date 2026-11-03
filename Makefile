@@ -12,6 +12,7 @@ lint:
 	uv run ruff format --check .
 	uv run mypy
 	uv run pylint $(PYTHON_PATHS)
+	uv run pydoclint $(PACKAGES)
 	uv run bandit -q -c pyproject.toml -r $(PACKAGES)
 	uv run codespell
 
