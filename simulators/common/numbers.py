@@ -57,3 +57,25 @@ def format_number(value: float) -> str:
         The value with up to 12 significant digits, for example '1000000000' or '-10.5'.
     """
     return f"{value:.12g}"
+
+
+def check_range(value: float, valid_range: tuple[float, float], unit: str) -> float:
+    """Return the value if it lies within an instrument's range.
+
+    Args:
+        value: The requested value.
+        valid_range: The lowest and highest value the instrument accepts.
+        unit: The value's unit, for the error detail.
+
+    Returns:
+        The value, unchanged.
+
+    Raises:
+        ScpiCommandError: -222 if the value is outside the range.
+    """
+    low, high = valid_range
+    if not low <= value <= high:
+        raise ScpiCommandError(
+            ScpiError(ScpiErrorCode.DATA_OUT_OF_RANGE, f"{format_number(value)} {unit}")
+        )
+    return value

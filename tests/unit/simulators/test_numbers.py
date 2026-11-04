@@ -5,7 +5,13 @@ import time
 import pytest
 
 from simulators.common.errors import ScpiCommandError, ScpiErrorCode
-from simulators.common.numbers import FREQUENCY_UNITS, LEVEL_UNITS, format_number, parse_number
+from simulators.common.numbers import (
+    FREQUENCY_UNITS,
+    LEVEL_UNITS,
+    check_range,
+    format_number,
+    parse_number,
+)
 
 
 @pytest.mark.parametrize(
@@ -87,3 +93,16 @@ def test_long_malformed_input_is_rejected_quickly(text: str) -> None:
 def test_numbers_format_without_needless_digits(value: float, expected: str) -> None:
     """Replies are plain numbers: no trailing zeros, no exponent for bench values."""
     assert format_number(value) == expected
+
+
+def test_check_range_passes_values_inside_the_range() -> None:
+    """A value at or between the limits comes back unchanged."""
+    lowest_hz = 9e3
+    assert check_range(lowest_hz, (lowest_hz, 6e9), "Hz") == lowest_hz
+
+
+def test_check_range_rejects_values_outside_with_their_unit() -> None:
+    """A value outside the limits is -222, with the value and unit as detail."""
+    with pytest.raises(ScpiCommandError) as raised:
+        check_range(8e3, (9e3, 6e9), "Hz")
+    assert raised.value.error.format() == '-222,"Data out of range;8000 Hz"'

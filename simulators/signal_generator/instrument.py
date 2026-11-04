@@ -2,9 +2,14 @@
 
 from dataclasses import replace
 
-from simulators.common.errors import ScpiCommandError, ScpiError, ScpiErrorCode
 from simulators.common.instrument import Identity, ScpiInstrument
-from simulators.common.numbers import FREQUENCY_UNITS, LEVEL_UNITS, format_number, parse_number
+from simulators.common.numbers import (
+    FREQUENCY_UNITS,
+    LEVEL_UNITS,
+    check_range,
+    format_number,
+    parse_number,
+)
 from simulators.common.parser import expect_no_parameters, expect_one_parameter, parse_boolean
 from simulators.common.physics import SourceState
 
@@ -14,28 +19,6 @@ FREQUENCY_RANGE_HZ = (9e3, 6e9)
 LEVEL_RANGE_DBM = (-120.0, 20.0)
 DEFAULT_STATE = SourceState(frequency_hz=1e9, level_dbm=-30.0, output_on=False)
 """The settings at power-on and after *RST: 1 GHz, -30 dBm, RF off."""
-
-
-def _check_range(value: float, valid_range: tuple[float, float], unit: str) -> float:
-    """Return the value if it lies within the instrument's range.
-
-    Args:
-        value: The requested value.
-        valid_range: The lowest and highest value the instrument accepts.
-        unit: The value's unit, for the error detail.
-
-    Returns:
-        The value, unchanged.
-
-    Raises:
-        ScpiCommandError: -222 if the value is outside the range.
-    """
-    low, high = valid_range
-    if not low <= value <= high:
-        raise ScpiCommandError(
-            ScpiError(ScpiErrorCode.DATA_OUT_OF_RANGE, f"{format_number(value)} {unit}")
-        )
-    return value
 
 
 class SignalGeneratorScpi(ScpiInstrument):
@@ -79,7 +62,7 @@ class SignalGeneratorScpi(ScpiInstrument):
             parameters: One frequency, with or without a unit.
         """
         frequency_hz = parse_number(expect_one_parameter(parameters), FREQUENCY_UNITS)
-        _check_range(frequency_hz, FREQUENCY_RANGE_HZ, "Hz")
+        check_range(frequency_hz, FREQUENCY_RANGE_HZ, "Hz")
         self._state = replace(self._state, frequency_hz=frequency_hz)
 
     def _query_frequency(self, parameters: tuple[str, ...]) -> str:
@@ -101,7 +84,7 @@ class SignalGeneratorScpi(ScpiInstrument):
             parameters: One level, in dBm.
         """
         level_dbm = parse_number(expect_one_parameter(parameters), LEVEL_UNITS)
-        _check_range(level_dbm, LEVEL_RANGE_DBM, "dBm")
+        check_range(level_dbm, LEVEL_RANGE_DBM, "dBm")
         self._state = replace(self._state, level_dbm=level_dbm)
 
     def _query_level(self, parameters: tuple[str, ...]) -> str:

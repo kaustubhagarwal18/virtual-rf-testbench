@@ -1,20 +1,16 @@
 """The signal generator started as its own process, the way Docker will run it."""
 
 import asyncio
-import json
-import os
 import socket
-import subprocess
-import sys
 from collections.abc import Iterator
 from importlib.metadata import PackageNotFoundError
 
 import pytest
 
-from simulators.signal_generator import app
+from simulators.common import app as common_app
 from simulators.signal_generator.app import Settings, parse_settings, start
+from tests.integration.processes import ask, simulator_process
 
-STARTUP_TIMEOUT_S = 10.0
 ANY_ADDRESS = "0.0.0.0"
 """The address a container listens on; here it is only parsed, never bound."""
 
@@ -22,35 +18,18 @@ ANY_ADDRESS = "0.0.0.0"
 @pytest.fixture(name="listening")
 def fixture_listening() -> Iterator[dict[str, object]]:
     """Start the generator on free ports and return its 'listening' log entry."""
-    environment = {**os.environ, "SIMULATOR_FIRMWARE_VERSION": "4.5.6"}
-    command = [sys.executable, "-m", "simulators.signal_generator"]
-    with subprocess.Popen(
-        [*command, "--scpi-port", "0", "--admin-port", "0"],
-        stderr=subprocess.PIPE,
-        text=True,
-        env=environment,
-    ) as process:
-        try:
-            assert process.stderr is not None
-            entry: dict[str, object] = {}
-            for line in process.stderr:
-                entry = json.loads(line)
-                if entry["message"] == "Signal generator listening":
-                    break
-            yield entry
-        finally:
-            process.terminate()
-            process.wait(STARTUP_TIMEOUT_S)
+    with simulator_process(
+        "simulators.signal_generator",
+        ["--scpi-port", "0", "--admin-port", "0"],
+        firmware_version="4.5.6",
+        ready_message="Signal generator listening",
+    ) as entry:
+        yield entry
 
 
 def test_process_logs_json_and_answers_on_its_port(listening: dict[str, object]) -> None:
     """The process logs where it listens, as JSON, and answers *IDN? with the configured version."""
-    port = listening["scpi_port"]
-    assert isinstance(port, int)
-    with socket.create_connection(("127.0.0.1", port), timeout=STARTUP_TIMEOUT_S) as connection:
-        connection.sendall(b"*IDN?\n")
-        reply = connection.makefile("r").readline().strip()
-    assert reply == "VirtualRF,SG-1,100001,4.5.6"
+    assert ask(listening["scpi_port"], "*IDN?") == "VirtualRF,SG-1,100001,4.5.6"
 
 
 def test_settings_default_to_local_ports_and_package_version() -> None:
@@ -89,7 +68,13 @@ def test_busy_admin_port_releases_the_scpi_port() -> None:
     with socket.socket() as blocker:
         blocker.bind(("127.0.0.1", 0))
         blocker.listen()
-        settings = Settings("127.0.0.1", scpi_port, blocker.getsockname()[1], "1.0.0", "100001")
+        settings = Settings(
+            host="127.0.0.1",
+            scpi_port=scpi_port,
+            firmware_version="1.0.0",
+            serial_number="100001",
+            admin_port=blocker.getsockname()[1],
+        )
         with pytest.raises(OSError):
             asyncio.run(start(settings))
     with socket.socket() as probe:
@@ -105,7 +90,7 @@ def test_missing_version_is_one_clear_line(
         """Behave as if the project isn't installed."""
         raise PackageNotFoundError("virtual-rf-testbench")
 
-    monkeypatch.setattr(app, "version", not_installed)
+    monkeypatch.setattr(common_app, "version", not_installed)
     with pytest.raises(SystemExit) as raised:
         parse_settings([], environ={})
     usage_error_exit_code = 2

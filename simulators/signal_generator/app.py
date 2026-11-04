@@ -5,38 +5,32 @@ import asyncio
 import logging
 import os
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
-from importlib.metadata import PackageNotFoundError, version
+from dataclasses import asdict, dataclass
 
 from simulators.common.admin import serve_admin
+from simulators.common.app import (
+    SimulatorSettings,
+    add_common_arguments,
+    parse_common_settings,
+    serve_until_stopped,
+)
 from simulators.common.logs import configure_logging
 from simulators.common.server import bound_port, serve_lines
 from simulators.signal_generator.admin import generator_admin_commands
 from simulators.signal_generator.instrument import SignalGeneratorScpi
 
-FIRMWARE_VERSION_VARIABLE = "SIMULATOR_FIRMWARE_VERSION"
-"""Environment variable that sets the reported firmware version, set when an image is built."""
-
 _LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
-class Settings:
-    """How the generator runs.
+class Settings(SimulatorSettings):
+    """How the generator runs: the common settings plus its admin port.
 
     Attributes:
-        host: The address both servers listen on.
-        scpi_port: The SCPI port; 0 picks a free port.
         admin_port: The admin port; 0 picks a free port.
-        firmware_version: The release reported by *IDN?.
-        serial_number: The serial number reported by *IDN?.
     """
 
-    host: str
-    scpi_port: int
     admin_port: int
-    firmware_version: str
-    serial_number: str
 
 
 def parse_settings(
@@ -57,27 +51,13 @@ def parse_settings(
         prog="python -m simulators.signal_generator",
         description="Simulated VirtualRF SG-1 signal generator",
     )
-    parser.add_argument("--host", default="127.0.0.1", help="address to listen on")
-    parser.add_argument("--scpi-port", type=int, default=5025, help="SCPI port (0 = any free)")
+    add_common_arguments(parser, default_serial="100001")
     parser.add_argument("--admin-port", type=int, default=5125, help="admin port (0 = any free)")
-    parser.add_argument("--serial", default="100001", help="serial number reported by *IDN?")
     parsed = parser.parse_args(arguments)
-    environment = os.environ if environ is None else environ
-    firmware_version = environment.get(FIRMWARE_VERSION_VARIABLE)
-    if not firmware_version:
-        try:
-            firmware_version = version("virtual-rf-testbench")
-        except PackageNotFoundError:
-            parser.error(
-                f"can't tell the firmware version: set {FIRMWARE_VERSION_VARIABLE}, "
-                "or install the project with make setup"
-            )
+    common = parse_common_settings(parser, parsed, os.environ if environ is None else environ)
     return Settings(
-        host=parsed.host,
-        scpi_port=parsed.scpi_port,
+        **asdict(common),
         admin_port=parsed.admin_port,
-        firmware_version=firmware_version,
-        serial_number=parsed.serial,
     )
 
 
@@ -122,9 +102,7 @@ async def serve_forever(settings: Settings) -> None:
     Args:
         settings: How to run.
     """
-    scpi, admin = await start(settings)
-    async with scpi, admin:
-        await asyncio.gather(scpi.serve_forever(), admin.serve_forever())
+    await serve_until_stopped(*await start(settings))
 
 
 def main(arguments: Sequence[str] | None = None) -> None:
