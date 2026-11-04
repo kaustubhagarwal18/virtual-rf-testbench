@@ -110,7 +110,13 @@ def parse_common_settings(
 
 
 async def start_scpi_and_admin(
-    handler: LineHandler, commands: AdminCommands, host: str, scpi_port: int, admin_port: int
+    handler: LineHandler,
+    commands: AdminCommands,
+    host: str,
+    scpi_port: int,
+    admin_port: int,
+    *,
+    scpi_delay_s: Callable[[], float] | None = None,
 ) -> tuple[asyncio.Server, asyncio.Server]:
     """Start an instrument's SCPI and admin servers, sharing one lock so they never interleave.
 
@@ -120,6 +126,8 @@ async def start_scpi_and_admin(
         host: The address to listen on.
         scpi_port: The SCPI port; 0 picks a free port.
         admin_port: The admin port; 0 picks a free port.
+        scpi_delay_s: Asked before each SCPI line, for a delay that doesn't hold the lock;
+            None means no delay.
 
     Returns:
         The SCPI server and the admin server, both listening.
@@ -129,7 +137,7 @@ async def start_scpi_and_admin(
             busy admin port doesn't leave the SCPI port taken.
     """
     lock = asyncio.Lock()
-    scpi = await serve_lines(handler, host, scpi_port, name="scpi", lock=lock)
+    scpi = await serve_lines(handler, host, scpi_port, name="scpi", lock=lock, delay_s=scpi_delay_s)
     try:
         admin = await serve_admin(commands, host, admin_port, lock=lock)
     except OSError:

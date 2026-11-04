@@ -14,8 +14,7 @@ level only: a real bench doesn't announce its faults, and the logs are triage ev
 
 import logging
 import math
-import time
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from simulators.common.admin import (
@@ -51,7 +50,8 @@ EXTRA_CABLE_LOSS = FaultDefinition("EXTRA_CABLE_LOSS_DB", "dB", (0.0, 40.0))
 """Loss added to the cable between generator and analyzer, as from a damaged cable."""
 
 SLOW_RESPONSES = FaultDefinition("SLOW_RESPONSE_S", "s", (0.0, 30.0))
-"""A delay before each SCPI line is handled, as from an overloaded instrument."""
+"""A delay before each SCPI line is handled, as from an overloaded instrument. The server
+waits before taking the instrument's lock, so the admin port stays responsive."""
 
 
 class FaultSwitches:
@@ -187,39 +187,3 @@ def _parse_value(definition: FaultDefinition, text: str) -> float:
             f"{definition.name} must be from {low:g} to {high:g} {definition.unit}, got {text}"
         )
     return value
-
-
-class SlowResponses:
-    """Wraps an SCPI line handler, waiting before each line while SLOW_RESPONSE_S is on."""
-
-    def __init__(
-        self,
-        handler: Callable[[str], list[str]],
-        switches: FaultSwitches,
-        sleep: Callable[[float], object] = time.sleep,
-    ) -> None:
-        """Wrap a handler.
-
-        Args:
-            handler: The instrument's line handler.
-            switches: The simulator's fault switches.
-            sleep: How to wait; tests pass a recorder. The server runs handlers in a worker
-                thread, so waiting never blocks the event loop.
-        """
-        self._handler = handler
-        self._switches = switches
-        self._sleep = sleep
-
-    def __call__(self, line: str) -> list[str]:
-        """Handle one line, after the fault's delay if it is on.
-
-        Args:
-            line: The received line.
-
-        Returns:
-            The handler's replies.
-        """
-        delay_s = self._switches.value(SLOW_RESPONSES.name)
-        if delay_s:
-            self._sleep(delay_s)
-        return self._handler(line)

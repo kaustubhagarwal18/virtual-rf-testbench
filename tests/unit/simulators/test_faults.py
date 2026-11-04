@@ -9,7 +9,6 @@ from simulators.common.faults import (
     EXTRA_CABLE_LOSS,
     SLOW_RESPONSES,
     FaultSwitches,
-    SlowResponses,
 )
 from simulators.common.physics import SourceState
 from simulators.spectrum_analyzer.link import CableWithFaults
@@ -112,21 +111,3 @@ def test_cable_loss_lowers_the_level_the_analyzer_receives() -> None:
     assert cable.source_state() == TONE
     commands.handle("FAULT EXTRA_CABLE_LOSS_DB 1.25")
     assert cable.source_state() == SourceState(1e9, -11.25, output_on=True)
-
-
-def test_slow_responses_wait_before_handling_each_line() -> None:
-    """With slow responses on, each line waits that long before it is handled."""
-    switches, commands = switches_with_commands()
-    waits: list[float] = []
-    handled: list[str] = []
-
-    def handler(line: str) -> list[str]:
-        """Record the line and answer it."""
-        handled.append(line)
-        return ["ok"]
-
-    slow = SlowResponses(handler, switches, sleep=waits.append)
-    assert slow("*IDN?") == ["ok"]
-    commands.handle("FAULT SLOW_RESPONSE_S 2.5")
-    assert slow("*OPC?") == ["ok"]
-    assert (waits, handled) == ([2.5], ["*IDN?", "*OPC?"])

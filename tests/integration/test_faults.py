@@ -1,6 +1,8 @@
 """Faults switched on the admin ports change what the drivers see, as on a faulty bench."""
 
 import json
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
@@ -60,3 +62,17 @@ def test_each_simulator_offers_only_its_own_faults(running_bench: RunningBench) 
     analyzer_faults = admin(running_bench.analyzer.admin_port, "FAULTS?")
     assert generator_faults == {"active": {}, "available": ["SLOW_RESPONSE_S"]}
     assert analyzer_faults == {"active": {}, "available": ["EXTRA_CABLE_LOSS_DB"]}
+
+
+def test_the_admin_port_answers_while_a_slow_scpi_line_waits(running_bench: RunningBench) -> None:
+    """Slow responses delay SCPI only: CLEAR answers at once, even while a query is waiting."""
+    admin(running_bench.generator.admin_port, f"FAULT SLOW_RESPONSE_S {SLOW_RESPONSE_S}")
+    with ThreadPoolExecutor(1) as pool:
+        waiting = pool.submit(ask, running_bench.generator.scpi_port, "*IDN?")
+        time.sleep(SLOW_RESPONSE_S / 4)
+        started_s = time.monotonic()
+        assert admin(running_bench.generator.admin_port, "CLEAR") == {
+            "cleared": ["SLOW_RESPONSE_S"]
+        }
+        assert time.monotonic() - started_s < SLOW_RESPONSE_S / 2
+        assert waiting.result().startswith("VirtualRF,SG-1")

@@ -17,7 +17,9 @@ give the answer away in the evidence.
   and cleared with `CLEAR`. Each simulator offers only the faults that belong to it:
   - the analyzer: `EXTRA_CABLE_LOSS_DB`, applied to the cable between the instruments, so
     the level arrives lower;
-  - the generator: `SLOW_RESPONSE_S`, a delay before each SCPI line is handled.
+  - the generator: `SLOW_RESPONSE_S`, a delay before each SCPI line is handled. The line
+    server waits *before* taking the instrument's lock, so a delayed SCPI line never blocks
+    the admin port: `CLEAR` still answers at once, and the analyzer can still read `STATE?`.
 
   The analyzer gets its own admin port for this (5126, so both simulators can run on one
   machine).
