@@ -158,9 +158,15 @@ firmware. That is the evidence the triage assistant will cite. A NaN or infinite
 always fails, and its value and margin are recorded as `"NaN"`, `"Infinity"` or
 `"-Infinity"`, so the JUnit properties stay standard JSON.
 
-`tools/results_summary.py` reads the JUnit XML, and the coverage XML when there is one, and
-prints the Markdown table CI shows: tests per suite, failures with their messages, coverage
-against the floor, and the slowest tests.
+`tools/results_summary.py` reads one or more JUnit XML files, and the coverage XML when there
+is one, and prints the Markdown table CI shows: tests per suite, failures with their messages,
+coverage against the floor, and the slowest tests. A results file that should exist but
+doesn't is named, so a job that died early can't pass for a short, clean run.
+
+On pull requests, CI's last job turns the same results into a comment with
+`tools/pr_comment.py`: the unit, integration and bench results together, plus each CI job's
+result and a link to the run. The comment starts with a hidden marker, so each push updates
+the same comment instead of adding another.
 
 ## Three test suites
 
@@ -198,7 +204,7 @@ localhost only.
 | A driver method | `drivers/signal_generator.py`, `drivers/spectrum_analyzer.py`, `drivers/base.py` |
 | How sessions connect, and how errors are raised | `drivers/session.py` |
 | Limits, margins and JUnit properties | `measurements/record.py`, `measurements/junit.py` |
-| The CI results table | `tools/results_summary.py` |
+| The CI results table and the pull request comment | `tools/results_summary.py`, `tools/pr_comment.py` |
 | A bench check or its limit | `tests/utilities/bench_checks.py` |
 | The bench suite and its addresses | `tests/bench/` |
 | The image, Compose and healthcheck | `Dockerfile`, `compose.yaml`, `simulators/healthcheck.py` |

@@ -1,6 +1,7 @@
 """Turn pytest's JUnit XML and coverage XML into the Markdown summary CI shows on each run.
 
 Run it with: python -m tools.results_summary reports/junit.xml --coverage reports/coverage.xml
+Several JUnit files can be given; their results are combined, and any missing file is named.
 """
 
 import argparse
@@ -183,7 +184,10 @@ def read_coverage_percent(path: Path) -> float | None:
 
 
 def render(
-    results: Sequence[TestResult], coverage_percent: float | None, coverage_floor_percent: float
+    results: Sequence[TestResult],
+    coverage_percent: float | None,
+    coverage_floor_percent: float,
+    missing: Sequence[Path] = (),
 ) -> str:
     """Write the Markdown summary.
 
@@ -191,17 +195,24 @@ def render(
         results: The test results.
         coverage_percent: Total coverage, or None if it wasn't measured.
         coverage_floor_percent: The coverage the build requires.
+        missing: Results files that should exist but don't, for example because the step
+            that writes them failed first.
 
     Returns:
-        A headline, a table per suite, coverage, failures if any, and the slowest tests.
+        A headline, any missing results files, a table per suite, coverage, failures if any,
+        and the slowest tests.
     """
     if not results:
+        if missing:
+            return f"## Test results: pytest didn't write {_joined_paths(missing)}\n"
         return "## Test results: no tests ran\n"
     totals = totals_by_suite(results)
     overall = SuiteTotals()
     for result in results:
         overall.add(result)
     lines = [f"## Test results: {_headline(overall)}", ""]
+    if missing:
+        lines += [f"No results from {_joined_paths(missing)}: pytest didn't write them.", ""]
     lines += ["| Suite | Run | Passed | Failed | Skipped | Time |", "|---|--:|--:|--:|--:|--:|"]
     lines += [_row(suite, suite_totals) for suite, suite_totals in totals.items()]
     lines += [
@@ -212,6 +223,50 @@ def render(
     lines += _failure_lines(results)
     lines += _slowest_lines(results)
     return "\n".join(lines) + "\n"
+
+
+def _joined_paths(paths: Sequence[Path]) -> str:
+    """Name files in Markdown, as code.
+
+    Args:
+        paths: The files.
+
+    Returns:
+        For example '`a.xml`, `b.xml`'.
+    """
+    return ", ".join(f"`{path}`" for path in paths)
+
+
+def summarise_files(
+    junit_paths: Sequence[Path], coverage_path: Path | None, coverage_floor_percent: float
+) -> str:
+    """Summarise one or more JUnit XML files, and optionally a coverage XML file.
+
+    Args:
+        junit_paths: The JUnit XML files; their results are combined, and missing ones are
+            named in the summary.
+        coverage_path: The coverage XML file, or None.
+        coverage_floor_percent: The coverage the build requires.
+
+    Returns:
+        The Markdown summary.
+    """
+    present = [path for path in junit_paths if path.exists()]
+    missing = [path for path in junit_paths if not path.exists()]
+    results = [result for path in present for result in read_junit(path)]
+    coverage = read_coverage_percent(coverage_path) if coverage_path else None
+    return render(results, coverage, coverage_floor_percent, missing)
+
+
+def add_result_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add the arguments that name the results files and the coverage floor.
+
+    Args:
+        parser: The parser to add them to.
+    """
+    parser.add_argument("junit", type=Path, nargs="+", help="pytest's JUnit XML files")
+    parser.add_argument("--coverage", type=Path, help="coverage XML file")
+    parser.add_argument("--coverage-floor", type=float, default=80.0, help="required coverage")
 
 
 def _headline(overall: SuiteTotals) -> str:
@@ -313,27 +368,21 @@ def _slowest_lines(results: Sequence[TestResult]) -> list[str]:
 
 
 def main(arguments: Sequence[str] | None = None) -> int:
-    """Print the summary for a JUnit XML file, and optionally a coverage XML file.
+    """Print the summary for JUnit XML files, and optionally a coverage XML file.
 
     Args:
         arguments: The command-line arguments; None reads them from sys.argv.
 
     Returns:
-        0, also when the results file is missing: the summary then says so, and the test
+        0, also when a results file is missing: the summary then says so, and the test
         step that failed to write it has already failed the build.
     """
     parser = argparse.ArgumentParser(
         prog="python -m tools.results_summary", description="Summarise pytest results."
     )
-    parser.add_argument("junit", type=Path, help="pytest's JUnit XML file")
-    parser.add_argument("--coverage", type=Path, help="coverage XML file")
-    parser.add_argument("--coverage-floor", type=float, default=80.0, help="required coverage")
+    add_result_arguments(parser)
     parsed = parser.parse_args(arguments)
-    if not parsed.junit.exists():
-        sys.stdout.write(f"## Test results: pytest didn't write {parsed.junit}\n")
-        return 0
-    coverage = read_coverage_percent(parsed.coverage) if parsed.coverage else None
-    sys.stdout.write(render(read_junit(parsed.junit), coverage, parsed.coverage_floor))
+    sys.stdout.write(summarise_files(parsed.junit, parsed.coverage, parsed.coverage_floor))
     return 0
 
 

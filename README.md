@@ -249,6 +249,7 @@ GitHub Actions runs on every pull request and on every push to `main`:
 | Test (Python 3.13) | `make test`, including the 80% coverage floor, then `make summary`, whose table appears on the run's summary page |
 | Bench (containers) | Builds the simulator image, `make bench-up`, `make bench-test`, then `make bench-summary` on the run's summary page; shows the simulator logs if anything failed |
 | Secret scan | gitleaks 8.30.1 over the full git history, including merge commits; the download is checksum-verified |
+| Results comment | On pull requests, once the other jobs finish: posts one comment with the test and bench results, coverage, any failures and each job's result, and updates that same comment on every push |
 
 Actions are pinned to commit SHAs, and dependencies install from `uv.lock` exactly
 (`uv sync --locked`).
