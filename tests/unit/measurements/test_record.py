@@ -5,7 +5,7 @@ from collections.abc import Callable
 
 import pytest
 
-from measurements.record import Limit, Measurement
+from measurements.record import Limit, Measurement, json_number
 
 VERSIONS = {"generator": "1.0.0", "analyzer": "2.0.0"}
 
@@ -129,3 +129,20 @@ def test_limits_must_be_finite(build: Callable[[], Limit]) -> None:
     """A limit bound of NaN or infinity is a programming error, refused at once."""
     with pytest.raises(ValueError, match="limit"):
         build()
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [(1.5, 1.5), (-0.0, -0.0), (math.nan, "NaN"), (math.inf, "Infinity"), (-math.inf, "-Infinity")],
+)
+def test_json_number_keeps_finite_numbers_and_names_the_rest(
+    value: float, expected: float | str
+) -> None:
+    """Finite numbers pass through; NaN and infinities become the strings JSON readers accept."""
+    assert json_number(value) == expected
+
+
+def test_a_non_finite_record_converts_to_strings() -> None:
+    """A NaN reading's value and margin are strings in the dict, and it fails."""
+    entry = level(math.nan, Limit.window(-11.0, 0.5)).to_dict()
+    assert (entry["value"], entry["margin"], entry["passed"]) == ("NaN", "NaN", False)

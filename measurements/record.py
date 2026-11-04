@@ -105,6 +105,23 @@ class Limit:
         return f">= {self.low:.12g} {unit}"
 
 
+def json_number(value: float) -> float | str:
+    """Return a number as JSON can hold it: finite numbers as they are, others as strings.
+
+    Args:
+        value: The number.
+
+    Returns:
+        The number itself if finite; otherwise 'NaN', 'Infinity' or '-Infinity', the names
+        JavaScript uses, since JSON has no literal for them.
+    """
+    if math.isfinite(value):
+        return value
+    if math.isnan(value):
+        return "NaN"
+    return "Infinity" if value > 0 else "-Infinity"
+
+
 def _difference_unit(unit: str) -> str:
     """Return the unit of a difference between two readings.
 
@@ -172,15 +189,17 @@ class Measurement:
         """Convert to plain data for results files and the triage service.
 
         Returns:
-            The fields, with the limit's bounds, the margin and the verdict.
+            The fields, with the limit's bounds, the margin and the verdict. A NaN or
+            infinite value or margin is written as 'NaN', 'Infinity' or '-Infinity', so the
+            result is always standard JSON; such a measurement never passes.
         """
         return {
             "name": self.name,
-            "value": self.value,
+            "value": json_number(self.value),
             "unit": self.unit,
             "limit_low": self.limit.low,
             "limit_high": self.limit.high,
-            "margin": self.margin,
+            "margin": json_number(self.margin),
             "passed": self.passed,
             "firmware_versions": dict(self.firmware_versions),
         }

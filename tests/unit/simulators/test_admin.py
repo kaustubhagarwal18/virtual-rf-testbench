@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import math
 
 import pytest
 
@@ -9,6 +10,8 @@ from simulators.common.admin import AdminCommands, serve_admin
 from simulators.common.server import bound_port
 from simulators.signal_generator.admin import generator_admin_commands
 from simulators.signal_generator.instrument import SignalGeneratorScpi
+from tests.support.strict_json import strict_loads
+from tests.support.tcp import ask_line
 
 
 def test_unknown_admin_command_is_an_error_object() -> None:
@@ -35,26 +38,47 @@ def test_generator_state_reflects_scpi_settings() -> None:
     }
 
 
-def test_admin_server_replies_with_one_json_line() -> None:
-    """Over TCP, each admin command gets one line of JSON back."""
+def ask_admin(commands: AdminCommands, line: str) -> str:
+    """Serve admin commands on a free local port, send one line and return the reply line.
+
+    Args:
+        commands: The admin commands to serve.
+        line: The line to send, without its line ending.
+
+    Returns:
+        The reply line.
+    """
 
     async def scenario() -> str:
-        """Query the generator's state over the admin port."""
-        generator = SignalGeneratorScpi(firmware_version="1.2.3")
-        server = await serve_admin(generator_admin_commands(generator), "127.0.0.1", 0)
+        """Serve the commands, ask one line, then wait for the connection to close."""
+        server = await serve_admin(commands, "127.0.0.1", 0)
         async with server:
-            reader, writer = await asyncio.open_connection("127.0.0.1", bound_port(server))
-            writer.write(b"STATE?\n")
-            await writer.drain()
-            reply = await asyncio.wait_for(reader.readline(), 5.0)
-            writer.close()
-            await writer.wait_closed()
-        return reply.decode()
+            reply = await ask_line(bound_port(server), line)
+        await asyncio.sleep(0.05)
+        return reply
 
-    assert json.loads(asyncio.run(scenario())) == {
+    return asyncio.run(scenario())
+
+
+def test_admin_server_replies_with_one_json_line() -> None:
+    """Over TCP, each admin command gets one line of JSON back."""
+    generator = SignalGeneratorScpi(firmware_version="1.2.3")
+    assert json.loads(ask_admin(generator_admin_commands(generator), "STATE?")) == {
         "frequency_hz": 1e9,
         "level_dbm": -30.0,
         "output_on": False,
+    }
+
+
+def test_admin_replies_stay_standard_json_with_non_finite_numbers() -> None:
+    """NaN or infinity in a reply is sent as a string, never as JSON's missing NaN literal."""
+    commands = AdminCommands()
+    commands.register("ODD?", lambda: {"level_dbm": math.nan, "margin_db": math.inf})
+    reply = ask_admin(commands, "ODD?")
+    assert "NaN" in reply
+    assert strict_loads(reply) == {
+        "level_dbm": "NaN",
+        "margin_db": "Infinity",
     }
 
 
@@ -74,19 +98,5 @@ def test_failing_admin_command_returns_an_error_object(caplog: pytest.LogCapture
 def test_admin_connections_are_logged_at_debug_level(caplog: pytest.LogCaptureFixture) -> None:
     """The analyzer connects for every measurement, so admin connections stay out of INFO logs."""
     caplog.set_level("INFO")
-
-    async def scenario() -> None:
-        """Connect to the admin port once."""
-        generator = SignalGeneratorScpi(firmware_version="1.2.3")
-        server = await serve_admin(generator_admin_commands(generator), "127.0.0.1", 0)
-        async with server:
-            reader, writer = await asyncio.open_connection("127.0.0.1", bound_port(server))
-            writer.write(b"STATE?\n")
-            await writer.drain()
-            await asyncio.wait_for(reader.readline(), 5.0)
-            writer.close()
-            await writer.wait_closed()
-        await asyncio.sleep(0.05)
-
-    asyncio.run(scenario())
+    ask_admin(generator_admin_commands(SignalGeneratorScpi(firmware_version="1.2.3")), "STATE?")
     assert not [record for record in caplog.records if record.getMessage().startswith("Client ")]

@@ -23,7 +23,10 @@ def record_in_junit(
     """
     failed: list[Measurement] = []
     for measurement in measurements:
-        record_property(f"measurement:{measurement.name}", json.dumps(measurement.to_dict()))
+        record_property(
+            f"measurement:{measurement.name}",
+            json.dumps(measurement.to_dict(), allow_nan=False),
+        )
         if not measurement.passed:
             failed.append(measurement)
     return failed

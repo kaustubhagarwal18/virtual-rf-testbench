@@ -7,10 +7,10 @@ real instrument offers.
 """
 
 import asyncio
-import json
 import logging
 from collections.abc import Callable
 
+from simulators.common.jsontext import to_json
 from simulators.common.server import serve_lines
 
 AdminReply = dict[str, object]
@@ -87,7 +87,7 @@ async def serve_admin(
         Returns:
             One JSON line.
         """
-        return [json.dumps(commands.handle(line))]
+        return [to_json(commands.handle(line))]
 
     return await serve_lines(
         handle_line, host, port, name="admin", lock=lock, connection_log_level=logging.DEBUG

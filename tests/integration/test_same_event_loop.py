@@ -9,30 +9,12 @@ from simulators.common.physics import BenchParameters, cable_loss_db
 from simulators.common.server import bound_port
 from simulators.signal_generator import app as generator_app
 from simulators.spectrum_analyzer import app as analyzer_app
+from tests.support.tcp import ask_line
 
 LEVEL_TOLERANCE_DB = 0.5
 CONCURRENT_QUERIES = 3
 SMALL_POOL_THREADS = 2
 VERSIONS = {"generator": "1.0.0", "analyzer": "1.0.0"}
-
-
-async def ask(port: int, line: str) -> str:
-    """Send one line to a local port and return the reply.
-
-    Args:
-        port: The port.
-        line: The line to send, without its line ending.
-
-    Returns:
-        The reply, without its line ending.
-    """
-    reader, writer = await asyncio.open_connection("127.0.0.1", port)
-    writer.write(f"{line}\n".encode())
-    await writer.drain()
-    reply = await asyncio.wait_for(reader.readline(), 5.0)
-    writer.close()
-    await writer.wait_closed()
-    return reply.decode().strip()
 
 
 async def measure_concurrently() -> list[str]:
@@ -62,11 +44,11 @@ async def measure_concurrently() -> list[str]:
         )
     )
     async with generator_scpi, generator_admin, analyzer:
-        await ask(bound_port(generator_scpi), "POW -10;OUTP ON;*OPC?")
+        await ask_line(bound_port(generator_scpi), "POW -10;OUTP ON;*OPC?")
         return list(
             await asyncio.gather(
                 *(
-                    ask(bound_port(analyzer), "CALC:MARK:MAX;CALC:MARK:Y?")
+                    ask_line(bound_port(analyzer), "CALC:MARK:MAX;CALC:MARK:Y?")
                     for _ in range(CONCURRENT_QUERIES)
                 )
             )

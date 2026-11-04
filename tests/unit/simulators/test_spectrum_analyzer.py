@@ -260,5 +260,35 @@ def test_channel_power_ignores_a_tone_outside_the_span() -> None:
     replies = analyzer.process("CALC:MARK:FUNC:POW:RES? CPOW")
     assert len(replies) == 1
     assert float(replies[0]) == pytest.approx(
-        noise_floor_dbm(1e5, PARAMETERS.noise_figure_db), abs=2.5
+        noise_floor_dbm(1e4, PARAMETERS.noise_figure_db), abs=2.5
     )
+
+
+@pytest.mark.parametrize(
+    ("span", "channel", "integrated_hz"),
+    [
+        ("1 kHz", "100 kHz", 1e3),
+        ("10 Hz", "100 MHz", 10.0),
+        ("1 MHz", "100 kHz", 1e5),
+        ("100 kHz", "100 kHz", 1e5),
+    ],
+)
+def test_channel_power_noise_covers_only_the_swept_part_of_the_channel(
+    span: str, channel: str, integrated_hz: float
+) -> None:
+    """With RF off, channel power is the noise in whichever is narrower: the channel or the span."""
+    analyzer = make_analyzer(FakeGenerator(SourceState(1e9, -10.0, output_on=False)))
+    analyzer.process(f"FREQ:SPAN {span};POW:ACH:BAND {channel}")
+    assert not errors_of(analyzer)
+    replies = analyzer.process("CALC:MARK:FUNC:POW:RES? CPOW")
+    assert float(replies[0]) == pytest.approx(
+        noise_floor_dbm(integrated_hz, PARAMETERS.noise_figure_db), abs=2.5
+    )
+
+
+def test_channel_power_wider_than_the_span_still_reads_a_tone_in_view() -> None:
+    """A tone inside the span is still measured when the channel is wider than the span."""
+    analyzer = make_analyzer()
+    analyzer.process("FREQ:SPAN 10 kHz;POW:ACH:BAND 1 MHz")
+    replies = analyzer.process("CALC:MARK:FUNC:POW:RES? CPOW")
+    assert float(replies[0]) == pytest.approx(EXPECTED_TONE_DBM, abs=LEVEL_TOLERANCE_DB)

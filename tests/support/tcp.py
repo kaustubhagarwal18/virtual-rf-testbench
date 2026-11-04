@@ -1,5 +1,6 @@
-"""Running a socketserver in a background thread for the length of a test."""
+"""TCP helpers for tests: a socketserver in a background thread, and asking a port one line."""
 
+import asyncio
 import socketserver
 import threading
 from collections.abc import Iterator
@@ -23,3 +24,23 @@ def serving_in_background(server: socketserver.TCPServer) -> Iterator[int]:
     finally:
         server.shutdown()
         server.server_close()
+
+
+async def ask_line(port: int, line: str, timeout_s: float = 5.0) -> str:
+    """Send one line to a local port and return the reply line.
+
+    Args:
+        port: The port.
+        line: The line to send, without its line ending.
+        timeout_s: How long to wait for the reply.
+
+    Returns:
+        The reply, without its line ending.
+    """
+    reader, writer = await asyncio.open_connection("127.0.0.1", port)
+    writer.write(f"{line}\n".encode())
+    await writer.drain()
+    reply = await asyncio.wait_for(reader.readline(), timeout_s)
+    writer.close()
+    await writer.wait_closed()
+    return reply.decode().strip()

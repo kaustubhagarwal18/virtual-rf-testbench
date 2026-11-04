@@ -77,7 +77,13 @@ sequenceDiagram
   reads the generator's `STATE?` there (ADR 0002). The planned fault switches will be further
   admin commands, so test code can never reach them over SCPI.
 - **Logs** (`logs.py`) are one JSON object per line on stderr, so they can be searched and,
-  later, ingested by the triage service.
+  later, ingested by the triage service. Logging never blocks an instrument: each record
+  goes on a bounded queue that a background thread writes to stderr. If nothing reads
+  stderr and the queue fills, records are dropped and counted, and a warning says how many
+  were lost once there is room again.
+- **JSON** (`jsontext.py`): JSON has no NaN or infinity, so admin replies and log lines
+  write them as the strings `"NaN"`, `"Infinity"` and `"-Infinity"`. Every line stays
+  standard JSON.
 
 ### The physics model
 
@@ -89,6 +95,7 @@ sequenceDiagram
 | Analyzer flatness | a smooth sine ripple across frequency | ±0.15 dB, repeating every 1.7 GHz |
 | Noise floor | -174 dBm/Hz + noise figure + 10·log10(RBW) | noise figure 24 dB, so -120 dBm at 1 kHz RBW |
 | Tone on the floor | the tone and the floor added as powers | |
+| Channel power | the noise over the channel, or over the span if that is narrower, plus the tone when it lies in both | |
 | Reading noise | seeded normal noise; `*RST` reseeds, so readings repeat | 0.02 dB on a tone, 0.5 dB on the bare floor |
 
 So -10 dBm at 1 GHz reads about -11.5 dBm. If the analyzer can't reach the generator, it
@@ -146,7 +153,9 @@ bound), the margin to that limit, pass or fail, and both instruments' firmware v
 The `record_measurements` fixture writes each one into the JUnit XML as properties, then
 fails the test listing every measurement that missed, with its margin. A failure therefore
 always says what was measured, against which limit, by how much it missed, and on which
-firmware. That is the evidence the triage assistant will cite.
+firmware. That is the evidence the triage assistant will cite. A NaN or infinite reading
+always fails, and its value and margin are recorded as `"NaN"`, `"Infinity"` or
+`"-Infinity"`, so the JUnit properties stay standard JSON.
 
 `tools/results_summary.py` reads the JUnit XML, and the coverage XML when there is one, and
 prints the Markdown table CI shows: tests per suite, failures with their messages, coverage

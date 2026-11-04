@@ -13,7 +13,7 @@ from simulators.common.app import (
     parse_common_settings,
     serve_until_stopped,
 )
-from simulators.common.logs import configure_logging
+from simulators.common.logs import json_logging
 from simulators.common.physics import BenchParameters, PhysicsModel
 from simulators.common.server import bound_port, serve_lines
 from simulators.spectrum_analyzer.instrument import SpectrumAnalyzerScpi
@@ -136,5 +136,5 @@ def main(arguments: Sequence[str] | None = None) -> None:
     Args:
         arguments: The command-line arguments; None reads them from sys.argv.
     """
-    configure_logging()
-    asyncio.run(serve_forever(parse_settings(arguments)))
+    with json_logging():
+        asyncio.run(serve_forever(parse_settings(arguments)))

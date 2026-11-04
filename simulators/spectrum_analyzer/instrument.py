@@ -330,7 +330,8 @@ class SpectrumAnalyzerScpi(ScpiInstrument):
         """Sweep once: ask the generator what it sends, and measure it through the physics model.
 
         Both results come from the swept span only, as a trace-based measurement does: a
-        tone outside the span is in neither the peak nor the channel power.
+        tone outside the span is in neither the peak nor the channel power, and a channel
+        wider than the span integrates only the part of it that was swept.
 
         Returns:
             The new sweep result, which is also kept for single-sweep measurements.
@@ -344,8 +345,9 @@ class SpectrumAnalyzerScpi(ScpiInstrument):
             if self._physics.tone_is_visible(in_view, settings.rbw_hz)
             else settings.centre_hz
         )
+        swept_channel_hz = min(settings.channel_bandwidth_hz, settings.span_hz)
         channel_power_dbm = self._physics.channel_power_reading_dbm(
-            in_view, settings.centre_hz, settings.channel_bandwidth_hz
+            in_view, settings.centre_hz, swept_channel_hz
         )
         self._sweep = SweepResult(peak_frequency_hz, peak_level_dbm, channel_power_dbm)
         return self._sweep
