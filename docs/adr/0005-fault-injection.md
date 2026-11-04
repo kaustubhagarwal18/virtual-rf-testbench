@@ -38,8 +38,14 @@ give the answer away in the evidence.
   as a closed ticket would record them). Triage reads the first two and is scored against the
   third. A run in which nothing failed isn't saved.
 - **The data set keeps questions apart from history.** Each fault has three history runs,
-  which triage may retrieve, and one question run at a size no history run has, which it is
-  asked about. The firmware fault has no size, so its runs differ only in timing and noise.
+  which triage may retrieve, and one question run, which it is asked about. For the two
+  sized faults the question uses a size absent from history. The firmware fault has no size,
+  so its question repeats release `0.2.0-rc1`: it is the easiest question in the set, and a
+  write-up has to say so rather than count it as evidence that retrieval generalises.
+- **A fault run sets the release it needs.** Applying a bench fault first starts the bench on
+  its normal release, so a run left on `0.2.0-rc1` by an earlier firmware run can't be saved
+  under a cable-loss label. A rebuild of the data set stages its runs and replaces the old
+  one only once every run has been saved.
 
 ## Consequences
 
@@ -53,3 +59,7 @@ give the answer away in the evidence.
   answer to the next query.
 - The bench suite's start-up check waits up to 10 s, so a slow instrument fails the tests'
   own timeouts instead of looking like a stopped bench.
+- Every child process the tooling starts is bounded (building the bench, reading the logs,
+  running the suite). A stalled one is reported, so the fault is always switched off again.
+- A run pytest couldn't finish, such as one where collection failed, is kept and reported
+  rather than being read as "nothing failed" and deleted.

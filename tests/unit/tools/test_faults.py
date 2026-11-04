@@ -21,14 +21,15 @@ def test_question_sizes_differ_from_every_history_size() -> None:
             assert len(fault.history_sizes) == len(set(fault.history_sizes))
 
 
-def test_an_admin_fault_clears_first_then_switches_on_and_clears_after() -> None:
-    """Applying clears both instruments, then sets the switch; restoring clears again."""
+def test_an_admin_fault_restores_the_baseline_release_clears_then_switches_on() -> None:
+    """Applying starts the normal release, clears both instruments, then sets the switch."""
     fault = CATALOGUE["cable_loss"]
     assert isinstance(fault, AdminFault)
     bench = FakeBench()
     assert fault.apply(bench, 1.25, "0.1.0") == "0.1.0"
     fault.restore(bench, "0.1.0")
     assert bench.calls == [
+        ("start", "0.1.0"),
         (GENERATOR, "CLEAR"),
         (ANALYZER, "CLEAR"),
         (ANALYZER, "FAULT EXTRA_CABLE_LOSS_DB 1.25"),

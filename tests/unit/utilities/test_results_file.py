@@ -18,6 +18,8 @@ from tests.utilities.results_file import (
 )
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+INTERRUPTED_EXIT_STATUS = 2
+"""Pytest's exit status when collection failed."""
 LEVEL = {"name": "level", "value": -12.5, "unit": "dBm", "margin": -0.5, "passed": False}
 
 
@@ -163,3 +165,65 @@ def test_a_real_session_writes_the_results_file(tmp_path: Path) -> None:
     assert "instrument said" in failed["message"]
     assert outcomes["test_setup_fails"]["message"] == "RuntimeError: fixture broke"
     assert outcomes["test_skipped"]["message"] == "Skipped: not today"
+    assert (results["exit_status"], results["collection_errors"]) == (1, [])
+
+
+def test_instrument_errors_from_every_failed_phase_are_kept() -> None:
+    """A failing call and a failing teardown each contribute their SCPI errors, once each."""
+    collector = ResultsCollector(["pytest"])
+    collector.add_report(
+        FakeReport("t::c", outcome="failed", longreprtext='boom -113,"Undefined header"')
+    )
+    collector.add_report(
+        FakeReport(
+            "t::c",
+            when="teardown",
+            outcome="failed",
+            longreprtext='reset failed -222,"Data out of range" and -113,"Undefined header"',
+        )
+    )
+    (test,) = collector.to_dict()["tests"]
+    assert test["outcome"] == "error"
+    assert test["instrument_errors"] == ['-113,"Undefined header"', '-222,"Data out of range"']
+
+
+def test_a_passing_run_records_its_exit_status_and_no_collection_errors() -> None:
+    """The results file says how pytest exited, so a broken run is recognisable."""
+    collector = ResultsCollector(["pytest"])
+    collector.add_report(FakeReport("t::a"))
+    collector.exit_status = 0
+    results = collector.to_dict()
+    assert (results["exit_status"], results["collection_errors"]) == (0, [])
+
+
+def test_a_collection_failure_is_recorded() -> None:
+    """A module that fails to import is recorded, so no failed tests can't look like a clean run."""
+    collector = ResultsCollector(["pytest"])
+    collector.add_collection_error("tests/bench/test_bench.py", "ImportError: no module named x")
+    collector.exit_status = INTERRUPTED_EXIT_STATUS
+    results = collector.to_dict()
+    assert results["totals"]["run"] == 0
+    assert results["exit_status"] == INTERRUPTED_EXIT_STATUS
+    assert results["collection_errors"] == [
+        {"id": "tests/bench/test_bench.py", "message": "ImportError: no module named x"}
+    ]
+
+
+def test_a_real_session_that_cannot_collect_records_it(tmp_path: Path) -> None:
+    """A module that won't import leaves the error and pytest's exit status in the file."""
+    write_suite(tmp_path)
+    (tmp_path / "test_broken.py").write_text("import module_that_does_not_exist\n")
+    results_path = tmp_path / "results.json"
+    environment = {**os.environ, "BENCH_RESULTS_JSON": str(results_path)}
+    environment["PYTHONPATH"] = str(REPOSITORY_ROOT)
+    subprocess.run(
+        [sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "-q"],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        check=False,
+    )
+    results = json.loads(results_path.read_text(encoding="utf-8"))
+    assert results["exit_status"] == INTERRUPTED_EXIT_STATUS
+    assert len(results["collection_errors"]) == 1
+    assert "module_that_does_not_exist" in results["collection_errors"][0]["message"]

@@ -35,12 +35,24 @@ _OUTCOME_ORDER = {"passed": 0, "skipped": 1, "failed": 2, "error": 3}
 """When a test's phases disagree, the worse outcome wins."""
 
 
-class Report(Protocol):
-    """The parts of pytest's TestReport the collector reads."""
+class FailureText(Protocol):
+    """The parts of any pytest report that describe a failure."""
 
     @property
     def nodeid(self) -> str:
-        """The test's id."""
+        """The test's or collector's id."""
+
+    @property
+    def longrepr(self) -> object:
+        """The failure or skip details."""
+
+    @property
+    def longreprtext(self) -> str:
+        """The failure or skip text, empty for a pass."""
+
+
+class Report(FailureText, Protocol):
+    """The parts of pytest's TestReport the collector reads."""
 
     @property
     def when(self) -> str:
@@ -55,16 +67,8 @@ class Report(Protocol):
         """The phase's time in seconds."""
 
     @property
-    def longrepr(self) -> object:
-        """The failure or skip details."""
-
-    @property
     def user_properties(self) -> list[tuple[str, object]]:
         """Properties recorded with record_property."""
-
-    @property
-    def longreprtext(self) -> str:
-        """The failure or skip text, empty for a pass."""
 
 
 @dataclass
@@ -132,7 +136,7 @@ def _outcome_of(report: Report) -> str:
     return report.outcome
 
 
-def _message_of(report: Report) -> str:
+def _message_of(report: FailureText) -> str:
     """Return a report's short failure or skip message.
 
     Args:
@@ -149,6 +153,37 @@ def _message_of(report: Report) -> str:
     return report.longreprtext.strip().splitlines()[-1] if report.longreprtext.strip() else ""
 
 
+@dataclass
+class Selection:
+    """Which of the collected tests pytest ran.
+
+    A subset run must not read like a complete one, so the counts are recorded as well as
+    the command that chose them.
+
+    Attributes:
+        command: The command line the session was started with.
+        selected: How many tests ran.
+        deselected: How many were collected but left out, for example by -m or -k.
+    """
+
+    command: str
+    selected: int = 0
+    deselected: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        """Describe the selection for the results file.
+
+        Returns:
+            The command, and how many tests were collected, selected and deselected.
+        """
+        return {
+            "command": self.command,
+            "collected": self.selected + self.deselected,
+            "selected": self.selected,
+            "deselected": self.deselected,
+        }
+
+
 class ResultsCollector:
     """Collects one bench session's results and writes them as JSON."""
 
@@ -159,10 +194,11 @@ class ResultsCollector:
             command: The command line the session was started with.
         """
         self.started = datetime.now(UTC)
-        self.command = shlex.join(command)
+        self.selection = Selection(shlex.join(command))
         self.firmware_versions: dict[str, str] = {}
-        self.deselected = 0
-        self.selected = 0
+        self.exit_status: int | None = None
+        """How pytest exited: 0 all passed, 1 tests failed, anything else a broken run."""
+        self._collection_errors: list[dict[str, str]] = []
         self._tests: dict[str, TestRecord] = {}
 
     def add_deselected(self, count: int) -> None:
@@ -171,10 +207,23 @@ class ResultsCollector:
         Args:
             count: How many were deselected.
         """
-        self.deselected += count
+        self.selection.deselected += count
+
+    def add_collection_error(self, test_id: str, message: str) -> None:
+        """Record that pytest couldn't collect something, so the run is incomplete.
+
+        Args:
+            test_id: What couldn't be collected, for example a test module.
+            message: Why.
+        """
+        self._collection_errors.append({"id": test_id, "message": message})
 
     def add_report(self, report: Report) -> None:
         """Add one phase's report to its test's record.
+
+        A test's phases are reported separately, so the worst outcome wins and the SCPI
+        errors of every failed phase are kept: a failing teardown must not hide what the
+        call already found.
 
         Args:
             report: The setup, call or teardown report.
@@ -182,10 +231,13 @@ class ResultsCollector:
         record = self._tests.setdefault(report.nodeid, TestRecord(report.nodeid))
         record.duration_s += report.duration
         outcome = _outcome_of(report)
+        if outcome != "passed":
+            for error in instrument_errors_in(report.longreprtext):
+                if error not in record.instrument_errors:
+                    record.instrument_errors.append(error)
         if _OUTCOME_ORDER[outcome] > _OUTCOME_ORDER[record.outcome]:
             record.outcome = outcome
             record.message = _message_of(report)
-            record.instrument_errors = instrument_errors_in(report.longreprtext)
         if report.when == "call":
             record.measurements = measurements_in(report.user_properties)
 
@@ -193,7 +245,8 @@ class ResultsCollector:
         """Build the results file's content.
 
         Returns:
-            The run's identity, selection, firmware versions, totals and per-test records.
+            The run's identity, selection, firmware versions, how pytest exited, any
+            collection errors, totals and per-test records.
         """
         finished = datetime.now(UTC)
         tests = list(self._tests.values())
@@ -205,12 +258,9 @@ class ResultsCollector:
             "started": self.started.isoformat(timespec="seconds"),
             "duration_s": round((finished - self.started).total_seconds(), 3),
             "firmware_versions": dict(self.firmware_versions),
-            "selection": {
-                "command": self.command,
-                "collected": self.selected + self.deselected,
-                "selected": self.selected,
-                "deselected": self.deselected,
-            },
+            "selection": self.selection.to_dict(),
+            "exit_status": self.exit_status,
+            "collection_errors": list(self._collection_errors),
             "totals": {"run": len(tests), **totals},
             "tests": [
                 {
@@ -278,7 +328,7 @@ class ResultsFilePlugin:
         Args:
             session: The session, whose items are the selected tests.
         """
-        self.collector.selected = len(session.items)
+        self.collector.selection.selected = len(session.items)
 
     def pytest_runtest_logreport(self, report: pytest.TestReport) -> None:
         """Add each phase's report.
@@ -288,6 +338,20 @@ class ResultsFilePlugin:
         """
         self.collector.add_report(report)
 
-    def pytest_sessionfinish(self) -> None:
-        """Write the results file."""
+    def pytest_collectreport(self, report: pytest.CollectReport) -> None:
+        """Record anything that couldn't be collected, such as a module that won't import.
+
+        Args:
+            report: One collector's report.
+        """
+        if report.failed:
+            self.collector.add_collection_error(report.nodeid, _message_of(report))
+
+    def pytest_sessionfinish(self, exitstatus: int) -> None:
+        """Record how pytest exited, then write the results file.
+
+        Args:
+            exitstatus: Pytest's exit status.
+        """
+        self.collector.exit_status = int(exitstatus)
         self.collector.write(self.path)

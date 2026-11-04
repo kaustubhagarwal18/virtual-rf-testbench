@@ -20,8 +20,18 @@ ADMIN_PORTS = {GENERATOR: 5125, ANALYZER: 5126}
 ADMIN_TIMEOUT_S = 60.0
 """How long an admin reply may take: with slow responses on, CLEAR waits for queued lines."""
 
-BENCH_START_TIMEOUT_S = 120
-"""How long docker compose may take to build and start a healthy bench."""
+BENCH_HEALTH_TIMEOUT_S = 120
+"""How long docker compose waits for both instruments to become healthy."""
+
+BUILD_TIMEOUT_S = 900
+"""How long building the image and starting the bench may take altogether."""
+
+LOGS_TIMEOUT_S = 60
+"""How long reading the instruments' logs may take."""
+
+SUITE_TIMEOUT_S = 2700
+"""How long the bench suite may take. Generous: with slow responses on, every test waits for
+its own timeout, and one recorded run took over 15 minutes."""
 
 BENCH_NOT_RUNNING_EXIT_CODE = 3
 """The bench suite's exit code when the instruments aren't answering (tests/bench/conftest.py)."""
@@ -32,6 +42,36 @@ Runner = Callable[..., subprocess.CompletedProcess[str]]
 
 class BenchControlError(Exception):
     """The bench couldn't be controlled; the message says what to do."""
+
+
+def run_bounded(
+    run: Runner,
+    command: Sequence[str],
+    timeout_s: float,
+    what: str,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    """Run a command with a time limit, so a stalled child process can't hang the bench tooling.
+
+    Args:
+        run: Runs the command.
+        command: The command and its arguments.
+        timeout_s: How long it may take.
+        what: What it does, for the error message.
+        env: The environment; None inherits this process's.
+
+    Returns:
+        The finished process, whatever its exit code.
+
+    Raises:
+        BenchControlError: If it didn't finish in time, so the caller can restore the bench.
+    """
+    try:
+        return run(
+            list(command), env=env, capture_output=True, text=True, check=False, timeout=timeout_s
+        )
+    except subprocess.TimeoutExpired as expired:
+        raise BenchControlError(f"{what} didn't finish within {timeout_s:g} s") from expired
 
 
 class ComposeBench:
@@ -89,16 +129,16 @@ class ComposeBench:
             firmware_version: The release both instruments report.
 
         Raises:
-            BenchControlError: If docker compose fails.
+            BenchControlError: If docker compose fails or doesn't finish in time.
         """
         command = ["docker", "compose", "up", "--build", "--detach", "--wait"]
-        command += ["--wait-timeout", str(BENCH_START_TIMEOUT_S)]
-        completed = self._run(
+        command += ["--wait-timeout", str(BENCH_HEALTH_TIMEOUT_S)]
+        completed = run_bounded(
+            self._run,
             command,
+            BUILD_TIMEOUT_S,
+            f"building and starting the bench as {firmware_version}",
             env={**os.environ, "FIRMWARE_VERSION": firmware_version},
-            capture_output=True,
-            text=True,
-            check=False,
         )
         if completed.returncode != 0:
             raise BenchControlError(
@@ -116,14 +156,14 @@ class ComposeBench:
             The log lines, each prefixed with the container's name.
 
         Raises:
-            BenchControlError: If docker compose can't read the logs; a saved run without
-                its logs would look like a run that logged nothing.
+            BenchControlError: If docker compose can't read the logs or doesn't finish in
+                time; a saved run without its logs would look like one that logged nothing.
         """
-        completed = self._run(
+        completed = run_bounded(
+            self._run,
             ["docker", "compose", "logs", "--no-color", "--since", since.isoformat()],
-            capture_output=True,
-            text=True,
-            check=False,
+            LOGS_TIMEOUT_S,
+            "reading the instruments' logs",
         )
         if completed.returncode != 0:
             raise BenchControlError(
@@ -151,7 +191,8 @@ class PytestSuite:
             firmware_version: The release the bench runs, which the identity test expects.
 
         Raises:
-            BenchControlError: If the bench wasn't running, or no results file was written.
+            BenchControlError: If the suite didn't finish in time, the bench wasn't running,
+                or no results file was written.
         """
         command: Sequence[str] = [
             sys.executable,
@@ -168,7 +209,9 @@ class PytestSuite:
             "BENCH_RESULTS_JSON": str(results_path),
             "FIRMWARE_VERSION": firmware_version,
         }
-        completed = self._run(command, env=environment, capture_output=True, text=True, check=False)
+        completed = run_bounded(
+            self._run, command, SUITE_TIMEOUT_S, "the bench suite", env=environment
+        )
         if completed.returncode == BENCH_NOT_RUNNING_EXIT_CODE:
             raise BenchControlError("The bench isn't running; start it with make bench-up")
         if not results_path.exists():

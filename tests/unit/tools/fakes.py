@@ -1,9 +1,12 @@
 """Stand-ins for the Docker bench and the bench suite, for the fault tooling's tests."""
 
 import json
+from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+from tools.bench_control import BenchControlError
 
 FAILING_TOTALS = {"run": 7, "passed": 5, "skipped": 0, "failed": 2, "error": 0}
 PASSING_TOTALS = {"run": 7, "passed": 7, "skipped": 0, "failed": 0, "error": 0}
@@ -36,17 +39,50 @@ class FakeSuite:
     """Writes a results file with chosen totals, recording the release it was told to expect."""
 
     def __init__(
-        self, totals: dict[str, int] | None = None, error: Exception | None = None
+        self,
+        totals: dict[str, int] | None = None,
+        error: Exception | None = None,
+        *,
+        exit_status: int | None = None,
+        collection_errors: Sequence[dict[str, str]] = (),
+        fail_after: int | None = None,
     ) -> None:
-        """Choose the totals to write, or an error to raise instead."""
+        """Choose what the suite writes, or how it fails.
+
+        Args:
+            totals: The totals to write; failing totals by default.
+            error: Raised instead of writing anything.
+            exit_status: Pytest's exit status; derived from the totals when None.
+            collection_errors: Collection errors to write, as a suite that couldn't collect.
+            fail_after: Fail once this many runs have been written.
+        """
         self.totals = FAILING_TOTALS if totals is None else totals
         self.error = error
+        failed = self.totals["failed"] or self.totals["error"]
+        self.exit_status = (1 if failed else 0) if exit_status is None else exit_status
+        self.collection_errors = list(collection_errors)
+        self.fail_after = fail_after
         self.versions: list[str] = []
 
     def run(self, results_path: Path, firmware_version: str) -> None:
-        """Write the results file, or raise the chosen error."""
+        """Write the results file, or fail the way the real suite can.
+
+        Args:
+            results_path: Where the results file goes.
+            firmware_version: The release the bench runs.
+
+        Raises:
+            BenchControlError: Once fail_after runs have been written.
+        """
         self.versions.append(firmware_version)
         if self.error is not None:
             raise self.error
-        results = {"firmware_versions": {"generator": firmware_version}, "totals": self.totals}
+        if self.fail_after is not None and len(self.versions) > self.fail_after:
+            raise BenchControlError("the bench stopped answering")
+        results = {
+            "firmware_versions": {"generator": firmware_version},
+            "exit_status": self.exit_status,
+            "collection_errors": self.collection_errors,
+            "totals": self.totals,
+        }
         results_path.write_text(json.dumps(results), encoding="utf-8")

@@ -189,9 +189,11 @@ suite, saves the run, and restores the bench.
 make fault NAME=cable_loss SIZE=1.5
 ```
 
-The run lands in `results/faults/` as `results.json`, the last lines of the instruments'
-logs, and a separate `label.json` with the known cause, which a closed ticket would hold. A
-run in which nothing failed isn't saved. `make fault-dataset` builds the triage data set in
+`make fault` starts the bench on the release the fault needs, so the examples above can be
+run in any order. The run lands in `results/faults/` as `results.json`, the last lines of the
+instruments' logs, and a separate `label.json` with the known cause, which a closed ticket
+would hold. A run in which nothing failed isn't saved, and one pytest couldn't finish is kept
+and reported rather than counted as a pass. `make fault-dataset` builds the triage data set in
 `triage/data/runs/`: three history runs per fault at different sizes, and one question run
 each at a size of its own. ADR 0005 explains the design.
 

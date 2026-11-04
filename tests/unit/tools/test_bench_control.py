@@ -3,6 +3,7 @@
 import socket
 import socketserver
 import subprocess
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -48,15 +49,24 @@ class FakeAdminPort(socketserver.ThreadingTCPServer):
 class RecordingRunner:
     """Stands in for subprocess.run: records each call and returns a chosen result."""
 
-    def __init__(self, returncode: int = 0, stdout: str = "", stderr: str = "") -> None:
-        """Choose the result every call gets."""
+    def __init__(
+        self, returncode: int = 0, stdout: str = "", stderr: str = "", *, times_out: bool = False
+    ) -> None:
+        """Choose the result every call gets, or make every call time out."""
         self.result = (returncode, stdout, stderr)
+        self.times_out = times_out
         self.calls: list[tuple[list[str], dict[str, Any]]] = []
         self.before_return: list[Path] = []
 
     def __call__(self, command: list[str], **options: Any) -> subprocess.CompletedProcess[str]:
-        """Record the call, create any files a real run would, and return the result."""
+        """Record the call, create any files a real run would, and return the result.
+
+        Raises:
+            TimeoutExpired: If this runner was built to time out.
+        """
         self.calls.append((command, options))
+        if self.times_out:
+            raise subprocess.TimeoutExpired(command, options.get("timeout") or 0)
         for path in self.before_return:
             path.write_text("{}", encoding="utf-8")
         returncode, stdout, stderr = self.result
@@ -147,3 +157,31 @@ def test_a_suite_that_wrote_no_results_says_so(tmp_path: Path) -> None:
     runner = RecordingRunner(returncode=4, stdout="ERROR: usage")
     with pytest.raises(BenchControlError, match="no results file:\nERROR: usage"):
         PytestSuite(run=runner).run(tmp_path / "results.json", "0.1.0")
+
+
+def test_every_child_process_gets_a_timeout(tmp_path: Path) -> None:
+    """Building, reading logs and running the suite are all bounded, so none can stall forever."""
+    results = tmp_path / "results.json"
+    runner = RecordingRunner()
+    runner.before_return.append(results)
+    bench = ComposeBench(run=runner)
+    bench.start("0.1.0")
+    bench.logs_since(datetime(2026, 11, 4, tzinfo=UTC))
+    PytestSuite(run=runner).run(results, "0.1.0")
+    timeouts = [options["timeout"] for _command, options in runner.calls]
+    assert len(timeouts) == len(runner.calls)
+    assert all(timeout > 0 for timeout in timeouts)
+
+
+@pytest.mark.parametrize("action", ["start", "logs", "suite"])
+def test_a_stalled_child_process_becomes_a_bench_error(action: str, tmp_path: Path) -> None:
+    """A timed-out child process is reported, so run_fault still reaches its restore step."""
+    runner = RecordingRunner(times_out=True)
+    bench = ComposeBench(run=runner)
+    actions: dict[str, Callable[[], object]] = {
+        "start": lambda: bench.start("0.1.0"),
+        "logs": lambda: bench.logs_since(datetime(2026, 11, 4, tzinfo=UTC)),
+        "suite": lambda: PytestSuite(run=runner).run(tmp_path / "results.json", "0.1.0"),
+    }
+    with pytest.raises(BenchControlError, match="didn't finish within"):
+        actions[action]()

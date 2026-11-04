@@ -9,7 +9,14 @@ import pytest
 
 from tests.unit.tools.fakes import FAILING_TOTALS, PASSING_TOTALS, FakeBench, FakeSuite
 from tools.bench_control import BenchControlError
-from tools.fault_run import LOG_LINES_KEPT, NothingFailedError, build_dataset, main, run_fault
+from tools.fault_run import (
+    LOG_LINES_KEPT,
+    NothingFailedError,
+    UnusableRunError,
+    build_dataset,
+    main,
+    run_fault,
+)
 from tools.faults import ANALYZER, CATALOGUE, GENERATOR
 
 DEFAULT_VERSION = "0.1.0"
@@ -166,3 +173,49 @@ def test_runs_as_a_module() -> None:
     )
     assert completed.returncode == USAGE_ERROR_EXIT_CODE
     assert "give a fault name or --dataset" in completed.stderr
+
+
+def test_a_run_whose_collection_failed_is_kept_and_reported(tmp_path: Path) -> None:
+    """A suite that couldn't collect isn't 'nothing failed': the evidence is kept and reported."""
+    folder = tmp_path / "broken"
+    suite = FakeSuite(
+        PASSING_TOTALS,
+        exit_status=2,
+        collection_errors=[{"id": "tests/bench/test_bench.py", "message": "ImportError"}],
+    )
+    with pytest.raises(UnusableRunError, match="couldn't collect"):
+        run_fault(
+            CATALOGUE["cable_loss"],
+            1.0,
+            folder,
+            bench=FakeBench(),
+            suite=suite,
+            default_version=DEFAULT_VERSION,
+        )
+    assert (folder / "results.json").exists()
+
+
+def test_a_run_pytest_could_not_finish_is_kept_and_reported(tmp_path: Path) -> None:
+    """An exit status that means neither 'all passed' nor 'tests failed' is reported too."""
+    folder = tmp_path / "interrupted"
+    with pytest.raises(UnusableRunError, match="exit status 3"):
+        run_fault(
+            CATALOGUE["cable_loss"],
+            1.0,
+            folder,
+            bench=FakeBench(),
+            suite=FakeSuite(PASSING_TOTALS, exit_status=3),
+            default_version=DEFAULT_VERSION,
+        )
+    assert (folder / "results.json").exists()
+
+
+def test_a_failure_part_way_leaves_the_previous_data_set_in_place(tmp_path: Path) -> None:
+    """If a later run fails, the old data set is untouched and no partial one is left behind."""
+    kept = tmp_path / "history" / "cable_loss-1" / "results.json"
+    kept.parent.mkdir(parents=True)
+    kept.write_text("previous run", encoding="utf-8")
+    with pytest.raises(BenchControlError):
+        build_dataset(tmp_path, FakeBench(), FakeSuite(fail_after=2), DEFAULT_VERSION)
+    assert kept.read_text(encoding="utf-8") == "previous run"
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["history"]

@@ -76,11 +76,13 @@ class AdminFault:
         Args:
             bench: The running bench.
             size: The fault's size; None uses the question size.
-            default_version: The bench's normal release.
+            default_version: The bench's normal release, which the bench is put back on
+                first: a run left on another release would be saved under this fault's label.
 
         Returns:
             The release the bench runs during the fault: its normal one.
         """
+        bench.start(default_version)
         clear_all(bench)
         value = self.question_size if size is None else size
         bench.send_admin(self.instrument, f"FAULT {self.switch} {value:g}")

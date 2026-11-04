@@ -12,12 +12,12 @@ import argparse
 import json
 import shutil
 import sys
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import asdict
 from datetime import UTC, datetime
 from importlib.metadata import version
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 from tools.bench_control import BenchControlError, ComposeBench, PytestSuite
 from tools.faults import CATALOGUE, Bench, Fault
@@ -25,6 +25,18 @@ from tools.faults import CATALOGUE, Bench, Fault
 PACKAGE_NAME = "virtual-rf-testbench"
 LOG_LINES_KEPT = 300
 """The last lines of the instruments' logs kept with a run, to keep saved runs small."""
+
+HISTORY = "history"
+"""The data set's past failures, which triage may retrieve with their labels."""
+
+QUESTIONS = "questions"
+"""The data set's questions, which triage is asked about and never sees the labels of."""
+
+STAGING = ".building"
+"""Where a new data set is built, so a failure part-way can't destroy the previous one."""
+
+USABLE_EXIT_STATUSES = frozenset({0, 1})
+"""Pytest's exit status for 'all passed' and 'tests failed'; any other means a broken run."""
 
 
 class ControllableBench(Bench, Protocol):
@@ -57,6 +69,29 @@ class NothingFailedError(Exception):
     """The fault was on, yet every test passed: the run has no failure to label."""
 
 
+class UnusableRunError(Exception):
+    """The suite didn't produce a usable run, so its evidence is kept instead of deleted."""
+
+
+def unusable_reason(results: dict[str, Any]) -> str | None:
+    """Say why a run isn't usable, if it isn't; such a run must not look like 'nothing failed'.
+
+    Args:
+        results: The suite's results file, already read.
+
+    Returns:
+        Why the run can't be used, or None when it can.
+    """
+    collection_errors = results.get("collection_errors") or []
+    if collection_errors:
+        first = collection_errors[0]
+        return f"pytest couldn't collect {first['id']}: {first['message']}"
+    exit_status = results.get("exit_status")
+    if exit_status not in USABLE_EXIT_STATUSES:
+        return f"pytest ended with exit status {exit_status}, so the run is incomplete"
+    return None
+
+
 def run_fault(
     fault: Fault,
     size: float | None,
@@ -83,6 +118,7 @@ def run_fault(
 
     Raises:
         NothingFailedError: If no test failed; the folder is removed again.
+        UnusableRunError: If pytest couldn't finish the run; the folder is kept.
     """
     run_folder.mkdir(parents=True)
     started = clock()
@@ -92,7 +128,10 @@ def run_fault(
         logs = bench.logs_since(started)
     finally:
         fault.restore(bench, default_version)
-    totals: dict[str, int] = json.loads((run_folder / "results.json").read_text())["totals"]
+    results: dict[str, Any] = json.loads((run_folder / "results.json").read_text())
+    if (problem := unusable_reason(results)) is not None:
+        raise UnusableRunError(f"{problem}; kept {run_folder}")
+    totals: dict[str, int] = results["totals"]
     if not totals["failed"] and not totals["error"]:
         shutil.rmtree(run_folder)
         raise NothingFailedError(f"{fault.name} at size {size}: every test passed; not saved")
@@ -108,13 +147,29 @@ def run_fault(
     return totals
 
 
+def dataset_plan() -> Iterator[tuple[Path, Fault, float | None]]:
+    """List every run the data set holds: three history runs and one question run per fault.
+
+    Yields:
+        tuple[Path, Fault, float | None]: Each run's folder relative to the data set's root,
+        its fault, and its size.
+    """
+    for fault in CATALOGUE.values():
+        for number, size in enumerate(fault.history_sizes, start=1):
+            yield Path(HISTORY) / f"{fault.name}-{number}", fault, size
+        yield Path(QUESTIONS) / fault.name, fault, fault.question_size
+
+
 def build_dataset(
     root: Path, bench: ControllableBench, suite: Suite, default_version: str
 ) -> list[Path]:
     """Run every fault at its history sizes and its question size, replacing any older data set.
 
+    The runs are built in a staging folder and only moved into place once every one of them
+    has been saved, so a bench that fails part-way leaves the previous data set untouched.
+
     Args:
-        root: The data set's folder; its history/ and questions/ folders are replaced.
+        root: The data set's folder.
         bench: The bench.
         suite: The bench suite.
         default_version: The bench's normal release.
@@ -122,27 +177,28 @@ def build_dataset(
     Returns:
         Every saved run's folder.
     """
-    for part in ("history", "questions"):
-        shutil.rmtree(root / part, ignore_errors=True)
-    saved: list[Path] = []
-    for fault in CATALOGUE.values():
-        for number, size in enumerate(fault.history_sizes, start=1):
-            folder = root / "history" / f"{fault.name}-{number}"
+    staging = root / STAGING
+    shutil.rmtree(staging, ignore_errors=True)
+    completed = False
+    try:
+        for relative, fault, size in dataset_plan():
             run_fault(
-                fault, size, folder, bench=bench, suite=suite, default_version=default_version
+                fault,
+                size,
+                staging / relative,
+                bench=bench,
+                suite=suite,
+                default_version=default_version,
             )
-            saved.append(folder)
-        folder = root / "questions" / fault.name
-        run_fault(
-            fault,
-            fault.question_size,
-            folder,
-            bench=bench,
-            suite=suite,
-            default_version=default_version,
-        )
-        saved.append(folder)
-    return saved
+        completed = True
+    finally:
+        if not completed:
+            shutil.rmtree(staging, ignore_errors=True)
+    for part in (HISTORY, QUESTIONS):
+        shutil.rmtree(root / part, ignore_errors=True)
+        (staging / part).rename(root / part)
+    shutil.rmtree(staging, ignore_errors=True)
+    return [root / relative for relative, _fault, _size in dataset_plan()]
 
 
 def main(
@@ -188,7 +244,7 @@ def main(
             suite=suite,
             default_version=default_version,
         )
-    except (BenchControlError, NothingFailedError) as error:
+    except (BenchControlError, NothingFailedError, UnusableRunError) as error:
         sys.stdout.write(f"{error}\n")
         return 1
     sys.stdout.write(
