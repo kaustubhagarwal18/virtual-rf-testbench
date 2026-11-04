@@ -36,6 +36,7 @@ services:
       - signal-generator:5125
     ports:
       - "127.0.0.1:5026:5025"
+      - "127.0.0.1:5126:5126"
     depends_on:
       signal-generator:
         condition: service_healthy

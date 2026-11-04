@@ -7,17 +7,19 @@ import os
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 
+from simulators.common.admin import AdminCommands
 from simulators.common.app import (
     SimulatorSettings,
     add_common_arguments,
     parse_common_settings,
-    serve_until_stopped,
+    run_simulator,
+    start_scpi_and_admin,
 )
-from simulators.common.logs import json_logging
+from simulators.common.faults import EXTRA_CABLE_LOSS, FaultSwitches
 from simulators.common.physics import BenchParameters, PhysicsModel
-from simulators.common.server import bound_port, serve_lines
+from simulators.common.server import bound_port
 from simulators.spectrum_analyzer.instrument import SpectrumAnalyzerScpi
-from simulators.spectrum_analyzer.link import AdminPortLink
+from simulators.spectrum_analyzer.link import AdminPortLink, CableWithFaults
 
 _LOGGER = logging.getLogger(__name__)
 _HIGHEST_PORT = 65535
@@ -25,15 +27,17 @@ _HIGHEST_PORT = 65535
 
 @dataclass(frozen=True)
 class Settings(SimulatorSettings):
-    """How the analyzer runs: the common settings plus where the generator's admin port is.
+    """How the analyzer runs: the common settings, the generator's admin port and its own.
 
     Attributes:
         generator_admin_host: Where the generator's admin port is.
         generator_admin_port: The generator's admin port.
+        admin_port: The analyzer's own admin port, for fault switches; 0 picks a free port.
     """
 
     generator_admin_host: str
     generator_admin_port: int
+    admin_port: int
 
 
 def _host_and_port(text: str) -> tuple[str, int]:
@@ -83,6 +87,12 @@ def parse_settings(
         metavar="HOST:PORT",
         help="the signal generator's admin port, which the analyzer measures",
     )
+    parser.add_argument(
+        "--admin-port",
+        type=int,
+        default=5126,
+        help="the analyzer's admin port (0 = any free); not 5125, which the generator uses",
+    )
     parsed = parser.parse_args(arguments)
     generator_admin_host, generator_admin_port = parsed.generator_admin
     common = parse_common_settings(parser, parsed, os.environ if environ is None else environ)
@@ -90,44 +100,48 @@ def parse_settings(
         **asdict(common),
         generator_admin_host=generator_admin_host,
         generator_admin_port=generator_admin_port,
+        admin_port=parsed.admin_port,
     )
 
 
-async def start(settings: Settings) -> asyncio.Server:
-    """Start the analyzer's SCPI server, measuring the generator at the configured address.
+async def start(settings: Settings) -> tuple[asyncio.Server, asyncio.Server]:
+    """Start the analyzer's SCPI and admin servers, measuring the generator at its address.
+
+    The analyzer reads the generator through the bench cable, whose fault (extra loss) is
+    switched on the analyzer's admin port.
 
     Args:
         settings: How to run.
 
     Returns:
-        The SCPI server, listening.
+        The SCPI server and the admin server, both listening.
     """
+    switches = FaultSwitches([EXTRA_CABLE_LOSS])
+    cable = CableWithFaults(
+        AdminPortLink(settings.generator_admin_host, settings.generator_admin_port), switches
+    )
     analyzer = SpectrumAnalyzerScpi(
         settings.firmware_version,
-        AdminPortLink(settings.generator_admin_host, settings.generator_admin_port),
+        cable,
         PhysicsModel(BenchParameters()),
         settings.serial_number,
     )
-    scpi = await serve_lines(analyzer.process, settings.host, settings.scpi_port, name="scpi")
+    commands = AdminCommands()
+    switches.register_commands(commands)
+    scpi, admin = await start_scpi_and_admin(
+        analyzer.process, commands, settings.host, settings.scpi_port, settings.admin_port
+    )
     _LOGGER.info(
         "Spectrum analyzer listening",
         extra={
             "host": settings.host,
             "scpi_port": bound_port(scpi),
+            "admin_port": bound_port(admin),
             "generator_admin": f"{settings.generator_admin_host}:{settings.generator_admin_port}",
             "firmware_version": settings.firmware_version,
         },
     )
-    return scpi
-
-
-async def serve_forever(settings: Settings) -> None:
-    """Run the analyzer until the process is stopped.
-
-    Args:
-        settings: How to run.
-    """
-    await serve_until_stopped(await start(settings))
+    return scpi, admin
 
 
 def main(arguments: Sequence[str] | None = None) -> None:
@@ -136,5 +150,4 @@ def main(arguments: Sequence[str] | None = None) -> None:
     Args:
         arguments: The command-line arguments; None reads them from sys.argv.
     """
-    with json_logging():
-        asyncio.run(serve_forever(parse_settings(arguments)))
+    run_simulator(arguments, parse_settings, start)

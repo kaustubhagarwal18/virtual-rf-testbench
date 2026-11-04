@@ -4,8 +4,10 @@ import json
 import logging
 import math
 import socket
+from dataclasses import replace
 from typing import Protocol, TypeIs
 
+from simulators.common.faults import EXTRA_CABLE_LOSS, FaultSwitches
 from simulators.common.physics import SourceState
 
 NO_SIGNAL = SourceState(frequency_hz=1e9, level_dbm=-200.0, output_on=False)
@@ -115,3 +117,29 @@ class AdminPortLink:
                 extra={"generator_admin": f"{self.host}:{self.port}", "reason": str(error)},
             )
             return NO_SIGNAL
+
+
+class CableWithFaults:
+    """The cable between generator and analyzer, with any extra loss the cable fault adds."""
+
+    def __init__(self, link: GeneratorLink, switches: FaultSwitches) -> None:
+        """Wrap the link to the generator.
+
+        Args:
+            link: How the analyzer reads the generator's state.
+            switches: The analyzer's fault switches.
+        """
+        self._link = link
+        self._switches = switches
+
+    def source_state(self) -> SourceState:
+        """Report the generator's state as it arrives at the analyzer.
+
+        Returns:
+            The generator's state, with its level lowered by the extra cable loss, if any.
+        """
+        state = self._link.source_state()
+        extra_loss_db = self._switches.value(EXTRA_CABLE_LOSS.name)
+        if not extra_loss_db:
+            return state
+        return replace(state, level_dbm=state.level_dbm - extra_loss_db)

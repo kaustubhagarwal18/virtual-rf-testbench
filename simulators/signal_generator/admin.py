@@ -2,7 +2,7 @@
 
 from dataclasses import asdict
 
-from simulators.common.admin import AdminCommands
+from simulators.common.admin import AdminCommands, AdminReply, expect_no_arguments
 from simulators.signal_generator.instrument import SignalGeneratorScpi
 
 
@@ -17,5 +17,18 @@ def generator_admin_commands(generator: SignalGeneratorScpi) -> AdminCommands:
         reads them (see ADR 0002).
     """
     commands = AdminCommands()
-    commands.register("STATE?", lambda: asdict(generator.source_state()))
+
+    def state(arguments: tuple[str, ...]) -> AdminReply:
+        """Report the generator's frequency, level and RF output.
+
+        Args:
+            arguments: The words after STATE?; there must be none.
+
+        Returns:
+            The source state.
+        """
+        expect_no_arguments("STATE?", arguments)
+        return asdict(generator.source_state())
+
+    commands.register("STATE?", state)
     return commands

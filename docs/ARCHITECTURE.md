@@ -18,7 +18,7 @@ flowchart LR
     end
     subgraph bench[Simulated bench]
         generator[SG-1 signal generator<br/>SCPI 5025, admin 5125]
-        analyzer[SA-1 spectrum analyzer<br/>SCPI 5026]
+        analyzer[SA-1 spectrum analyzer<br/>SCPI 5026, admin 5126]
     end
     checks --> sg_driver & sa_driver
     sg_driver & sa_driver --> session
@@ -74,9 +74,14 @@ sequenceDiagram
 - **Numbers** (`numbers.py`, `parser.py`) accept SCPI's units (`1 GHz`, `-10 dBm`), and
   range checks reject out-of-range values with -222 without changing
   the setting.
-- **The admin port** (`admin.py`) answers JSON, apart from the SCPI interface. The analyzer
-  reads the generator's `STATE?` there (ADR 0002). The planned fault switches will be further
-  admin commands, so test code can never reach them over SCPI.
+- **The admin ports** (`admin.py`) answer JSON, apart from the SCPI interface: the generator
+  on 5125, the analyzer on 5126. The analyzer reads the generator's `STATE?` there
+  (ADR 0002), and the fault tooling switches faults there, so test code can never reach them
+  over SCPI.
+- **Faults** (`faults.py`, ADR 0005) are numbers where 0 means off: extra loss in the cable
+  the analyzer reads through, and a delay before the generator handles each SCPI line. A
+  firmware regression is a simulated release instead (`signal_generator/releases.py`): in
+  `0.2.0-rc1`, `OUTP ON` gives -113.
 - **Logs** (`logs.py`) are one JSON object per line on stderr, so they can be searched and,
   later, ingested by the triage service. Logging never blocks an instrument: each record
   goes on a bounded queue that a background thread writes to stderr. If nothing reads
@@ -168,6 +173,29 @@ On pull requests, CI's last job turns the same results into a comment with
 result and a link to the run. The comment starts with a hidden marker, so each push updates
 the same comment instead of adding another.
 
+## Results files and saved runs
+
+Every bench run writes `reports/bench-results.json` (`tests/utilities/results_file.py`): the
+firmware versions, the selection (collected, selected and deselected tests, so a subset never
+passes for a full run), and for each test its outcome, message, the SCPI errors in its
+failure, and its measurements with limits and margins. It holds only what a real bench knows
+after a run, never the cause.
+
+```mermaid
+flowchart LR
+    catalogue[Fault catalogue<br/>tools/faults.py] --> runner[make fault<br/>tools/fault_run.py]
+    runner -->|switch on, or rebuild as a release| bench[Docker bench]
+    runner -->|run| suite[Bench suite] --> results[results.json]
+    bench --> logs[logs.txt]
+    catalogue --> label[label.json<br/>category, cause, fix]
+    results & logs & label --> run[Saved run]
+```
+
+`make fault` saves a run as `results.json`, the last lines of the instruments' logs, and a
+separate `label.json`, so triage reads the evidence without ever seeing the answer. The data
+set in `triage/data/runs/` holds three history runs per fault, which triage may retrieve, and
+one question run per fault at a size no history run has, which it is asked about.
+
 ## Three test suites
 
 | Suite | Runs against | Command | What it proves |
@@ -200,6 +228,7 @@ localhost only.
 | How commands and numbers are parsed | `simulators/common/parser.py`, `numbers.py` |
 | What the analyzer reads | `simulators/common/physics.py` |
 | How the analyzer finds the generator | `simulators/spectrum_analyzer/link.py`, `simulators/signal_generator/admin.py` |
+| Faults and simulated releases | `simulators/common/faults.py`, `simulators/signal_generator/releases.py` |
 | Simulator startup and command-line options | `simulators/common/app.py`, each simulator's `app.py` |
 | A driver method | `drivers/signal_generator.py`, `drivers/spectrum_analyzer.py`, `drivers/base.py` |
 | How sessions connect, and how errors are raised | `drivers/session.py` |
@@ -208,6 +237,8 @@ localhost only.
 | A bench check or its limit | `tests/utilities/bench_checks.py` |
 | The bench suite and its addresses | `tests/bench/` |
 | The image, Compose and healthcheck | `Dockerfile`, `compose.yaml`, `simulators/healthcheck.py` |
+| The JSON results file | `tests/utilities/results_file.py`, `tests/bench/conftest.py` |
+| The fault catalogue, `make fault` and the data set | `tools/faults.py`, `tools/fault_run.py`, `tools/bench_control.py` |
 | CI jobs | `.github/workflows/ci.yml` |
 
 ## Decisions
@@ -218,5 +249,6 @@ localhost only.
 | [0002](adr/0002-analyzer-reads-generator-state-from-admin-port.md) | The analyzer reads the generator's state from the generator's admin port |
 | [0003](adr/0003-rsinstrument-rather-than-plain-pyvisa.md) | RsInstrument rather than plain PyVISA, behind a small session interface |
 | [0004](adr/0004-one-simulator-image-on-compose.md) | One hardened simulator image, run with Docker Compose |
+| [0005](adr/0005-fault-injection.md) | Fault injection on the admin ports and as simulated releases |
 
 What comes next is in the [roadmap](ROADMAP.md).

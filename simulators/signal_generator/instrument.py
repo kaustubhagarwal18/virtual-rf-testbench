@@ -12,6 +12,7 @@ from simulators.common.numbers import (
 )
 from simulators.common.parser import expect_no_parameters, expect_one_parameter, parse_boolean
 from simulators.common.physics import SourceState
+from simulators.signal_generator.releases import apply_release_changes
 
 MANUFACTURER = "VirtualRF"
 MODEL = "SG-1"
@@ -28,7 +29,8 @@ class SignalGeneratorScpi(ScpiInstrument):
         """Create the generator at its default settings, with its commands registered.
 
         Args:
-            firmware_version: The simulator release, reported by *IDN?.
+            firmware_version: The simulator release, reported by *IDN?; a release listed in
+                releases.py also changes some commands.
             serial_number: The unit's serial number, reported by *IDN?.
         """
         super().__init__(Identity(MANUFACTURER, MODEL, serial_number, firmware_version))
@@ -42,6 +44,7 @@ class SignalGeneratorScpi(ScpiInstrument):
             query=self._query_level,
         )
         self.register("OUTPut[:STATe]", write=self._set_output, query=self._query_output)
+        apply_release_changes(self, firmware_version)
 
     def source_state(self) -> SourceState:
         """Report what the generator is sending, for the analyzer.
