@@ -15,6 +15,7 @@ from tools.results_summary import (
     read_junit,
     render,
     suite_of,
+    summarise_files,
     totals_by_suite,
 )
 
@@ -210,3 +211,48 @@ def test_ids_use_the_file_and_keep_test_classes(tmp_path: Path) -> None:
         "tests/unit/test_x.py::TestFoo::test_y",
         "tests/unit/test_x.py::test_z",
     ]
+
+
+BENCH_JUNIT_XML = """<?xml version="1.0" encoding="utf-8"?>
+<testsuites><testsuite name="pytest" tests="1">
+  <testcase classname="tests.bench.test_bench" name="test_level" time="0.050"/>
+</testsuite></testsuites>
+"""
+
+
+def test_several_results_files_are_combined(tmp_path: Path) -> None:
+    """Results from several JUnit files are counted together, each suite in its own row."""
+    summary = summarise_files(
+        [write(tmp_path, "junit.xml", JUNIT_XML), write(tmp_path, "bench.xml", BENCH_JUNIT_XML)],
+        None,
+        80.0,
+    )
+    assert summary.startswith("## Test results: 2 failed, 3 passed, 1 skipped\n")
+    assert "| bench | 1 | 1 | 0 | 0 |" in summary
+    assert "No results from" not in summary
+
+
+def test_a_missing_results_file_is_named_next_to_the_others(tmp_path: Path) -> None:
+    """When one of several files is missing, the summary names it and still counts the rest."""
+    missing = tmp_path / "bench-junit.xml"
+    summary = summarise_files([write(tmp_path, "junit.xml", JUNIT_XML), missing], None, 80.0)
+    assert summary.startswith("## Test results: 2 failed, 2 passed, 1 skipped\n")
+    assert f"No results from `{missing}`: pytest didn't write them." in summary
+
+
+def test_every_file_missing_names_them_all(tmp_path: Path) -> None:
+    """With no results at all, the headline names every file pytest didn't write."""
+    first, second = tmp_path / "junit.xml", tmp_path / "bench-junit.xml"
+    assert summarise_files([first, second], None, 80.0) == (
+        f"## Test results: pytest didn't write `{first}`, `{second}`\n"
+    )
+
+
+def test_main_accepts_several_results_files(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The command line takes any number of JUnit files."""
+    junit = write(tmp_path, "junit.xml", JUNIT_XML)
+    bench = write(tmp_path, "bench.xml", BENCH_JUNIT_XML)
+    assert main([str(junit), str(bench)]) == 0
+    assert "| bench |" in capsys.readouterr().out
