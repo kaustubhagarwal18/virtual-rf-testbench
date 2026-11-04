@@ -28,10 +28,12 @@ cause exists only in another artefact.
 
 ## Consequences
 
-- Three faults produce a failure whose cause is nowhere in `results.json`: the only
-  explanation is one line of `sequence.log`. The unit-mistake fault is the sharpest, because
-  the instruments accept the value and a single measurement fails with nothing wrong in its
-  own numbers.
+- Four faults produce a failure whose cause is nowhere in `results.json`: the three
+  configuration faults and the release that leaks a level offset. The step's name is in the
+  test's message, so it narrows the search, but which parameter and why are only in
+  `sequence.log`. Two pairs are indistinguishable without it: the missing and out-of-range
+  parameters both stop at "read bench configuration", and the decimal error and the leaked
+  offset both stop at "verify level offset".
 - Nothing is swallowed: the full reason, including any SCPI error, is written to the log, and
   the log is part of the run's evidence. What is withheld is only the test's message, which
   is what makes these failures expensive for a person.

@@ -53,7 +53,8 @@ LINK_DOWN = FaultDefinition("LINK_DOWN", "", (0.0, 1.0))
 """1 disconnects the cable between the instruments: the analyzer then sees no signal."""
 
 LINK_FAILS_EVERY = FaultDefinition("LINK_FAILS_EVERY", "sweeps", (0.0, 1000.0))
-"""A loose connector: every Nth reading of the generator's state fails, and only that one."""
+"""A loose connector: every Nth reading of the generator's state fails, and only that one.
+Whole sweeps only: the value is truncated, so anything below 1 leaves the link alone."""
 
 SLOW_RESPONSES = FaultDefinition("SLOW_RESPONSE_S", "s", (0.0, 30.0))
 """A delay before each SCPI line is handled, as from an overloaded instrument. The server

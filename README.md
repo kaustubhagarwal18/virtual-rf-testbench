@@ -206,7 +206,7 @@ holding `results.json`, `logs.txt` with the last lines of both instruments' logs
 separate `label.json` with the known cause, which a closed ticket would hold. A run in which
 nothing failed isn't saved, and one pytest couldn't finish is kept and reported rather than
 counted as a pass. Runs also keep `sequence.log`, the setup sequence's own log, which for
-three of the faults is the only place the cause appears.
+four of the faults is the only place the cause appears.
 
 `make fault-dataset` builds the triage data set in `triage/data/runs/`: three history runs
 per fault, and one question run each. Where a fault has a size, the question uses one no

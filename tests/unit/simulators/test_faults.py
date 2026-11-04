@@ -157,3 +157,20 @@ def test_clearing_the_link_faults_restores_the_signal() -> None:
     commands.handle("FAULT LINK_DOWN 1")
     commands.handle("CLEAR")
     assert [cable.source_state() for _ in range(3)] == [TONE] * 3
+
+
+@pytest.mark.parametrize("every", ["0.5", "0.9"])
+def test_a_link_that_fails_less_than_every_sweep_leaves_it_alone(every: str) -> None:
+    """A value below one sweep can't drop a reading, and must not divide by zero either."""
+    switches, commands = switches_with_commands()
+    cable = CableWithFaults(FixedLink(TONE), switches)
+    commands.handle(f"FAULT LINK_FAILS_EVERY {every}")
+    assert [cable.source_state() for _ in range(4)] == [TONE] * 4
+
+
+def test_a_fractional_link_fault_counts_whole_sweeps() -> None:
+    """2.5 sweeps means every second one: the value is truncated, never rounded up."""
+    switches, commands = switches_with_commands()
+    cable = CableWithFaults(FixedLink(TONE), switches)
+    commands.handle("FAULT LINK_FAILS_EVERY 2.5")
+    assert [cable.source_state() == NO_SIGNAL for _ in range(4)] == [False, True, False, True]

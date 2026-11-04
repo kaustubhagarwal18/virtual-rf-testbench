@@ -167,5 +167,5 @@ class CableWithFaults:
         """
         if self._switches.value(LINK_DOWN.name):
             return True
-        every = self._switches.value(LINK_FAILS_EVERY.name)
-        return bool(every) and self._readings % int(every) == 0
+        every = int(self._switches.value(LINK_FAILS_EVERY.name))
+        return every >= 1 and self._readings % every == 0

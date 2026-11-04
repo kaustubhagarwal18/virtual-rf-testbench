@@ -7,7 +7,7 @@ Each run is a folder:
 |---|---|
 | `results.json` | The bench suite's results: firmware versions, which tests were selected, how pytest exited, and for each test its outcome, message, instrument errors and measurements with limits and margins |
 | `logs.txt` | The last lines of both instruments' JSON logs during the run |
-| `sequence.log` | The setup sequence's own log, one line per step. For three faults this is the only place the cause appears. Absent from the `slow_responses` runs, where no session opens, so no step ever runs |
+| `sequence.log` | The setup sequence's own log, one line per step. For four faults this is the only place the cause appears. Absent from the `slow_responses` runs, where no session opens, so no step ever runs |
 | `label.json` | The known cause: fault, size, category (firmware, bench or test), cause and fix |
 
 - `runs/history/` holds three runs per fault. Triage may retrieve these, with their labels, as
@@ -42,8 +42,12 @@ retrieval generalises.
 - **The `link_flaky` runs differ from each other**, with 4 to 11 failures depending on how
   often the connector drops a sweep. That is the point of it: the same fault doesn't produce
   the same failures twice.
-- **The three configuration faults have identical results files**, 19 errors and one pass.
-  Only `sequence.log` tells them apart, which is what makes them worth asking about.
+- **Two faults have results files that cannot be told apart.**
+  `config_parameter_missing` and `config_parameter_out_of_range` both fail at "read bench
+  configuration" on the station, with 19 errors and one pass; only `sequence.log` says
+  whether the parameter was unset or out of range. `config_decimal_error` and
+  `reset_leaks_offset` both fail at "verify level offset" on the generator, which separates
+  them from the first two but not from each other — again, only the log says which.
 - **The `slow_responses` runs select only the smoke tests.** With every instrument call
   waiting out its timeout, the whole suite would take the best part of an hour per run. The
   results file records what was selected, so a reader can see it.
