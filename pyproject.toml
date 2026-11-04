@@ -70,7 +70,7 @@ min-public-methods = 1
 max-args = 7
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests/unit", "tests/integration"]
 addopts = ["--strict-markers", "--cov", "--cov-report=term-missing"]
 junit_family = "xunit1"
 markers = [

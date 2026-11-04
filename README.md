@@ -113,6 +113,24 @@ make bench-down
 Each container runs as an unprivileged user on a read-only filesystem, and reports the
 image's version in `*IDN?`. ADR 0004 explains the choices.
 
+### The bench suite
+
+With the bench up, run the suite in `tests/bench/` against the containers:
+
+```
+make bench-test
+make bench-summary
+```
+
+The suite treats the instruments as black boxes, reaching them only over SCPI through the
+drivers. It checks identity and release, reset defaults, level and frequency at 1 GHz,
+channel power, the noise floor with RF off, and that bad commands are rejected. Every
+reading is recorded with its limit and margin in `reports/bench-junit.xml`. Tests are
+marked `smoke`, `regression` or `negative`, so `uv run pytest tests/bench -m smoke --no-cov`
+runs just the quick checks. If the bench isn't running, the suite stops at once and says to
+run `make bench-up`. Set `BENCH_HOST`, `BENCH_GENERATOR_PORT` and `BENCH_ANALYZER_PORT` to
+point it at another bench.
+
 ## Drive the instruments from Python
 
 The drivers in `drivers/` control the instruments the way bench tests will: over SCPI
@@ -166,6 +184,7 @@ make test
 | `make test` | Runs the tests and fails if coverage is below 80%; writes `reports/junit.xml` and `reports/coverage.xml` |
 | `make summary` | Prints a results summary from those files: tests run, passed, failed and skipped per suite, coverage, failures and the slowest tests |
 | `make bench-up` / `bench-down` / `bench-logs` | Starts, stops or follows the containerised bench |
+| `make bench-test` / `bench-summary` | Runs the bench suite against the containers, writing `reports/bench-junit.xml`, and prints its summary |
 | `make clean` | Removes the virtual environment, the tool caches and the pre-commit hook; `make setup` restores them |
 
 The pre-commit hooks run `make lint` before every commit, so the same checks run locally and
@@ -179,6 +198,7 @@ GitHub Actions runs on every pull request and on every push to `main`:
 |---|---|
 | Lint | Every pre-commit hook on all files: trailing whitespace, final newlines, YAML and TOML syntax, large files, merge conflict markers, then `make lint` |
 | Test (Python 3.13) | `make test`, including the 80% coverage floor, then `make summary`, whose table appears on the run's summary page |
+| Bench (containers) | Builds the simulator image, `make bench-up`, `make bench-test`, then `make bench-summary` on the run's summary page; shows the simulator logs if anything failed |
 | Secret scan | gitleaks 8.30.1 over the full git history, including merge commits; the download is checksum-verified |
 
 Actions are pinned to commit SHAs, and dependencies install from `uv.lock` exactly

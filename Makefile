@@ -6,7 +6,7 @@ REVISION ?= $(shell git rev-parse --short HEAD 2>/dev/null)
 export FIRMWARE_VERSION REVISION
 PYTHON_PATHS := $(PACKAGES) tests
 
-.PHONY: setup lint fmt test summary bench-up bench-down bench-logs clean
+.PHONY: setup lint fmt test summary bench-up bench-down bench-logs bench-test bench-summary clean
 
 setup:
 	uv sync
@@ -43,6 +43,12 @@ bench-down:
 
 bench-logs:
 	docker compose logs --follow
+
+bench-test:
+	uv run pytest tests/bench --no-cov --junitxml=reports/bench-junit.xml
+
+bench-summary:
+	uv run python -m tools.results_summary reports/bench-junit.xml
 
 clean:
 	-uv run --no-sync pre-commit uninstall
