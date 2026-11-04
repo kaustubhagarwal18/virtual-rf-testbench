@@ -1,7 +1,7 @@
 """The admin port: out-of-band access to a simulator, kept apart from its SCPI interface.
 
 Each admin command is one line and gets one line of JSON back. A simulator's admin port
-reports its state now; fault switches are added in Week 2. Test code never needs it: only
+reports its state now; fault switches will be added later. Test code never needs it: only
 the other simulators and the fault tooling use it, so the SCPI interface stays exactly what a
 real instrument offers.
 """

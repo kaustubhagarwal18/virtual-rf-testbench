@@ -1,4 +1,4 @@
-"""The drivers on the in-process bench: the Week 1 level measurement, recorded with its margin."""
+"""The drivers on the in-process bench: the level measurement, recorded with its margin."""
 
 import socket
 from collections.abc import Callable, Iterator

@@ -14,7 +14,7 @@ from measurements.record import Limit, Measurement
 from tests.support.bench import firmware_versions, measure_peak_at
 
 CARRIER_FREQUENCY_HZ = 1e9
-"""The carrier the Week 1 measurements use."""
+"""The carrier the bench measurements use."""
 
 CARRIER_LEVEL_DBM = -10.0
 """The generator level for the carrier."""

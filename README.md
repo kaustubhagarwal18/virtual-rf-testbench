@@ -50,9 +50,56 @@ assistant's accuracy be measured rather than guessed.
 
 ## Status
 
-Early development. The first milestone is the simulated instruments, their Python drivers
-and the first bench tests, running on Docker Compose. Setup instructions will be added here as
-each part starts working.
+The virtual bench works: the simulated instruments, their drivers, measurement records, and
+a bench suite that runs against the instruments in Docker, locally and in CI. Fault injection
+and calibration come next, then the triage assistant. The [roadmap](docs/ROADMAP.md) has the
+plan, and [ARCHITECTURE.md](docs/ARCHITECTURE.md) explains how the pieces fit
+together.
+
+## Quick start
+
+You need git, `make`, [uv](https://docs.astral.sh/uv/) and Docker. On macOS, install uv with
+Homebrew and start Docker Desktop:
+
+```
+brew install uv
+```
+
+On Linux, follow uv's [installation guide](https://docs.astral.sh/uv/getting-started/installation/)
+and make sure the Docker daemon is running. uv installs Python 3.13 for the project, so the
+system Python doesn't matter.
+
+Clone the repository and install the dependencies:
+
+```
+git clone https://github.com/kaustubhagarwal18/virtual-rf-testbench.git
+cd virtual-rf-testbench
+make setup
+```
+
+Run the tests, which need no Docker:
+
+```
+make test
+```
+
+Start the bench in Docker, run the bench suite against it, and print its results:
+
+```
+make bench-up
+make bench-test
+make bench-summary
+```
+
+The summary shows 7 tests passed. Each reading, with its limit and margin, is in
+`reports/bench-junit.xml`. Stop the bench when you're done:
+
+```
+make bench-down
+```
+
+The sections below go further: talking to the instruments by hand, driving them from
+Python, and the development commands.
 
 ## Run the simulators
 
@@ -203,6 +250,19 @@ GitHub Actions runs on every pull request and on every push to `main`:
 
 Actions are pinned to commit SHAs, and dependencies install from `uv.lock` exactly
 (`uv sync --locked`).
+
+## Known issues
+
+- RsInstrument leaves a socket open when a connection is refused, so a test that connects to
+  a closed port shows a `ResourceWarning`. It comes from the library and is harmless in test
+  runs; [ADR 0003](docs/adr/0003-rsinstrument-rather-than-plain-pyvisa.md) has the details.
+
+## Further reading
+
+- [Architecture](docs/ARCHITECTURE.md): how the simulators, drivers, measurement records and
+  test suites fit together, and where to look in the code
+- [Roadmap](docs/ROADMAP.md): what's done and what comes next
+- [Decision records](docs/adr/): why the main choices were made
 
 ## License
 

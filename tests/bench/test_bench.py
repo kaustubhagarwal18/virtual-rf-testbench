@@ -1,4 +1,4 @@
-"""The Week 1 bench suite, against the simulators running in Docker."""
+"""The bench suite, against the simulators running in Docker."""
 
 import os
 from collections.abc import Callable
@@ -14,7 +14,7 @@ Bench = tuple[SignalGenerator, SpectrumAnalyzer]
 Recorder = Callable[..., None]
 
 NOMINAL_CABLE_LOSS_1GHZ_DB = 1.5
-"""The bench cable's loss at 1 GHz, from its datasheet. Week 2's calibration measures it."""
+"""The bench cable's loss at 1 GHz, from its datasheet, until calibration measures it."""
 
 EXPECTED_CARRIER_LEVEL_DBM = bench_checks.CARRIER_LEVEL_DBM - NOMINAL_CABLE_LOSS_1GHZ_DB
 """What the analyzer should read: the generator level minus the cable's nominal loss."""

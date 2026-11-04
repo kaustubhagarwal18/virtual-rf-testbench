@@ -29,13 +29,13 @@ one line of JSON. `STATE?` returns:
 ```
 
 The analyzer asks for it on every measurement, so a reading always reflects the generator's
-current settings. Test code never uses the admin port; only the simulators and, from Week 2,
+current settings. Test code never uses the admin port; only the simulators and, once it exists,
 the fault tooling do.
 
 ## Consequences
 
 - The analyzer needs the generator's admin address as a setting.
-- The admin port must not be reachable from outside the bench network. Week 7 protects it
-  with a token from OpenBao, as the spec requires.
-- Fault switches (Week 2) become further admin commands registered next to `STATE?`, so
+- The admin port must not be reachable from outside the bench network. Once the bench runs
+  on the cluster, a token from OpenBao protects it.
+- Fault switches, when added, become further admin commands registered next to `STATE?`, so
   injecting a fault never touches the SCPI interface.

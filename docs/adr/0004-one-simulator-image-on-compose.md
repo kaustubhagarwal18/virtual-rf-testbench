@@ -5,8 +5,8 @@
 
 ## Context
 
-Week 1 runs the bench on Docker Compose (`make bench-up`), and every later stage reuses what
-Compose runs: CI service containers in Week 4, Helm charts on k3s in Weeks 5 and 6. The image
+The bench runs on Docker Compose (`make bench-up`), and every later stage reuses what
+Compose runs: CI service containers, then Helm charts on k3s. The image
 is also the firmware release: each simulator version is a release under test.
 
 ## Decision
@@ -41,7 +41,7 @@ is also the firmware release: each simulator version is a release under test.
 
 ## Consequences
 
-- The bench suite (step 10) tests the released image from outside, as CI and k3s will.
-- Week 2's firmware-change fault is a second image tag, and Week 3 adds the triage stack to the
-  same Compose file.
+- The bench suite tests the released image from outside, as CI and k3s will.
+- The planned firmware-change fault will be a second image tag, and the triage stack will
+  join the same Compose file.
 - Docker Desktop must be running for `make bench-up`; `make test` stays Docker-free.
