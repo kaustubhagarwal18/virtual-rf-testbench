@@ -1,0 +1,8 @@
+{
+  "fault": "link_flaky",
+  "size": 3.0,
+  "unit": "sweeps",
+  "category": "bench",
+  "cause": "A loose connector: the signal disappears for one sweep in a few, so a measurement fails for no reason visible in its own numbers",
+  "fix": "Reseated and replaced the connector, then reran the suite"
+}

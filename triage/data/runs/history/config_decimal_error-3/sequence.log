@@ -1,0 +1,38 @@
+17:11:02.839 INFO  step=1 action=read bench configuration instrument=station result=ok
+17:11:02.840 ERROR step=2 action=verify level offset instrument=generator parameter=level_offset_db expected=15.0 reason=AssertionError: the generator carries a level offset of 0 dB, but the bench configuration expects 15 dB
+17:11:02.887 INFO  step=3 action=read bench configuration instrument=station result=ok
+17:11:02.888 ERROR step=4 action=verify level offset instrument=generator parameter=level_offset_db expected=15.0 reason=AssertionError: the generator carries a level offset of 0 dB, but the bench configuration expects 15 dB
+17:11:02.988 INFO  step=5 action=read bench configuration instrument=station result=ok
+17:11:02.989 ERROR step=6 action=verify level offset instrument=generator parameter=level_offset_db expected=15.0 reason=AssertionError: the generator carries a level offset of 0 dB, but the bench configuration expects 15 dB
+17:11:03.016 INFO  step=7 action=read bench configuration instrument=station result=ok
+17:11:03.017 ERROR step=8 action=verify level offset instrument=generator parameter=level_offset_db expected=15.0 reason=AssertionError: the generator carries a level offset of 0 dB, but the bench configuration expects 15 dB
+17:11:03.040 INFO  step=9 action=read bench configuration instrument=station result=ok
+17:11:03.042 ERROR step=10 action=verify level offset instrument=generator parameter=level_offset_db expected=15.0 reason=AssertionError: the generator carries a level offset of 0 dB, but the bench configuration expects 15 dB
+17:11:03.065 INFO  step=11 action=read bench configuration instrument=station result=ok
+17:11:03.066 ERROR step=12 action=verify level offset instrument=generator parameter=level_offset_db expected=15.0 reason=AssertionError: the generator carries a level offset of 0 dB, but the bench configuration expects 15 dB
+17:11:03.090 INFO  step=13 action=read bench configuration instrument=station result=ok
+17:11:03.091 ERROR step=14 action=verify level offset instrument=generator parameter=level_offset_db expected=15.0 reason=AssertionError: the generator carries a level offset of 0 dB, but the bench configuration expects 15 dB
+17:11:03.115 INFO  step=15 action=read bench configuration instrument=station result=ok
+17:11:03.116 ERROR step=16 action=verify level offset instrument=generator parameter=level_offset_db expected=15.0 reason=AssertionError: the generator carries a level offset of 0 dB, but the bench configuration expects 15 dB
+17:11:03.139 INFO  step=17 action=read bench configuration instrument=station result=ok
+17:11:03.140 ERROR step=18 action=verify level offset instrument=generator parameter=level_offset_db expected=15.0 reason=AssertionError: the generator carries a level offset of 0 dB, but the bench configuration expects 15 dB
+17:11:03.164 INFO  step=19 action=read bench configuration instrument=station result=ok
+17:11:03.165 ERROR step=20 action=verify level offset instrument=generator parameter=level_offset_db expected=15.0 reason=AssertionError: the generator carries a level offset of 0 dB, but the bench configuration expects 15 dB
+17:11:03.189 INFO  step=21 action=read bench configuration instrument=station result=ok
+17:11:03.190 ERROR step=22 action=verify level offset instrument=generator parameter=level_offset_db expected=15.0 reason=AssertionError: the generator carries a level offset of 0 dB, but the bench configuration expects 15 dB
+17:11:03.214 INFO  step=23 action=read bench configuration instrument=station result=ok
+17:11:03.215 ERROR step=24 action=verify level offset instrument=generator parameter=level_offset_db expected=15.0 reason=AssertionError: the generator carries a level offset of 0 dB, but the bench configuration expects 15 dB
+17:11:03.239 INFO  step=25 action=read bench configuration instrument=station result=ok
+17:11:03.240 ERROR step=26 action=verify level offset instrument=generator parameter=level_offset_db expected=15.0 reason=AssertionError: the generator carries a level offset of 0 dB, but the bench configuration expects 15 dB
+17:11:03.265 INFO  step=27 action=read bench configuration instrument=station result=ok
+17:11:03.266 ERROR step=28 action=verify level offset instrument=generator parameter=level_offset_db expected=15.0 reason=AssertionError: the generator carries a level offset of 0 dB, but the bench configuration expects 15 dB
+17:11:03.289 INFO  step=29 action=read bench configuration instrument=station result=ok
+17:11:03.290 ERROR step=30 action=verify level offset instrument=generator parameter=level_offset_db expected=15.0 reason=AssertionError: the generator carries a level offset of 0 dB, but the bench configuration expects 15 dB
+17:11:03.315 INFO  step=31 action=read bench configuration instrument=station result=ok
+17:11:03.316 ERROR step=32 action=verify level offset instrument=generator parameter=level_offset_db expected=15.0 reason=AssertionError: the generator carries a level offset of 0 dB, but the bench configuration expects 15 dB
+17:11:03.339 INFO  step=33 action=read bench configuration instrument=station result=ok
+17:11:03.340 ERROR step=34 action=verify level offset instrument=generator parameter=level_offset_db expected=15.0 reason=AssertionError: the generator carries a level offset of 0 dB, but the bench configuration expects 15 dB
+17:11:03.363 INFO  step=35 action=read bench configuration instrument=station result=ok
+17:11:03.364 ERROR step=36 action=verify level offset instrument=generator parameter=level_offset_db expected=15.0 reason=AssertionError: the generator carries a level offset of 0 dB, but the bench configuration expects 15 dB
+17:11:03.387 INFO  step=37 action=read bench configuration instrument=station result=ok
+17:11:03.389 ERROR step=38 action=verify level offset instrument=generator parameter=level_offset_db expected=15.0 reason=AssertionError: the generator carries a level offset of 0 dB, but the bench configuration expects 15 dB

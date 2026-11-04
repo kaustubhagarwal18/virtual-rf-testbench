@@ -185,3 +185,49 @@ def test_a_stalled_child_process_becomes_a_bench_error(action: str, tmp_path: Pa
     }
     with pytest.raises(BenchControlError, match="didn't finish within"):
         actions[action]()
+
+
+def test_starting_the_release_the_bench_already_runs_changes_nothing() -> None:
+    """A long run of faults doesn't restart the containers for every one of them."""
+    runner = RecordingRunner()
+    bench = ComposeBench(run=runner)
+    bench.start("0.1.0")
+    bench.start("0.1.0")
+    assert len(runner.calls) == 1
+
+
+def test_a_different_release_restarts_the_bench() -> None:
+    """A release fault needs the containers recreated, so the version really changes."""
+    runner = RecordingRunner()
+    bench = ComposeBench(run=runner)
+    bench.start("0.1.0")
+    bench.start("0.2.0-rc1")
+    versions = [options["env"]["FIRMWARE_VERSION"] for _command, options in runner.calls]
+    assert versions == ["0.1.0", "0.2.0-rc1"]
+
+
+def test_a_compose_start_that_fails_once_is_retried_after_a_down() -> None:
+    """Compose sometimes can't recreate a container it just replaced; one retry fixes it."""
+
+    class FailsOnce(RecordingRunner):
+        """Fails the first compose up, then succeeds."""
+
+        def __call__(self, command: list[str], **options: Any) -> subprocess.CompletedProcess[str]:
+            """Fail only the first up."""
+            ups = len([call for call, _ in self.calls if "up" in call])
+            completed = super().__call__(command, **options)
+            if "up" in command and ups == 0:
+                return subprocess.CompletedProcess(command, 1, "", "container is unhealthy")
+            return completed
+
+    runner = FailsOnce()
+    ComposeBench(run=runner).start("0.1.0")
+    actions = [[word for word in command if word in {"up", "down"}] for command, _ in runner.calls]
+    assert actions == [["up"], ["down"], ["up"]]
+
+
+def test_a_compose_start_that_keeps_failing_reports_both_attempts() -> None:
+    """When the retry fails too, the error carries what compose said each time."""
+    runner = RecordingRunner(returncode=1, stderr="container is unhealthy")
+    with pytest.raises(BenchControlError, match="twice:\ncontainer is unhealthy"):
+        ComposeBench(run=runner).start("0.1.0")
