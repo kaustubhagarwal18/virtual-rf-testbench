@@ -8,7 +8,7 @@ import pytest
 from drivers.session import InstrumentError
 from drivers.signal_generator import SignalGenerator
 from drivers.spectrum_analyzer import SpectrumAnalyzer
-from tests.support import bench_checks
+from tests.utilities import bench_checks
 
 Bench = tuple[SignalGenerator, SpectrumAnalyzer]
 Recorder = Callable[..., None]

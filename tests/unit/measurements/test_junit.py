@@ -7,7 +7,7 @@ import pytest
 
 from measurements.junit import record_in_junit
 from measurements.record import Limit, Measurement
-from tests.support.strict_json import strict_loads
+from tests.utilities.strict_json import strict_loads
 
 VERSIONS = {"generator": "1.0.0", "analyzer": "1.0.0"}
 

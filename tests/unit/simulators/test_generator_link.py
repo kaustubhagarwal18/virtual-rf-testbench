@@ -8,7 +8,7 @@ import pytest
 
 from simulators.common.physics import SourceState
 from simulators.spectrum_analyzer.link import NO_SIGNAL, AdminPortLink, parse_state
-from tests.support.tcp import serving_in_background
+from tests.utilities.tcp import serving_in_background
 
 
 class _Responder(socketserver.StreamRequestHandler):

@@ -171,7 +171,7 @@ against the floor, and the slowest tests.
 | `tests/bench/` | the containers from `make bench-up`, as black boxes | `make bench-test` | the released image measures correctly from the outside, as a real bench would |
 
 The integration and bench suites take the same measurements through the same checks
-(`tests/support/bench_checks.py`). Only the expected level differs: in-process, the tests know
+(`tests/utilities/bench_checks.py`). Only the expected level differs: in-process, the tests know
 the exact physics; against the containers, they use the cable's datasheet loss. `make test`
 needs no Docker, and enforces the 80% coverage floor over the first two suites.
 
@@ -199,7 +199,7 @@ localhost only.
 | How sessions connect, and how errors are raised | `drivers/session.py` |
 | Limits, margins and JUnit properties | `measurements/record.py`, `measurements/junit.py` |
 | The CI results table | `tools/results_summary.py` |
-| A bench check or its limit | `tests/support/bench_checks.py` |
+| A bench check or its limit | `tests/utilities/bench_checks.py` |
 | The bench suite and its addresses | `tests/bench/` |
 | The image, Compose and healthcheck | `Dockerfile`, `compose.yaml`, `simulators/healthcheck.py` |
 | CI jobs | `.github/workflows/ci.yml` |

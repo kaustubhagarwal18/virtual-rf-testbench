@@ -15,8 +15,8 @@ from drivers.signal_generator import SignalGenerator
 from drivers.spectrum_analyzer import SpectrumAnalyzer
 from simulators.common.physics import BenchParameters, cable_loss_db, flatness_error_db
 from tests.integration.conftest import RunningBench
-from tests.support import bench_checks
-from tests.support.bench import firmware_versions, open_bench
+from tests.utilities import bench_checks
+from tests.utilities.bench import firmware_versions, open_bench
 
 Recorder = Callable[..., None]
 

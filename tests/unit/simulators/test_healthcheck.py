@@ -10,7 +10,7 @@ from contextlib import contextmanager
 import pytest
 
 from simulators.healthcheck import check_instrument, main
-from tests.support.tcp import serving_in_background
+from tests.utilities.tcp import serving_in_background
 
 
 class _OneReplyHandler(socketserver.StreamRequestHandler):

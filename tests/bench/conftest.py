@@ -12,7 +12,7 @@ import pytest
 from drivers.signal_generator import SignalGenerator
 from drivers.spectrum_analyzer import SpectrumAnalyzer
 from simulators.healthcheck import check_instrument
-from tests.support.bench import open_bench
+from tests.utilities.bench import open_bench
 
 BENCH_HOST = os.environ.get("BENCH_HOST", "127.0.0.1")
 GENERATOR_PORT = int(os.environ.get("BENCH_GENERATOR_PORT", "5025"))

@@ -9,7 +9,7 @@ from simulators.common.physics import BenchParameters, cable_loss_db
 from simulators.common.server import bound_port
 from simulators.signal_generator import app as generator_app
 from simulators.spectrum_analyzer import app as analyzer_app
-from tests.support.tcp import ask_line
+from tests.utilities.tcp import ask_line
 
 LEVEL_TOLERANCE_DB = 0.5
 CONCURRENT_QUERIES = 3

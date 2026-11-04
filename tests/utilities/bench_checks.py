@@ -11,7 +11,7 @@ from drivers.session import InstrumentError
 from drivers.signal_generator import SignalGenerator
 from drivers.spectrum_analyzer import SpectrumAnalyzer
 from measurements.record import Limit, Measurement
-from tests.support.bench import firmware_versions, measure_peak_at
+from tests.utilities.bench import firmware_versions, measure_peak_at
 
 CARRIER_FREQUENCY_HZ = 1e9
 """The carrier the bench measurements use."""

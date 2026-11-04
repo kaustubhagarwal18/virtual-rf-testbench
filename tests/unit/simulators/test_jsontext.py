@@ -5,7 +5,7 @@ import math
 import pytest
 
 from simulators.common.jsontext import json_safe, to_json
-from tests.support.strict_json import strict_loads
+from tests.utilities.strict_json import strict_loads
 
 
 def test_non_finite_numbers_become_strings_at_any_depth() -> None:

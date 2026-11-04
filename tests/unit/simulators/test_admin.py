@@ -10,8 +10,8 @@ from simulators.common.admin import AdminCommands, serve_admin
 from simulators.common.server import bound_port
 from simulators.signal_generator.admin import generator_admin_commands
 from simulators.signal_generator.instrument import SignalGeneratorScpi
-from tests.support.strict_json import strict_loads
-from tests.support.tcp import ask_line
+from tests.utilities.strict_json import strict_loads
+from tests.utilities.tcp import ask_line
 
 
 def test_unknown_admin_command_is_an_error_object() -> None:

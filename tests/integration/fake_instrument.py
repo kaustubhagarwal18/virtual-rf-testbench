@@ -5,7 +5,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 
-from tests.support.tcp import serving_in_background
+from tests.utilities.tcp import serving_in_background
 
 
 @dataclass

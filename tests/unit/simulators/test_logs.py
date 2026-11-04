@@ -10,7 +10,7 @@ import time
 from typing import Any
 
 from simulators.common.logs import DroppingQueueHandler, JsonFormatter, json_logging
-from tests.support.strict_json import strict_loads
+from tests.utilities.strict_json import strict_loads
 
 
 def make_record(message: str, **extra: object) -> logging.LogRecord:
