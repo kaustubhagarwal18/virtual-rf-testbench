@@ -7,11 +7,13 @@ import pytest
 from simulators.common.admin import AdminCommands
 from simulators.common.faults import (
     EXTRA_CABLE_LOSS,
+    LINK_DOWN,
+    LINK_FAILS_EVERY,
     SLOW_RESPONSES,
     FaultSwitches,
 )
 from simulators.common.physics import SourceState
-from simulators.spectrum_analyzer.link import CableWithFaults
+from simulators.spectrum_analyzer.link import NO_SIGNAL, CableWithFaults
 
 TONE = SourceState(frequency_hz=1e9, level_dbm=-10.0, output_on=True)
 CABLE_LOSS_DB = 1.5
@@ -30,8 +32,8 @@ class FixedLink:
 
 
 def switches_with_commands() -> tuple[FaultSwitches, AdminCommands]:
-    """Return fault switches for both faults, with their admin commands registered."""
-    switches = FaultSwitches([EXTRA_CABLE_LOSS, SLOW_RESPONSES])
+    """Return fault switches for every fault, with their admin commands registered."""
+    switches = FaultSwitches([EXTRA_CABLE_LOSS, LINK_DOWN, LINK_FAILS_EVERY, SLOW_RESPONSES])
     commands = AdminCommands()
     switches.register_commands(commands)
     return switches, commands
@@ -43,7 +45,12 @@ def test_faults_start_off() -> None:
     assert switches.value(EXTRA_CABLE_LOSS.name) == 0.0
     assert commands.handle("FAULTS?") == {
         "active": {},
-        "available": ["EXTRA_CABLE_LOSS_DB", "SLOW_RESPONSE_S"],
+        "available": [
+            "EXTRA_CABLE_LOSS_DB",
+            "LINK_DOWN",
+            "LINK_FAILS_EVERY",
+            "SLOW_RESPONSE_S",
+        ],
     }
 
 
@@ -78,7 +85,8 @@ def test_clear_switches_every_fault_off() -> None:
         ("FAULT EXTRA_CABLE_LOSS_DB 1 2", "FAULT needs a fault name and a value, or OFF"),
         (
             "FAULT BROKEN_CABLE 1",
-            "Unknown fault BROKEN_CABLE; available: EXTRA_CABLE_LOSS_DB, SLOW_RESPONSE_S",
+            "Unknown fault BROKEN_CABLE; available: EXTRA_CABLE_LOSS_DB, LINK_DOWN, "
+            "LINK_FAILS_EVERY, SLOW_RESPONSE_S",
         ),
         ("FAULT EXTRA_CABLE_LOSS_DB lots", "EXTRA_CABLE_LOSS_DB needs a number in dB, got 'lots'"),
         ("FAULT EXTRA_CABLE_LOSS_DB nan", "EXTRA_CABLE_LOSS_DB needs a number in dB, got 'nan'"),
@@ -111,3 +119,58 @@ def test_cable_loss_lowers_the_level_the_analyzer_receives() -> None:
     assert cable.source_state() == TONE
     commands.handle("FAULT EXTRA_CABLE_LOSS_DB 1.25")
     assert cable.source_state() == SourceState(1e9, -11.25, output_on=True)
+
+
+def test_a_disconnected_cable_leaves_the_analyzer_with_no_signal(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """With the cable down the analyzer sees nothing, and says so in its log."""
+    switches, commands = switches_with_commands()
+    cable = CableWithFaults(FixedLink(TONE), switches)
+    commands.handle("FAULT LINK_DOWN 1")
+    assert cable.source_state() == NO_SIGNAL
+    assert any(
+        "No signal reaching the analyzer" in record.getMessage() for record in caplog.records
+    )
+
+
+def test_a_loose_connector_drops_only_every_nth_reading() -> None:
+    """Every third reading sees nothing; the others are normal, so failures look intermittent."""
+    switches, commands = switches_with_commands()
+    cable = CableWithFaults(FixedLink(TONE), switches)
+    commands.handle("FAULT LINK_FAILS_EVERY 3")
+    readings = [cable.source_state() for _ in range(6)]
+    assert [reading == NO_SIGNAL for reading in readings] == [
+        False,
+        False,
+        True,
+        False,
+        False,
+        True,
+    ]
+
+
+def test_clearing_the_link_faults_restores_the_signal() -> None:
+    """Once the faults are cleared, every reading sees the generator again."""
+    switches, commands = switches_with_commands()
+    cable = CableWithFaults(FixedLink(TONE), switches)
+    commands.handle("FAULT LINK_DOWN 1")
+    commands.handle("CLEAR")
+    assert [cable.source_state() for _ in range(3)] == [TONE] * 3
+
+
+@pytest.mark.parametrize("every", ["0.5", "0.9"])
+def test_a_link_that_fails_less_than_every_sweep_leaves_it_alone(every: str) -> None:
+    """A value below one sweep can't drop a reading, and must not divide by zero either."""
+    switches, commands = switches_with_commands()
+    cable = CableWithFaults(FixedLink(TONE), switches)
+    commands.handle(f"FAULT LINK_FAILS_EVERY {every}")
+    assert [cable.source_state() for _ in range(4)] == [TONE] * 4
+
+
+def test_a_fractional_link_fault_counts_whole_sweeps() -> None:
+    """2.5 sweeps means every second one: the value is truncated, never rounded up."""
+    switches, commands = switches_with_commands()
+    cable = CableWithFaults(FixedLink(TONE), switches)
+    commands.handle("FAULT LINK_FAILS_EVERY 2.5")
+    assert [cable.source_state() == NO_SIGNAL for _ in range(4)] == [False, True, False, True]

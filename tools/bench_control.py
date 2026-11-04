@@ -10,6 +10,7 @@ import sys
 from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 from tools.faults import ANALYZER, GENERATOR
@@ -93,6 +94,7 @@ class ComposeBench:
         self.host = host
         self.admin_ports = ADMIN_PORTS if admin_ports is None else admin_ports
         self._run = run
+        self._release: str | None = None
 
     def send_admin(self, instrument: str, line: str) -> dict[str, Any]:
         """Send one admin command and return its reply.
@@ -125,26 +127,59 @@ class ComposeBench:
     def start(self, firmware_version: str) -> None:
         """Build and start the bench as a firmware release, and wait until it is healthy.
 
+        A bench this object already started on that release is left alone, so a long run of
+        faults doesn't restart the containers dozens of times for no reason. Compose
+        occasionally fails to recreate a container that has just been replaced, so one
+        failure is retried after taking the bench down, and only a second one is an error.
+
         Args:
             firmware_version: The release both instruments report.
 
         Raises:
-            BenchControlError: If docker compose fails or doesn't finish in time.
+            BenchControlError: If docker compose fails twice, or doesn't finish in time.
+        """
+        if self._release == firmware_version:
+            return
+        self._release = None
+        first = self._compose_up(firmware_version)
+        if first.returncode != 0:
+            self.down()
+            retried = self._compose_up(firmware_version)
+            if retried.returncode != 0:
+                raise BenchControlError(
+                    f"docker compose couldn't start the bench as {firmware_version}, twice:\n"
+                    f"{first.stderr.strip()}\n{retried.stderr.strip()}"
+                )
+        self._release = firmware_version
+
+    def _compose_up(self, firmware_version: str) -> subprocess.CompletedProcess[str]:
+        """Ask compose to build and start the bench, and wait for both instruments.
+
+        Args:
+            firmware_version: The release both instruments report.
+
+        Returns:
+            The finished process, whatever its exit code.
         """
         command = ["docker", "compose", "up", "--build", "--detach", "--wait"]
         command += ["--wait-timeout", str(BENCH_HEALTH_TIMEOUT_S)]
-        completed = run_bounded(
+        return run_bounded(
             self._run,
             command,
             BUILD_TIMEOUT_S,
             f"building and starting the bench as {firmware_version}",
             env={**os.environ, "FIRMWARE_VERSION": firmware_version},
         )
-        if completed.returncode != 0:
-            raise BenchControlError(
-                f"docker compose couldn't start the bench as {firmware_version}:\n"
-                f"{completed.stderr.strip()}"
-            )
+
+    def down(self) -> None:
+        """Take the bench down, so the next start recreates it from nothing."""
+        self._release = None
+        run_bounded(
+            self._run,
+            ["docker", "compose", "down", "--remove-orphans"],
+            LOGS_TIMEOUT_S,
+            "taking the bench down",
+        )
 
     def logs_since(self, since: datetime) -> str:
         """Return both instruments' logs from a moment on.
@@ -183,12 +218,22 @@ class PytestSuite:
         """
         self._run = run
 
-    def run(self, results_path: Path, firmware_version: str) -> None:
-        """Run every bench test, writing the JSON results file; failing tests are expected.
+    def run(
+        self,
+        results_path: Path,
+        firmware_version: str,
+        environment: Mapping[str, str] = MappingProxyType({}),
+        selection: Sequence[str] = (),
+    ) -> None:
+        """Run the bench tests, writing the JSON results file; failing tests are expected.
 
         Args:
             results_path: Where the results file goes.
             firmware_version: The release the bench runs, which the identity test expects.
+            environment: Extra environment for the run, such as a bench configuration or
+                where to write the sequence log.
+            selection: Extra pytest arguments, to run a subset when a fault makes the whole
+                suite too slow; the results file records what was selected.
 
         Raises:
             BenchControlError: If the suite didn't finish in time, the bench wasn't running,
@@ -203,14 +248,16 @@ class PytestSuite:
             "-p",
             "no:cacheprovider",
             "-q",
+            *selection,
         ]
-        environment = {
+        run_environment = {
             **os.environ,
+            **environment,
             "BENCH_RESULTS_JSON": str(results_path),
             "FIRMWARE_VERSION": firmware_version,
         }
         completed = run_bounded(
-            self._run, command, SUITE_TIMEOUT_S, "the bench suite", env=environment
+            self._run, command, SUITE_TIMEOUT_S, "the bench suite", env=run_environment
         )
         if completed.returncode == BENCH_NOT_RUNNING_EXIT_CODE:
             raise BenchControlError("The bench isn't running; start it with make bench-up")

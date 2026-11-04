@@ -1,5 +1,10 @@
-"""Steps both bench suites share: opening the two instruments and taking a peak reading."""
+"""Steps both bench suites share: opening the two instruments and taking a peak reading.
 
+Each step is logged at INFO, so a failing test shows in the terminal what it had done to the
+instruments before it failed.
+"""
+
+import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
 
@@ -7,6 +12,8 @@ from drivers.session import RsInstrumentSession, socket_resource
 from drivers.signal_generator import SignalGenerator
 from drivers.spectrum_analyzer import SpectrumAnalyzer
 from drivers.types import PeakReading
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @contextmanager
@@ -65,7 +72,11 @@ def measure_peak_at(
     Returns:
         The analyzer's peak reading.
     """
+    _LOGGER.info("set the generator to %.6g Hz at %.6g dBm", frequency_hz, level_dbm)
     generator.configure(frequency_hz=frequency_hz, level_dbm=level_dbm)
     generator.set_output(on=True)
+    _LOGGER.info("tuned the analyzer to %.6g Hz, 1 MHz span, 1 kHz RBW", frequency_hz)
     analyzer.configure(centre_hz=frequency_hz, span_hz=1e6, rbw_hz=1e3)
-    return analyzer.measure_peak()
+    peak = analyzer.measure_peak()
+    _LOGGER.info("peak: %.6g Hz at %.6g dBm", peak.frequency_hz, peak.level_dbm)
+    return peak

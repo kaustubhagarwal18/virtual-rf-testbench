@@ -1,0 +1,564 @@
+{
+  "run_id": "20261104T171044.783399Z",
+  "started": "2026-11-04T17:10:44+00:00",
+  "duration_s": 0.73,
+  "firmware_versions": {
+    "generator": "0.1.0",
+    "analyzer": "0.1.0"
+  },
+  "selection": {
+    "command": "pytest tests/bench --no-cov -p no:cacheprovider -q",
+    "collected": 20,
+    "selected": 20,
+    "deselected": 0
+  },
+  "exit_status": 1,
+  "collection_errors": [],
+  "totals": {
+    "run": 20,
+    "passed": 8,
+    "skipped": 0,
+    "failed": 12,
+    "error": 0
+  },
+  "tests": [
+    {
+      "id": "tests/bench/test_bench.py::test_instruments_identify_as_the_release_under_test",
+      "outcome": "passed",
+      "duration_s": 0.028,
+      "message": "",
+      "instrument_errors": [],
+      "measurements": []
+    },
+    {
+      "id": "tests/bench/test_bench.py::test_reset_leaves_the_generator_at_safe_defaults",
+      "outcome": "passed",
+      "duration_s": 0.019,
+      "message": "",
+      "instrument_errors": [],
+      "measurements": [
+        {
+          "name": "reset_frequency",
+          "value": 1000000000.0,
+          "unit": "Hz",
+          "limit_low": 999999000.0,
+          "limit_high": 1000001000.0,
+          "margin": 1000.0,
+          "passed": true,
+          "firmware_versions": {
+            "generator": "0.1.0"
+          }
+        },
+        {
+          "name": "reset_level",
+          "value": -30.0,
+          "unit": "dBm",
+          "limit_low": -30.01,
+          "limit_high": -29.99,
+          "margin": 0.010000000000001563,
+          "passed": true,
+          "firmware_versions": {
+            "generator": "0.1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "tests/bench/test_bench.py::test_path_loss_calibration_matches_the_cable_datasheet",
+      "outcome": "failed",
+      "duration_s": 0.07,
+      "message": "Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269 dB, FAIL\npath_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL\npath_loss_2400mhz: 110.207564039 dB, limit 1.82379000772 to 2.82379000772 dB, margin -107.384 dB, FAIL\npath_loss_5000mhz: 110.132770235 dB, limit 2.85410196625 to 3.85410196625 dB, margin -106.279 dB, FAIL",
+      "instrument_errors": [],
+      "measurements": [
+        {
+          "name": "path_loss_100mhz",
+          "value": 109.243158555,
+          "unit": "dB",
+          "limit_low": 0.0,
+          "limit_high": 0.9743416490252569,
+          "margin": -108.26881690597473,
+          "passed": false,
+          "firmware_versions": {
+            "generator": "0.1.0",
+            "analyzer": "0.1.0"
+          }
+        },
+        {
+          "name": "path_loss_1000mhz",
+          "value": 110.881881396,
+          "unit": "dB",
+          "limit_low": 1.0,
+          "limit_high": 2.0,
+          "margin": -108.881881396,
+          "passed": false,
+          "firmware_versions": {
+            "generator": "0.1.0",
+            "analyzer": "0.1.0"
+          }
+        },
+        {
+          "name": "path_loss_2400mhz",
+          "value": 110.207564039,
+          "unit": "dB",
+          "limit_low": 1.8237900077244502,
+          "limit_high": 2.82379000772445,
+          "margin": -107.38377403127555,
+          "passed": false,
+          "firmware_versions": {
+            "generator": "0.1.0",
+            "analyzer": "0.1.0"
+          }
+        },
+        {
+          "name": "path_loss_5000mhz",
+          "value": 110.132770235,
+          "unit": "dB",
+          "limit_low": 2.8541019662496847,
+          "limit_high": 3.8541019662496847,
+          "margin": -106.27866826875031,
+          "passed": false,
+          "firmware_versions": {
+            "generator": "0.1.0",
+            "analyzer": "0.1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "tests/bench/test_bench.py::test_a_level_offset_shifts_the_level_at_the_connector",
+      "outcome": "failed",
+      "duration_s": 0.052,
+      "message": "Failed: level_offset_shift: -1.638722841 dB, limit 1.7 to 2.3 dB, margin -3.33872 dB, FAIL",
+      "instrument_errors": [],
+      "measurements": [
+        {
+          "name": "level_offset_shift",
+          "value": -1.6387228410000034,
+          "unit": "dB",
+          "limit_low": 1.7,
+          "limit_high": 2.3,
+          "margin": -3.3387228410000036,
+          "passed": false,
+          "firmware_versions": {
+            "generator": "0.1.0",
+            "analyzer": "0.1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "tests/bench/test_bench.py::test_level_and_frequency_across_the_band[100000000.0]",
+      "outcome": "passed",
+      "duration_s": 0.03,
+      "message": "",
+      "instrument_errors": [],
+      "measurements": [
+        {
+          "name": "level_100mhz_minus10dbm",
+          "value": -119.243158555,
+          "unit": "dBm",
+          "limit_low": -119.54315855499999,
+          "limit_high": -118.943158555,
+          "margin": 0.29999999999999716,
+          "passed": true,
+          "firmware_versions": {
+            "generator": "0.1.0",
+            "analyzer": "0.1.0"
+          }
+        },
+        {
+          "name": "frequency_100mhz_minus10dbm",
+          "value": 100000000.0,
+          "unit": "Hz",
+          "limit_low": 99999000.0,
+          "limit_high": 100001000.0,
+          "margin": 1000.0,
+          "passed": true,
+          "firmware_versions": {
+            "generator": "0.1.0",
+            "analyzer": "0.1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "tests/bench/test_bench.py::test_level_and_frequency_across_the_band[1000000000.0]",
+      "outcome": "failed",
+      "duration_s": 0.029,
+      "message": "Failed: level_1000mhz_minus10dbm: -119.243158555 dBm, limit -121.181881396 to -120.581881396 dBm, margin -1.33872 dB, FAIL",
+      "instrument_errors": [],
+      "measurements": [
+        {
+          "name": "level_1000mhz_minus10dbm",
+          "value": -119.243158555,
+          "unit": "dBm",
+          "limit_low": -121.181881396,
+          "limit_high": -120.581881396,
+          "margin": -1.3387228410000063,
+          "passed": false,
+          "firmware_versions": {
+            "generator": "0.1.0",
+            "analyzer": "0.1.0"
+          }
+        },
+        {
+          "name": "frequency_1000mhz_minus10dbm",
+          "value": 1000000000.0,
+          "unit": "Hz",
+          "limit_low": 999999000.0,
+          "limit_high": 1000001000.0,
+          "margin": 1000.0,
+          "passed": true,
+          "firmware_versions": {
+            "generator": "0.1.0",
+            "analyzer": "0.1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "tests/bench/test_bench.py::test_level_and_frequency_across_the_band[2400000000.0]",
+      "outcome": "failed",
+      "duration_s": 0.03,
+      "message": "Failed: level_2400mhz_minus10dbm: -119.243158555 dBm, limit -120.507564039 to -119.907564039 dBm, margin -0.664405 dB, FAIL",
+      "instrument_errors": [],
+      "measurements": [
+        {
+          "name": "level_2400mhz_minus10dbm",
+          "value": -119.243158555,
+          "unit": "dBm",
+          "limit_low": -120.507564039,
+          "limit_high": -119.90756403900001,
+          "margin": -0.6644054840000138,
+          "passed": false,
+          "firmware_versions": {
+            "generator": "0.1.0",
+            "analyzer": "0.1.0"
+          }
+        },
+        {
+          "name": "frequency_2400mhz_minus10dbm",
+          "value": 2400000000.0,
+          "unit": "Hz",
+          "limit_low": 2399999000.0,
+          "limit_high": 2400001000.0,
+          "margin": 1000.0,
+          "passed": true,
+          "firmware_versions": {
+            "generator": "0.1.0",
+            "analyzer": "0.1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "tests/bench/test_bench.py::test_level_and_frequency_across_the_band[5000000000.0]",
+      "outcome": "failed",
+      "duration_s": 0.03,
+      "message": "Failed: level_5000mhz_minus10dbm: -119.243158555 dBm, limit -120.432770235 to -119.832770235 dBm, margin -0.589612 dB, FAIL",
+      "instrument_errors": [],
+      "measurements": [
+        {
+          "name": "level_5000mhz_minus10dbm",
+          "value": -119.243158555,
+          "unit": "dBm",
+          "limit_low": -120.43277023499999,
+          "limit_high": -119.832770235,
+          "margin": -0.5896116800000044,
+          "passed": false,
+          "firmware_versions": {
+            "generator": "0.1.0",
+            "analyzer": "0.1.0"
+          }
+        },
+        {
+          "name": "frequency_5000mhz_minus10dbm",
+          "value": 5000000000.0,
+          "unit": "Hz",
+          "limit_low": 4999999000.0,
+          "limit_high": 5000001000.0,
+          "margin": 1000.0,
+          "passed": true,
+          "firmware_versions": {
+            "generator": "0.1.0",
+            "analyzer": "0.1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "tests/bench/test_bench.py::test_level_accuracy_across_levels[-30.0]",
+      "outcome": "failed",
+      "duration_s": 0.03,
+      "message": "Failed: level_1000mhz_minus30dbm: -119.243158555 dBm, limit -141.181881396 to -140.581881396 dBm, margin -21.3387 dB, FAIL",
+      "instrument_errors": [],
+      "measurements": [
+        {
+          "name": "level_1000mhz_minus30dbm",
+          "value": -119.243158555,
+          "unit": "dBm",
+          "limit_low": -141.181881396,
+          "limit_high": -140.58188139599997,
+          "margin": -21.338722840999978,
+          "passed": false,
+          "firmware_versions": {
+            "generator": "0.1.0",
+            "analyzer": "0.1.0"
+          }
+        },
+        {
+          "name": "frequency_1000mhz_minus30dbm",
+          "value": 1000000000.0,
+          "unit": "Hz",
+          "limit_low": 999999000.0,
+          "limit_high": 1000001000.0,
+          "margin": 1000.0,
+          "passed": true,
+          "firmware_versions": {
+            "generator": "0.1.0",
+            "analyzer": "0.1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "tests/bench/test_bench.py::test_level_accuracy_across_levels[-20.0]",
+      "outcome": "failed",
+      "duration_s": 0.029,
+      "message": "Failed: level_1000mhz_minus20dbm: -119.243158555 dBm, limit -131.181881396 to -130.581881396 dBm, margin -11.3387 dB, FAIL",
+      "instrument_errors": [],
+      "measurements": [
+        {
+          "name": "level_1000mhz_minus20dbm",
+          "value": -119.243158555,
+          "unit": "dBm",
+          "limit_low": -131.181881396,
+          "limit_high": -130.58188139599997,
+          "margin": -11.338722840999978,
+          "passed": false,
+          "firmware_versions": {
+            "generator": "0.1.0",
+            "analyzer": "0.1.0"
+          }
+        },
+        {
+          "name": "frequency_1000mhz_minus20dbm",
+          "value": 1000000000.0,
+          "unit": "Hz",
+          "limit_low": 999999000.0,
+          "limit_high": 1000001000.0,
+          "margin": 1000.0,
+          "passed": true,
+          "firmware_versions": {
+            "generator": "0.1.0",
+            "analyzer": "0.1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "tests/bench/test_bench.py::test_level_accuracy_across_levels[0.0]",
+      "outcome": "failed",
+      "duration_s": 0.029,
+      "message": "Failed: level_1000mhz_0dbm: -119.243158555 dBm, limit -111.181881396 to -110.581881396 dBm, margin -8.06128 dB, FAIL",
+      "instrument_errors": [],
+      "measurements": [
+        {
+          "name": "level_1000mhz_0dbm",
+          "value": -119.243158555,
+          "unit": "dBm",
+          "limit_low": -111.181881396,
+          "limit_high": -110.581881396,
+          "margin": -8.061277159,
+          "passed": false,
+          "firmware_versions": {
+            "generator": "0.1.0",
+            "analyzer": "0.1.0"
+          }
+        },
+        {
+          "name": "frequency_1000mhz_0dbm",
+          "value": 1000000000.0,
+          "unit": "Hz",
+          "limit_low": 999999000.0,
+          "limit_high": 1000001000.0,
+          "margin": 1000.0,
+          "passed": true,
+          "firmware_versions": {
+            "generator": "0.1.0",
+            "analyzer": "0.1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "tests/bench/test_bench.py::test_channel_power_at_the_carrier",
+      "outcome": "failed",
+      "duration_s": 0.033,
+      "message": "Failed: channel_power_1ghz_100khz: -98.9790097618 dBm, limit -121.381881396 to -120.381881396 dBm, margin -21.4029 dB, FAIL",
+      "instrument_errors": [],
+      "measurements": [
+        {
+          "name": "channel_power_1ghz_100khz",
+          "value": -98.9790097618,
+          "unit": "dBm",
+          "limit_low": -121.381881396,
+          "limit_high": -120.381881396,
+          "margin": -21.402871634199997,
+          "passed": false,
+          "firmware_versions": {
+            "generator": "0.1.0",
+            "analyzer": "0.1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "tests/bench/test_bench.py::test_noise_floor_with_rf_off[1000.0--110.0]",
+      "outcome": "passed",
+      "duration_s": 0.027,
+      "message": "",
+      "instrument_errors": [],
+      "measurements": [
+        {
+          "name": "noise_floor_1khz_rbw",
+          "value": -119.243158555,
+          "unit": "dBm",
+          "limit_low": null,
+          "limit_high": -110.0,
+          "margin": 9.243158554999994,
+          "passed": true,
+          "firmware_versions": {
+            "generator": "0.1.0",
+            "analyzer": "0.1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "tests/bench/test_bench.py::test_noise_floor_with_rf_off[100000.0--90.0]",
+      "outcome": "passed",
+      "duration_s": 0.027,
+      "message": "",
+      "instrument_errors": [],
+      "measurements": [
+        {
+          "name": "noise_floor_100khz_rbw",
+          "value": -99.2431585551,
+          "unit": "dBm",
+          "limit_low": null,
+          "limit_high": -90.0,
+          "margin": 9.243158555099996,
+          "passed": true,
+          "firmware_versions": {
+            "generator": "0.1.0",
+            "analyzer": "0.1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "tests/bench/test_bench.py::test_second_harmonic_is_below_its_limit",
+      "outcome": "failed",
+      "duration_s": 0.038,
+      "message": "Failed: second_harmonic_1000mhz: -1.638722841 dBc, limit <= -40 dBc, margin -38.3613 dBc, FAIL",
+      "instrument_errors": [],
+      "measurements": [
+        {
+          "name": "second_harmonic_1000mhz",
+          "value": -1.6387228410000034,
+          "unit": "dBc",
+          "limit_low": null,
+          "limit_high": -40.0,
+          "margin": -38.361277159,
+          "passed": false,
+          "firmware_versions": {
+            "generator": "0.1.0",
+            "analyzer": "0.1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "tests/bench/test_bench.py::test_switching_the_output_off_removes_the_carrier",
+      "outcome": "failed",
+      "duration_s": 0.039,
+      "message": "Failed: carrier_to_floor_1000mhz: 1.638722841 dB, limit >= 60 dB, margin -58.3613 dB, FAIL",
+      "instrument_errors": [],
+      "measurements": [
+        {
+          "name": "carrier_to_floor_1000mhz",
+          "value": 1.6387228410000034,
+          "unit": "dB",
+          "limit_low": 60.0,
+          "limit_high": null,
+          "margin": -58.361277159,
+          "passed": false,
+          "firmware_versions": {
+            "generator": "0.1.0",
+            "analyzer": "0.1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "tests/bench/test_bench.py::test_out_of_range_level_is_rejected_and_changes_nothing",
+      "outcome": "passed",
+      "duration_s": 0.019,
+      "message": "",
+      "instrument_errors": [],
+      "measurements": []
+    },
+    {
+      "id": "tests/bench/test_bench.py::test_unknown_command_is_reported",
+      "outcome": "passed",
+      "duration_s": 0.018,
+      "message": "",
+      "instrument_errors": [],
+      "measurements": []
+    },
+    {
+      "id": "tests/bench/test_bench.py::test_a_parameter_of_the_wrong_type_is_reported",
+      "outcome": "passed",
+      "duration_s": 0.019,
+      "message": "",
+      "instrument_errors": [],
+      "measurements": []
+    },
+    {
+      "id": "tests/bench/test_bench.py::test_the_bench_recovers_after_a_dropped_connection",
+      "outcome": "failed",
+      "duration_s": 0.037,
+      "message": "Failed: level_1000mhz_minus10dbm: -119.243158555 dBm, limit -121.181881396 to -120.581881396 dBm, margin -1.33872 dB, FAIL",
+      "instrument_errors": [],
+      "measurements": [
+        {
+          "name": "level_1000mhz_minus10dbm",
+          "value": -119.243158555,
+          "unit": "dBm",
+          "limit_low": -121.181881396,
+          "limit_high": -120.581881396,
+          "margin": -1.3387228410000063,
+          "passed": false,
+          "firmware_versions": {
+            "generator": "0.1.0",
+            "analyzer": "0.1.0"
+          }
+        },
+        {
+          "name": "frequency_1000mhz_minus10dbm",
+          "value": 1000000000.0,
+          "unit": "Hz",
+          "limit_low": 999999000.0,
+          "limit_high": 1000001000.0,
+          "margin": 1000.0,
+          "passed": true,
+          "firmware_versions": {
+            "generator": "0.1.0",
+            "analyzer": "0.1.0"
+          }
+        }
+      ]
+    }
+  ]
+}

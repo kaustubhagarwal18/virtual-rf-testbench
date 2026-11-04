@@ -1,0 +1,8 @@
+{
+  "fault": "config_decimal_error",
+  "size": null,
+  "unit": "",
+  "category": "test",
+  "cause": "The bench configuration asks for a 15 dB level offset where 1.5 dB was meant: a misplaced decimal point, and far more than the cable's loss",
+  "fix": "Corrected level_offset_db to 1.5"
+}

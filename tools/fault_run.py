@@ -12,13 +12,15 @@ import argparse
 import json
 import shutil
 import sys
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import asdict
 from datetime import UTC, datetime
 from importlib.metadata import version
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, Protocol
 
+from tests.utilities.sequencer import SEQUENCE_LOG_VARIABLE
 from tools.bench_control import BenchControlError, ComposeBench, PytestSuite
 from tools.faults import CATALOGUE, Bench, Fault
 
@@ -56,12 +58,20 @@ class ControllableBench(Bench, Protocol):
 class Suite(Protocol):
     """Runs the bench suite."""
 
-    def run(self, results_path: Path, firmware_version: str) -> None:
+    def run(
+        self,
+        results_path: Path,
+        firmware_version: str,
+        environment: Mapping[str, str] = MappingProxyType({}),
+        selection: Sequence[str] = (),
+    ) -> None:
         """Run it, writing the results file.
 
         Args:
             results_path: Where the results file goes.
             firmware_version: The release the bench runs.
+            environment: Extra environment for the run.
+            selection: Extra pytest arguments.
         """
 
 
@@ -143,7 +153,11 @@ def run_fault(
     started = clock()
     try:
         firmware_version = fault.apply(bench, size, default_version)
-        suite.run(run_folder / "results.json", firmware_version)
+        environment = {
+            **fault.suite_environment(size),
+            SEQUENCE_LOG_VARIABLE: str(run_folder / "sequence.log"),
+        }
+        suite.run(run_folder / "results.json", firmware_version, environment, fault.selection)
         logs = bench.logs_since(started)
     finally:
         try_restore(fault, bench, default_version)
@@ -154,8 +168,30 @@ def run_fault(
     if not totals["failed"] and not totals["error"]:
         shutil.rmtree(run_folder)
         raise NothingFailedError(f"{fault.name} at size {size}: every test passed; not saved")
-    kept_logs = logs.splitlines()[-LOG_LINES_KEPT:]
-    (run_folder / "logs.txt").write_text("\n".join(kept_logs) + "\n", encoding="utf-8")
+    save_logs(run_folder, logs)
+    save_label(run_folder, fault, size)
+    return totals
+
+
+def save_logs(run_folder: Path, logs: str) -> None:
+    """Keep the last lines of the instruments' logs with the run.
+
+    Args:
+        run_folder: Where the run is saved.
+        logs: Everything both instruments logged during the run.
+    """
+    kept = logs.splitlines()[-LOG_LINES_KEPT:]
+    (run_folder / "logs.txt").write_text("\n".join(kept) + "\n", encoding="utf-8")
+
+
+def save_label(run_folder: Path, fault: Fault, size: float | None) -> None:
+    """Write the run's known cause beside its evidence, in a file of its own.
+
+    Args:
+        run_folder: Where the run is saved.
+        fault: The fault that was injected.
+        size: Its size, or None for a fault that has none.
+    """
     label = {
         "fault": fault.name,
         "size": fault.question_size if size is None else size,
@@ -163,7 +199,6 @@ def run_fault(
         **asdict(fault.label),
     }
     (run_folder / "label.json").write_text(json.dumps(label, indent=2) + "\n", encoding="utf-8")
-    return totals
 
 
 def dataset_plan() -> Iterator[tuple[Path, Fault, float | None]]:

@@ -57,11 +57,14 @@ def test_slow_responses_trip_a_short_timeout_until_cleared(running_bench: Runnin
 
 
 def test_each_simulator_offers_only_its_own_faults(running_bench: RunningBench) -> None:
-    """The generator offers slow responses, the analyzer the cable fault."""
+    """The generator offers slow responses; the cable and link faults belong to the analyzer."""
     generator_faults = admin(running_bench.generator.admin_port, "FAULTS?")
     analyzer_faults = admin(running_bench.analyzer.admin_port, "FAULTS?")
     assert generator_faults == {"active": {}, "available": ["SLOW_RESPONSE_S"]}
-    assert analyzer_faults == {"active": {}, "available": ["EXTRA_CABLE_LOSS_DB"]}
+    assert analyzer_faults == {
+        "active": {},
+        "available": ["EXTRA_CABLE_LOSS_DB", "LINK_DOWN", "LINK_FAILS_EVERY"],
+    }
 
 
 def test_the_admin_port_answers_while_a_slow_scpi_line_waits(running_bench: RunningBench) -> None:

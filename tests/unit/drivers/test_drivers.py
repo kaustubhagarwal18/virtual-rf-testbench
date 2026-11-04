@@ -155,3 +155,19 @@ def test_non_finite_numbers_are_unexpected(reply: str) -> None:
     """A reading of NaN or infinity is reported, never passed on as a number."""
     with pytest.raises(InstrumentError, match="Unexpected reply"):
         SignalGenerator(FakeSession({"SOUR:POW?": reply})).level_dbm()
+
+
+def test_the_generator_reads_and_sets_its_level_offset() -> None:
+    """The offset is read and set with the SCPI command real generators use."""
+    session = FakeSession({"SOUR:POW:OFFS?": "-1.5"})
+    generator = SignalGenerator(session)
+    assert generator.offset_db() == pytest.approx(-1.5)
+    generator.set_offset_db(-2.25)
+    assert session.sent == ["SOUR:POW:OFFS?", "SOUR:POW:OFFS -2.25", "*OPC?"]
+
+
+def test_the_analyzer_sets_its_channel_bandwidth() -> None:
+    """The channel bandwidth is set and the command group waited for."""
+    session = FakeSession()
+    SpectrumAnalyzer(session).set_channel_bandwidth_hz(1e5)
+    assert session.sent == ["POW:ACH:BAND 100000", "*OPC?"]

@@ -2,6 +2,7 @@
 
 import math
 import statistics
+from dataclasses import replace
 
 import pytest
 
@@ -130,7 +131,9 @@ def test_same_seed_gives_the_same_readings() -> None:
 def test_different_seeds_give_different_readings() -> None:
     """A different seed gives a different sequence of readings."""
     first = PhysicsModel(PARAMETERS)
-    second = PhysicsModel(BenchParameters(seed=PARAMETERS.seed + 1))
+    second = PhysicsModel(
+        BenchParameters(noise=replace(PARAMETERS.noise, seed=PARAMETERS.noise.seed + 1))
+    )
     assert first.peak_reading_dbm(STRONG_TONE, RBW_HZ) != second.peak_reading_dbm(
         STRONG_TONE, RBW_HZ
     )
@@ -151,7 +154,7 @@ def test_strong_tone_readings_scatter_by_the_repeatability() -> None:
     assert statistics.fmean(readings) == pytest.approx(
         model.expected_peak_dbm(STRONG_TONE, RBW_HZ), abs=0.005
     )
-    assert statistics.stdev(readings) == pytest.approx(PARAMETERS.repeatability_db, rel=0.2)
+    assert statistics.stdev(readings) == pytest.approx(PARAMETERS.noise.repeatability_db, rel=0.2)
 
 
 def test_noise_floor_readings_scatter_more() -> None:
@@ -159,7 +162,7 @@ def test_noise_floor_readings_scatter_more() -> None:
     model = PhysicsModel(PARAMETERS)
     silent = SourceState(frequency_hz=1e9, level_dbm=-10.0, output_on=False)
     readings = [model.peak_reading_dbm(silent, RBW_HZ) for _ in range(2000)]
-    assert statistics.stdev(readings) == pytest.approx(PARAMETERS.noise_floor_spread_db, rel=0.2)
+    assert statistics.stdev(readings) == pytest.approx(PARAMETERS.noise.floor_spread_db, rel=0.2)
 
 
 CHANNEL_BANDWIDTH_HZ = 1e5
@@ -195,7 +198,7 @@ def test_channel_power_readings_scatter_by_the_repeatability() -> None:
     readings = [
         model.channel_power_reading_dbm(STRONG_TONE, 1e9, CHANNEL_BANDWIDTH_HZ) for _ in range(2000)
     ]
-    assert statistics.stdev(readings) == pytest.approx(PARAMETERS.repeatability_db, rel=0.2)
+    assert statistics.stdev(readings) == pytest.approx(PARAMETERS.noise.repeatability_db, rel=0.2)
 
 
 def test_tone_visibility_needs_ten_db_above_the_floor() -> None:
@@ -205,3 +208,28 @@ def test_tone_visibility_needs_ten_db_above_the_floor() -> None:
     weak = SourceState(frequency_hz=1e9, level_dbm=floor + 5.0, output_on=True)
     assert model.tone_is_visible(STRONG_TONE, RBW_HZ)
     assert not model.tone_is_visible(weak, RBW_HZ)
+
+
+def test_the_generator_puts_a_carrier_and_a_second_harmonic_on_the_cable() -> None:
+    """A real generator isn't perfectly clean: there is a weaker tone at twice the frequency."""
+    model = PhysicsModel(PARAMETERS)
+    carrier, harmonic = model.signals(STRONG_TONE)
+    assert carrier == STRONG_TONE
+    assert harmonic.frequency_hz == 2 * STRONG_TONE.frequency_hz
+    assert harmonic.level_dbm == STRONG_TONE.level_dbm + PARAMETERS.second_harmonic_dbc
+    assert harmonic.output_on
+
+
+def test_nothing_is_on_the_cable_with_the_output_off() -> None:
+    """With RF off there is no carrier and no harmonic."""
+    assert not PhysicsModel(PARAMETERS).signals(replace(STRONG_TONE, output_on=False))
+
+
+def test_the_harmonic_suffers_more_cable_loss_than_the_carrier() -> None:
+    """At twice the frequency the cable loses more, so the harmonic arrives weaker than its dBc."""
+    model = PhysicsModel(PARAMETERS)
+    carrier, harmonic = model.signals(STRONG_TONE)
+    carrier_at_analyzer = model.expected_peak_dbm(carrier, RBW_HZ)
+    harmonic_at_analyzer = model.expected_peak_dbm(harmonic, RBW_HZ)
+    suppression_dbc = harmonic_at_analyzer - carrier_at_analyzer
+    assert suppression_dbc < PARAMETERS.second_harmonic_dbc

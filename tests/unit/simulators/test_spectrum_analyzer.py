@@ -310,3 +310,35 @@ def test_each_command_after_a_semicolon_needs_its_full_path(
     analyzer.process("CALC:MARK:MAX")
     assert len(analyzer.process(line)) == reply_count
     assert errors_of(analyzer) == errors
+
+
+def test_the_second_harmonic_is_measured_at_twice_the_carrier_frequency() -> None:
+    """Tuned to 2 GHz with a 1 GHz carrier, the analyzer sees the harmonic below it."""
+    analyzer = make_analyzer()
+    carrier_dbm = peak(analyzer)[1]
+    analyzer.process("FREQ:CENT 2 GHz")
+    harmonic_dbm = peak(analyzer)[1]
+    assert harmonic_dbm < carrier_dbm + PARAMETERS.second_harmonic_dbc
+    assert harmonic_dbm > carrier_dbm + PARAMETERS.second_harmonic_dbc - 5
+
+
+def test_the_carrier_is_still_what_a_span_around_it_measures() -> None:
+    """Adding a harmonic doesn't change what the analyzer reads at the carrier."""
+    analyzer = make_analyzer()
+    assert peak(analyzer)[1] == pytest.approx(EXPECTED_TONE_DBM, abs=LEVEL_TOLERANCE_DB)
+
+
+def test_a_span_holding_neither_signal_reads_the_noise_floor() -> None:
+    """Between the carrier and its harmonic there is only noise."""
+    analyzer = make_analyzer()
+    analyzer.process("FREQ:CENT 1.5 GHz")
+    assert peak(analyzer)[1] == pytest.approx(
+        noise_floor_dbm(1e3, PARAMETERS.noise_figure_db), abs=2.5
+    )
+
+
+def test_the_marker_sits_on_whichever_signal_is_in_the_span() -> None:
+    """With the harmonic in view the marker reports its frequency, not the carrier's."""
+    analyzer = make_analyzer()
+    analyzer.process("FREQ:CENT 2 GHz")
+    assert peak(analyzer)[0] == pytest.approx(2e9, abs=1e3)

@@ -72,6 +72,7 @@ max-args = 7
 [tool.pytest.ini_options]
 testpaths = ["tests/unit", "tests/integration"]
 addopts = ["--strict-markers", "--cov", "--cov-report=term-missing"]
+log_level = "INFO"
 junit_family = "xunit1"
 markers = [
     "smoke: fast checks that the bench is alive",

@@ -181,9 +181,20 @@ firmware regression is a simulated release instead: build the bench as `0.2.0-rc
 FIRMWARE_VERSION=0.2.0-rc1 make bench-up
 ```
 
-`make fault` does all of this for one fault from the catalogue (`cable_loss`,
-`slow_responses` or `output_command_change`): it switches the fault on, runs the bench
-suite, saves the run, and restores the bench.
+`make fault` does all of this for one fault from the catalogue: it switches the fault on,
+runs the bench suite, saves the run, and restores the bench.
+
+| Fault | Cause | What the suite shows |
+|---|---|---|
+| `cable_loss` | bench | Calibration is out of limits at every frequency; the levels, being calibrated, still pass |
+| `link_down` | bench | Nothing connected: 12 measurements read the noise floor, and each sweep logs a warning |
+| `link_flaky` | bench | A loose connector drops one sweep in four: a few failures with nothing wrong in their own numbers |
+| `slow_responses` | test | Every instrument call outlives the session timeout; the instruments report no errors |
+| `config_parameter_missing` | test | The setup sequence stops at step 1; `sequence.log` names the parameter nobody set |
+| `config_parameter_out_of_range` | test | Step 1 again, with a value beyond the generator's range |
+| `config_decimal_error` | test | A 15 dB offset where 1.5 dB was meant: step 2 fails, and only the log says so |
+| `reset_leaks_offset` | firmware | `0.2.0-rc2` stops clearing the level offset on `*RST`, so every test after the offset test fails on a setting it never touched |
+| `output_command_change` | firmware | `0.2.0-rc1` drops the short `OUTP` form: -113 on a new release |
 
 ```
 make fault NAME=cable_loss SIZE=1.5
@@ -194,10 +205,12 @@ run in any order. Each run lands in its own folder, `results/faults/<fault>-<tim
 holding `results.json`, `logs.txt` with the last lines of both instruments' logs, and a
 separate `label.json` with the known cause, which a closed ticket would hold. A run in which
 nothing failed isn't saved, and one pytest couldn't finish is kept and reported rather than
-counted as a pass. `make fault-dataset` builds the triage data set in
-`triage/data/runs/`: three history runs per fault, and one question run each. For the two
-faults with a size, the question uses a size no history run has; the firmware fault has no
-size, so its question repeats release `0.2.0-rc1`. ADR 0005 explains the design.
+counted as a pass. Runs also keep `sequence.log`, the setup sequence's own log, which for
+four of the faults is the only place the cause appears.
+
+`make fault-dataset` builds the triage data set in `triage/data/runs/`: three history runs
+per fault, and one question run each. Where a fault has a size, the question uses one no
+history run has. ADR 0005 explains the faults, ADR 0007 the sequence log.
 
 ### The bench suite
 
@@ -209,8 +222,13 @@ make bench-summary
 ```
 
 The suite treats the instruments as black boxes, reaching them only over SCPI through the
-drivers. It checks identity and release, reset defaults, level and frequency at 1 GHz,
-channel power, the noise floor with RF off, and that bad commands are rejected. Every
+drivers. It measures the bench's path loss first and judges every level against it
+(ADR 0006), then checks identity and release, reset defaults, level and frequency at four
+frequencies and three levels, channel power, the noise floor at two bandwidths, the second
+harmonic, that the output really switches, that bad commands are rejected, and that a
+dropped connection doesn't take an instrument down. Before each test a short sequence reads
+the bench configuration and puts the instruments into the state it asks for, logging each
+step to `sequence.log`. Every
 reading is recorded with its limit and margin in `reports/bench-junit.xml`, and every run
 writes `reports/bench-results.json`: the firmware versions, which tests were selected, each
 test's outcome and message, the instrument errors in it, and every measurement. Tests are
@@ -274,6 +292,7 @@ make test
 | `make bench-up` / `bench-down` / `bench-logs` | Starts, stops or follows the containerised bench |
 | `make bench-test` / `bench-summary` | Runs the bench suite against the containers, writing `reports/bench-junit.xml` and `reports/bench-results.json`, and prints its summary |
 | `make fault NAME=… [SIZE=…]` | Runs the bench suite with one fault on and saves the run with its label in `results/faults/` |
+| `BENCH_LEVEL_OFFSET_DB`, `BENCH_CHANNEL_BANDWIDTH_HZ` | The bench configuration the setup sequence applies; unset means a healthy bench |
 | `make fault-dataset` | Rebuilds the triage data set in `triage/data/runs/`: every fault, three history runs and one question run each |
 | `make clean` | Removes the virtual environment, the tool caches and the pre-commit hook; `make setup` restores them |
 

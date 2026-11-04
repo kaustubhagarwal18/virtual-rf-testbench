@@ -55,3 +55,12 @@ class SpectrumAnalyzer(ScpiDriver):
         self.session.write(f"POW:ACH:BAND {scpi_number(channel_bandwidth_hz)}")
         self.sweep()
         return self.query_number("CALC1:MARK1:FUNC:POW:RES? CPOW")
+
+    def set_channel_bandwidth_hz(self, channel_bandwidth_hz: float) -> None:
+        """Set the bandwidth channel power is measured over, then wait for it to finish.
+
+        Args:
+            channel_bandwidth_hz: The channel bandwidth.
+        """
+        self.session.write(f"POW:ACH:BAND {scpi_number(channel_bandwidth_hz)}")
+        self.wait_until_complete()

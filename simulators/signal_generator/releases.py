@@ -5,13 +5,16 @@ what the generator does; every other version behaves as the baseline. Releases a
 by exact name, so a real version bump never picks up a simulated regression by accident.
 """
 
-from typing import NoReturn, Protocol
+from typing import NoReturn, Protocol, runtime_checkable
 
 from simulators.common.errors import ScpiCommandError, ScpiError, ScpiErrorCode
 from simulators.common.instrument import ScpiInstrument
 
 CHANGED_OUTPUT_RELEASE = "0.2.0-rc1"
 """A release candidate whose RF output command needs its :STATe keyword."""
+
+LEAKY_RESET_RELEASE = "0.2.0-rc2"
+"""A release candidate whose *RST no longer clears the level offset."""
 
 
 class ReleaseChange(Protocol):
@@ -54,8 +57,38 @@ class OutputNeedsStateKeyword:
         instrument.register("OUTPut", write=_undefined_header, query=_undefined_header)
 
 
+@runtime_checkable
+class LevelOffsetInstrument(Protocol):
+    """An instrument with a level offset that *RST normally clears."""
+
+    def keep_offset_across_reset(self) -> None:
+        """Stop *RST from clearing the offset."""
+
+
+class ResetKeepsTheLevelOffset:
+    """*RST no longer clears the level offset, so one test's offset reaches the next.
+
+    A regression of this shape is nasty on a bench: the test that sets an offset passes, and
+    tests that run later read low for no reason of their own.
+    """
+
+    def apply(self, instrument: ScpiInstrument) -> None:
+        """Stop the instrument clearing its offset on reset.
+
+        Args:
+            instrument: The generator.
+
+        Raises:
+            TypeError: If the instrument has no level offset to keep.
+        """
+        if not isinstance(instrument, LevelOffsetInstrument):
+            raise TypeError(f"{type(instrument).__name__} has no level offset to keep")
+        instrument.keep_offset_across_reset()
+
+
 RELEASE_CHANGES: dict[str, tuple[ReleaseChange, ...]] = {
     CHANGED_OUTPUT_RELEASE: (OutputNeedsStateKeyword(),),
+    LEAKY_RESET_RELEASE: (ResetKeepsTheLevelOffset(),),
 }
 """The changes each simulated release makes, by exact firmware version."""
 

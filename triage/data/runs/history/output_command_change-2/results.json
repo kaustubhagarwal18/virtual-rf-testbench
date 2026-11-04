@@ -1,29 +1,31 @@
 {
-  "run_id": "20261104T125446.573923Z",
-  "started": "2026-11-04T12:54:46+00:00",
-  "duration_s": 2.395,
+  "run_id": "20261104T171318.344117Z",
+  "started": "2026-11-04T17:13:18+00:00",
+  "duration_s": 3.109,
   "firmware_versions": {
     "generator": "0.2.0-rc1",
     "analyzer": "0.2.0-rc1"
   },
   "selection": {
     "command": "pytest tests/bench --no-cov -p no:cacheprovider -q",
-    "collected": 7,
-    "selected": 7,
+    "collected": 20,
+    "selected": 20,
     "deselected": 0
   },
+  "exit_status": 1,
+  "collection_errors": [],
   "totals": {
-    "run": 7,
+    "run": 20,
     "passed": 3,
     "skipped": 0,
-    "failed": 4,
-    "error": 0
+    "failed": 7,
+    "error": 10
   },
   "tests": [
     {
       "id": "tests/bench/test_bench.py::test_instruments_identify_as_the_release_under_test",
       "outcome": "passed",
-      "duration_s": 0.023,
+      "duration_s": 0.029,
       "message": "",
       "instrument_errors": [],
       "measurements": []
@@ -31,17 +33,42 @@
     {
       "id": "tests/bench/test_bench.py::test_reset_leaves_the_generator_at_safe_defaults",
       "outcome": "failed",
-      "duration_s": 2.025,
+      "duration_s": 2.03,
       "message": "drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to 'OUTP?'; instrument errors: 'TCPIP::127.0.0.1::5025::SOCKET': Query 'OUTP?' - VISA Timeout error occurred (2000 milliseconds) and ... Instrument error detected: -113,\"Undefined header\"",
       "instrument_errors": [
         "-113,\"Undefined header\""
       ],
-      "measurements": []
+      "measurements": [
+        {
+          "name": "reset_frequency",
+          "value": 1000000000.0,
+          "unit": "Hz",
+          "limit_low": 999999000.0,
+          "limit_high": 1000001000.0,
+          "margin": 1000.0,
+          "passed": true,
+          "firmware_versions": {
+            "generator": "0.2.0-rc1"
+          }
+        },
+        {
+          "name": "reset_level",
+          "value": -30.0,
+          "unit": "dBm",
+          "limit_low": -30.01,
+          "limit_high": -29.99,
+          "margin": 0.010000000000001563,
+          "passed": true,
+          "firmware_versions": {
+            "generator": "0.2.0-rc1"
+          }
+        }
+      ]
     },
     {
-      "id": "tests/bench/test_bench.py::test_level_and_frequency_at_1ghz",
-      "outcome": "failed",
-      "duration_s": 0.022,
+      "id": "tests/bench/test_bench.py::test_path_loss_calibration_matches_the_cable_datasheet",
+      "outcome": "error",
+      "duration_s": 0.029,
       "message": "drivers.session.InstrumentError: TCPIP::127.0.0.1::5025::SOCKET: 'OUTP ON' failed: 'TCPIP::127.0.0.1::5025::SOCKET': Instrument error detected: -113,\"Undefined header\"",
       "instrument_errors": [
         "-113,\"Undefined header\""
@@ -49,9 +76,9 @@
       "measurements": []
     },
     {
-      "id": "tests/bench/test_bench.py::test_channel_power_at_1ghz",
+      "id": "tests/bench/test_bench.py::test_a_level_offset_shifts_the_level_at_the_connector",
       "outcome": "failed",
-      "duration_s": 0.019,
+      "duration_s": 0.023,
       "message": "drivers.session.InstrumentError: TCPIP::127.0.0.1::5025::SOCKET: 'OUTP ON' failed: 'TCPIP::127.0.0.1::5025::SOCKET': Instrument error detected: -113,\"Undefined header\"",
       "instrument_errors": [
         "-113,\"Undefined header\""
@@ -59,10 +86,120 @@
       "measurements": []
     },
     {
-      "id": "tests/bench/test_bench.py::test_noise_floor_with_rf_off",
+      "id": "tests/bench/test_bench.py::test_level_and_frequency_across_the_band[100000000.0]",
+      "outcome": "error",
+      "duration_s": 0.0,
+      "message": "drivers.session.InstrumentError: TCPIP::127.0.0.1::5025::SOCKET: 'OUTP ON' failed: 'TCPIP::127.0.0.1::5025::SOCKET': Instrument error detected: -113,\"Undefined header\"",
+      "instrument_errors": [
+        "-113,\"Undefined header\""
+      ],
+      "measurements": []
+    },
+    {
+      "id": "tests/bench/test_bench.py::test_level_and_frequency_across_the_band[1000000000.0]",
+      "outcome": "error",
+      "duration_s": 0.0,
+      "message": "drivers.session.InstrumentError: TCPIP::127.0.0.1::5025::SOCKET: 'OUTP ON' failed: 'TCPIP::127.0.0.1::5025::SOCKET': Instrument error detected: -113,\"Undefined header\"",
+      "instrument_errors": [
+        "-113,\"Undefined header\""
+      ],
+      "measurements": []
+    },
+    {
+      "id": "tests/bench/test_bench.py::test_level_and_frequency_across_the_band[2400000000.0]",
+      "outcome": "error",
+      "duration_s": 0.0,
+      "message": "drivers.session.InstrumentError: TCPIP::127.0.0.1::5025::SOCKET: 'OUTP ON' failed: 'TCPIP::127.0.0.1::5025::SOCKET': Instrument error detected: -113,\"Undefined header\"",
+      "instrument_errors": [
+        "-113,\"Undefined header\""
+      ],
+      "measurements": []
+    },
+    {
+      "id": "tests/bench/test_bench.py::test_level_and_frequency_across_the_band[5000000000.0]",
+      "outcome": "error",
+      "duration_s": 0.0,
+      "message": "drivers.session.InstrumentError: TCPIP::127.0.0.1::5025::SOCKET: 'OUTP ON' failed: 'TCPIP::127.0.0.1::5025::SOCKET': Instrument error detected: -113,\"Undefined header\"",
+      "instrument_errors": [
+        "-113,\"Undefined header\""
+      ],
+      "measurements": []
+    },
+    {
+      "id": "tests/bench/test_bench.py::test_level_accuracy_across_levels[-30.0]",
+      "outcome": "error",
+      "duration_s": 0.0,
+      "message": "drivers.session.InstrumentError: TCPIP::127.0.0.1::5025::SOCKET: 'OUTP ON' failed: 'TCPIP::127.0.0.1::5025::SOCKET': Instrument error detected: -113,\"Undefined header\"",
+      "instrument_errors": [
+        "-113,\"Undefined header\""
+      ],
+      "measurements": []
+    },
+    {
+      "id": "tests/bench/test_bench.py::test_level_accuracy_across_levels[-20.0]",
+      "outcome": "error",
+      "duration_s": 0.0,
+      "message": "drivers.session.InstrumentError: TCPIP::127.0.0.1::5025::SOCKET: 'OUTP ON' failed: 'TCPIP::127.0.0.1::5025::SOCKET': Instrument error detected: -113,\"Undefined header\"",
+      "instrument_errors": [
+        "-113,\"Undefined header\""
+      ],
+      "measurements": []
+    },
+    {
+      "id": "tests/bench/test_bench.py::test_level_accuracy_across_levels[0.0]",
+      "outcome": "error",
+      "duration_s": 0.0,
+      "message": "drivers.session.InstrumentError: TCPIP::127.0.0.1::5025::SOCKET: 'OUTP ON' failed: 'TCPIP::127.0.0.1::5025::SOCKET': Instrument error detected: -113,\"Undefined header\"",
+      "instrument_errors": [
+        "-113,\"Undefined header\""
+      ],
+      "measurements": []
+    },
+    {
+      "id": "tests/bench/test_bench.py::test_channel_power_at_the_carrier",
+      "outcome": "error",
+      "duration_s": 0.0,
+      "message": "drivers.session.InstrumentError: TCPIP::127.0.0.1::5025::SOCKET: 'OUTP ON' failed: 'TCPIP::127.0.0.1::5025::SOCKET': Instrument error detected: -113,\"Undefined header\"",
+      "instrument_errors": [
+        "-113,\"Undefined header\""
+      ],
+      "measurements": []
+    },
+    {
+      "id": "tests/bench/test_bench.py::test_noise_floor_with_rf_off[1000.0--110.0]",
       "outcome": "failed",
-      "duration_s": 0.017,
+      "duration_s": 0.024,
       "message": "drivers.session.InstrumentError: TCPIP::127.0.0.1::5025::SOCKET: 'OUTP OFF' failed: 'TCPIP::127.0.0.1::5025::SOCKET': Instrument error detected: -113,\"Undefined header\"",
+      "instrument_errors": [
+        "-113,\"Undefined header\""
+      ],
+      "measurements": []
+    },
+    {
+      "id": "tests/bench/test_bench.py::test_noise_floor_with_rf_off[100000.0--90.0]",
+      "outcome": "failed",
+      "duration_s": 0.021,
+      "message": "drivers.session.InstrumentError: TCPIP::127.0.0.1::5025::SOCKET: 'OUTP OFF' failed: 'TCPIP::127.0.0.1::5025::SOCKET': Instrument error detected: -113,\"Undefined header\"",
+      "instrument_errors": [
+        "-113,\"Undefined header\""
+      ],
+      "measurements": []
+    },
+    {
+      "id": "tests/bench/test_bench.py::test_second_harmonic_is_below_its_limit",
+      "outcome": "failed",
+      "duration_s": 0.038,
+      "message": "drivers.session.InstrumentError: TCPIP::127.0.0.1::5025::SOCKET: 'OUTP ON' failed: 'TCPIP::127.0.0.1::5025::SOCKET': Instrument error detected: -113,\"Undefined header\"",
+      "instrument_errors": [
+        "-113,\"Undefined header\""
+      ],
+      "measurements": []
+    },
+    {
+      "id": "tests/bench/test_bench.py::test_switching_the_output_off_removes_the_carrier",
+      "outcome": "failed",
+      "duration_s": 0.027,
+      "message": "drivers.session.InstrumentError: TCPIP::127.0.0.1::5025::SOCKET: 'OUTP ON' failed: 'TCPIP::127.0.0.1::5025::SOCKET': Instrument error detected: -113,\"Undefined header\"",
       "instrument_errors": [
         "-113,\"Undefined header\""
       ],
@@ -71,7 +208,7 @@
     {
       "id": "tests/bench/test_bench.py::test_out_of_range_level_is_rejected_and_changes_nothing",
       "outcome": "passed",
-      "duration_s": 0.02,
+      "duration_s": 0.023,
       "message": "",
       "instrument_errors": [],
       "measurements": []
@@ -79,9 +216,29 @@
     {
       "id": "tests/bench/test_bench.py::test_unknown_command_is_reported",
       "outcome": "passed",
-      "duration_s": 0.019,
+      "duration_s": 0.021,
       "message": "",
       "instrument_errors": [],
+      "measurements": []
+    },
+    {
+      "id": "tests/bench/test_bench.py::test_a_parameter_of_the_wrong_type_is_reported",
+      "outcome": "failed",
+      "duration_s": 0.021,
+      "message": "Failed: 'OUTP MAYBE': expected error -104, the instrument reported: TCPIP::127.0.0.1::5025::SOCKET: 'OUTP MAYBE' failed: 'TCPIP::127.0.0.1::5025::SOCKET': Instrument error detected: -113,\"Undefined header\"",
+      "instrument_errors": [
+        "-113,\"Undefined header\""
+      ],
+      "measurements": []
+    },
+    {
+      "id": "tests/bench/test_bench.py::test_the_bench_recovers_after_a_dropped_connection",
+      "outcome": "error",
+      "duration_s": 0.0,
+      "message": "drivers.session.InstrumentError: TCPIP::127.0.0.1::5025::SOCKET: 'OUTP ON' failed: 'TCPIP::127.0.0.1::5025::SOCKET': Instrument error detected: -113,\"Undefined header\"",
+      "instrument_errors": [
+        "-113,\"Undefined header\""
+      ],
       "measurements": []
     }
   ]
