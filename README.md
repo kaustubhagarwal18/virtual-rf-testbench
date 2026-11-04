@@ -151,7 +151,8 @@ make bench-up
 ```
 
 It builds the image, starts both instruments, and returns once each answers `*IDN?`. They
-listen on localhost only: the generator on 5025 (admin port 5125) and the analyzer on 5026.
+listen on localhost only: the generator on 5025 (admin port 5125) and the analyzer on 5026
+(admin port 5126).
 The `nc` and Python examples on this page work against them unchanged.
 
 ```
@@ -161,6 +162,42 @@ make bench-down
 
 Each container runs as an unprivileged user on a read-only filesystem, and reports the
 image's version in `*IDN?`. ADR 0004 explains the choices.
+
+### Faults
+
+Faults make the bench fail the way real benches do, with a known cause. Bench faults are
+switched on the admin ports, never over SCPI:
+
+```
+printf 'FAULT EXTRA_CABLE_LOSS_DB 1.0\n' | nc -w 1 127.0.0.1 5126
+printf 'FAULT SLOW_RESPONSE_S 2.5\n' | nc -w 1 127.0.0.1 5125
+```
+
+`FAULTS?` lists the active and available faults, and `CLEAR` switches them all off. A
+firmware regression is a simulated release instead: build the bench as `0.2.0-rc1`, in which
+`OUTP ON` gives -113 and only `OUTP:STAT ON` works:
+
+```
+FIRMWARE_VERSION=0.2.0-rc1 make bench-up
+```
+
+`make fault` does all of this for one fault from the catalogue (`cable_loss`,
+`slow_responses` or `output_command_change`): it switches the fault on, runs the bench
+suite, saves the run, and restores the bench.
+
+```
+make fault NAME=cable_loss SIZE=1.5
+```
+
+`make fault` starts the bench on the release the fault needs, so the examples above can be
+run in any order. Each run lands in its own folder, `results/faults/<fault>-<timestamp>/`,
+holding `results.json`, `logs.txt` with the last lines of both instruments' logs, and a
+separate `label.json` with the known cause, which a closed ticket would hold. A run in which
+nothing failed isn't saved, and one pytest couldn't finish is kept and reported rather than
+counted as a pass. `make fault-dataset` builds the triage data set in
+`triage/data/runs/`: three history runs per fault, and one question run each. For the two
+faults with a size, the question uses a size no history run has; the firmware fault has no
+size, so its question repeats release `0.2.0-rc1`. ADR 0005 explains the design.
 
 ### The bench suite
 
@@ -174,7 +211,9 @@ make bench-summary
 The suite treats the instruments as black boxes, reaching them only over SCPI through the
 drivers. It checks identity and release, reset defaults, level and frequency at 1 GHz,
 channel power, the noise floor with RF off, and that bad commands are rejected. Every
-reading is recorded with its limit and margin in `reports/bench-junit.xml`. Tests are
+reading is recorded with its limit and margin in `reports/bench-junit.xml`, and every run
+writes `reports/bench-results.json`: the firmware versions, which tests were selected, each
+test's outcome and message, the instrument errors in it, and every measurement. Tests are
 marked `smoke`, `regression` or `negative`, so `uv run pytest tests/bench -m smoke --no-cov`
 runs just the quick checks. If the bench isn't running, the suite stops at once and says to
 run `make bench-up`. Set `BENCH_HOST`, `BENCH_GENERATOR_PORT` and `BENCH_ANALYZER_PORT` to
@@ -233,7 +272,9 @@ make test
 | `make test` | Runs the tests and fails if coverage is below 80%; writes `reports/junit.xml` and `reports/coverage.xml` |
 | `make summary` | Prints a results summary from those files: tests run, passed, failed and skipped per suite, coverage, failures and the slowest tests |
 | `make bench-up` / `bench-down` / `bench-logs` | Starts, stops or follows the containerised bench |
-| `make bench-test` / `bench-summary` | Runs the bench suite against the containers, writing `reports/bench-junit.xml`, and prints its summary |
+| `make bench-test` / `bench-summary` | Runs the bench suite against the containers, writing `reports/bench-junit.xml` and `reports/bench-results.json`, and prints its summary |
+| `make fault NAME=… [SIZE=…]` | Runs the bench suite with one fault on and saves the run with its label in `results/faults/` |
+| `make fault-dataset` | Rebuilds the triage data set in `triage/data/runs/`: every fault, three history runs and one question run each |
 | `make clean` | Removes the virtual environment, the tool caches and the pre-commit hook; `make setup` restores them |
 
 The pre-commit hooks run `make lint` before every commit, so the same checks run locally and

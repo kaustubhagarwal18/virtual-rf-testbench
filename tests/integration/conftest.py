@@ -157,7 +157,7 @@ def running_bench() -> Iterator[RunningBench]:
             """Start the analyzer, linked to the generator's admin port.
 
             Returns:
-                The analyzer's SCPI server.
+                The analyzer's SCPI and admin servers.
             """
             settings = analyzer_app.Settings(
                 host="127.0.0.1",
@@ -166,12 +166,13 @@ def running_bench() -> Iterator[RunningBench]:
                 generator_admin_port=generator_admin_port,
                 firmware_version="9.9.9",
                 serial_number="200001",
+                admin_port=0,
             )
-            return (await analyzer_app.start(settings),)
+            return await analyzer_app.start(settings)
 
         with ServersInBackground(start_analyzer) as analyzer:
-            (analyzer_scpi_port,) = analyzer.ports()
+            analyzer_scpi_port, analyzer_admin_port = analyzer.ports()
             yield RunningBench(
                 RunningSimulator(generator_scpi_port, generator_admin_port),
-                RunningSimulator(analyzer_scpi_port),
+                RunningSimulator(analyzer_scpi_port, analyzer_admin_port),
             )

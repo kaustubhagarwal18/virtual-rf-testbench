@@ -1,0 +1,8 @@
+{
+  "fault": "slow_responses",
+  "size": 2.5,
+  "unit": "s",
+  "category": "test",
+  "cause": "The test's 2 s instrument timeout is shorter than the generator's response time",
+  "fix": "Raised the session timeout to cover the instrument's specified response time"
+}

@@ -33,7 +33,7 @@ async def measure_concurrently() -> list[str]:
             admin_port=0,
         )
     )
-    analyzer = await analyzer_app.start(
+    analyzer, analyzer_admin = await analyzer_app.start(
         analyzer_app.Settings(
             host="127.0.0.1",
             scpi_port=0,
@@ -41,9 +41,10 @@ async def measure_concurrently() -> list[str]:
             serial_number="200001",
             generator_admin_host="127.0.0.1",
             generator_admin_port=bound_port(generator_admin),
+            admin_port=0,
         )
     )
-    async with generator_scpi, generator_admin, analyzer:
+    async with generator_scpi, generator_admin, analyzer, analyzer_admin:
         await ask_line(bound_port(generator_scpi), "POW -10;OUTP ON;*OPC?")
         return list(
             await asyncio.gather(

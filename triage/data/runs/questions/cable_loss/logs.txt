@@ -1,0 +1,34 @@
+signal-generator-1  | {"time": "2026-11-04T12:08:27.640+00:00", "level": "INFO", "logger": "simulators.common.server", "message": "Client connected", "server": "scpi", "peer": "('172.18.0.1', 56510)"}
+signal-generator-1  | {"time": "2026-11-04T12:08:27.642+00:00", "level": "INFO", "logger": "simulators.common.server", "message": "Client disconnected", "server": "scpi", "peer": "('172.18.0.1', 56510)"}
+signal-generator-1  | {"time": "2026-11-04T12:08:27.647+00:00", "level": "INFO", "logger": "simulators.common.server", "message": "Client connected", "server": "scpi", "peer": "('172.18.0.1', 56520)"}
+signal-generator-1  | {"time": "2026-11-04T12:08:27.663+00:00", "level": "INFO", "logger": "simulators.common.server", "message": "Client disconnected", "server": "scpi", "peer": "('172.18.0.1', 56520)"}
+signal-generator-1  | {"time": "2026-11-04T12:08:27.664+00:00", "level": "INFO", "logger": "simulators.common.server", "message": "Client connected", "server": "scpi", "peer": "('172.18.0.1', 56530)"}
+signal-generator-1  | {"time": "2026-11-04T12:08:27.680+00:00", "level": "INFO", "logger": "simulators.common.server", "message": "Client disconnected", "server": "scpi", "peer": "('172.18.0.1', 56530)"}
+signal-generator-1  | {"time": "2026-11-04T12:08:27.680+00:00", "level": "INFO", "logger": "simulators.common.server", "message": "Client connected", "server": "scpi", "peer": "('172.18.0.1', 56532)"}
+signal-generator-1  | {"time": "2026-11-04T12:08:27.730+00:00", "level": "INFO", "logger": "simulators.common.server", "message": "Client disconnected", "server": "scpi", "peer": "('172.18.0.1', 56532)"}
+signal-generator-1  | {"time": "2026-11-04T12:08:27.731+00:00", "level": "INFO", "logger": "simulators.common.server", "message": "Client connected", "server": "scpi", "peer": "('172.18.0.1', 56538)"}
+signal-generator-1  | {"time": "2026-11-04T12:08:27.767+00:00", "level": "INFO", "logger": "simulators.common.server", "message": "Client disconnected", "server": "scpi", "peer": "('172.18.0.1', 56538)"}
+signal-generator-1  | {"time": "2026-11-04T12:08:27.768+00:00", "level": "INFO", "logger": "simulators.common.server", "message": "Client connected", "server": "scpi", "peer": "('172.18.0.1', 56548)"}
+signal-generator-1  | {"time": "2026-11-04T12:08:27.794+00:00", "level": "INFO", "logger": "simulators.common.server", "message": "Client disconnected", "server": "scpi", "peer": "('172.18.0.1', 56548)"}
+signal-generator-1  | {"time": "2026-11-04T12:08:27.795+00:00", "level": "INFO", "logger": "simulators.common.server", "message": "Client connected", "server": "scpi", "peer": "('172.18.0.1', 56554)"}
+signal-generator-1  | {"time": "2026-11-04T12:08:27.809+00:00", "level": "WARNING", "logger": "simulators.common.instrument", "message": "Command rejected", "command": "SOUR:POW 25", "error": "-222,\"Data out of range;25 dBm\""}
+signal-generator-1  | {"time": "2026-11-04T12:08:27.813+00:00", "level": "INFO", "logger": "simulators.common.server", "message": "Client disconnected", "server": "scpi", "peer": "('172.18.0.1', 56554)"}
+signal-generator-1  | {"time": "2026-11-04T12:08:27.814+00:00", "level": "INFO", "logger": "simulators.common.server", "message": "Client connected", "server": "scpi", "peer": "('172.18.0.1', 56566)"}
+signal-generator-1  | {"time": "2026-11-04T12:08:27.826+00:00", "level": "WARNING", "logger": "simulators.common.instrument", "message": "Command rejected", "command": "SOURce:BOGus 1", "error": "-113,\"Undefined header\""}
+signal-generator-1  | {"time": "2026-11-04T12:08:27.829+00:00", "level": "INFO", "logger": "simulators.common.server", "message": "Client disconnected", "server": "scpi", "peer": "('172.18.0.1', 56566)"}
+spectrum-analyzer-1  | {"time": "2026-11-04T12:08:27.644+00:00", "level": "INFO", "logger": "simulators.common.server", "message": "Client connected", "server": "scpi", "peer": "('172.18.0.1', 56862)"}
+spectrum-analyzer-1  | {"time": "2026-11-04T12:08:27.646+00:00", "level": "INFO", "logger": "simulators.common.server", "message": "Client disconnected", "server": "scpi", "peer": "('172.18.0.1', 56862)"}
+spectrum-analyzer-1  | {"time": "2026-11-04T12:08:27.653+00:00", "level": "INFO", "logger": "simulators.common.server", "message": "Client connected", "server": "scpi", "peer": "('172.18.0.1', 56864)"}
+spectrum-analyzer-1  | {"time": "2026-11-04T12:08:27.663+00:00", "level": "INFO", "logger": "simulators.common.server", "message": "Client disconnected", "server": "scpi", "peer": "('172.18.0.1', 56864)"}
+spectrum-analyzer-1  | {"time": "2026-11-04T12:08:27.670+00:00", "level": "INFO", "logger": "simulators.common.server", "message": "Client connected", "server": "scpi", "peer": "('172.18.0.1', 56880)"}
+spectrum-analyzer-1  | {"time": "2026-11-04T12:08:27.679+00:00", "level": "INFO", "logger": "simulators.common.server", "message": "Client disconnected", "server": "scpi", "peer": "('172.18.0.1', 56880)"}
+spectrum-analyzer-1  | {"time": "2026-11-04T12:08:27.686+00:00", "level": "INFO", "logger": "simulators.common.server", "message": "Client connected", "server": "scpi", "peer": "('172.18.0.1', 56886)"}
+spectrum-analyzer-1  | {"time": "2026-11-04T12:08:27.730+00:00", "level": "INFO", "logger": "simulators.common.server", "message": "Client disconnected", "server": "scpi", "peer": "('172.18.0.1', 56886)"}
+spectrum-analyzer-1  | {"time": "2026-11-04T12:08:27.737+00:00", "level": "INFO", "logger": "simulators.common.server", "message": "Client connected", "server": "scpi", "peer": "('172.18.0.1', 56902)"}
+spectrum-analyzer-1  | {"time": "2026-11-04T12:08:27.767+00:00", "level": "INFO", "logger": "simulators.common.server", "message": "Client disconnected", "server": "scpi", "peer": "('172.18.0.1', 56902)"}
+spectrum-analyzer-1  | {"time": "2026-11-04T12:08:27.774+00:00", "level": "INFO", "logger": "simulators.common.server", "message": "Client connected", "server": "scpi", "peer": "('172.18.0.1', 56918)"}
+spectrum-analyzer-1  | {"time": "2026-11-04T12:08:27.794+00:00", "level": "INFO", "logger": "simulators.common.server", "message": "Client disconnected", "server": "scpi", "peer": "('172.18.0.1', 56918)"}
+spectrum-analyzer-1  | {"time": "2026-11-04T12:08:27.801+00:00", "level": "INFO", "logger": "simulators.common.server", "message": "Client connected", "server": "scpi", "peer": "('172.18.0.1', 56920)"}
+spectrum-analyzer-1  | {"time": "2026-11-04T12:08:27.813+00:00", "level": "INFO", "logger": "simulators.common.server", "message": "Client disconnected", "server": "scpi", "peer": "('172.18.0.1', 56920)"}
+spectrum-analyzer-1  | {"time": "2026-11-04T12:08:27.820+00:00", "level": "INFO", "logger": "simulators.common.server", "message": "Client connected", "server": "scpi", "peer": "('172.18.0.1', 56928)"}
+spectrum-analyzer-1  | {"time": "2026-11-04T12:08:27.829+00:00", "level": "INFO", "logger": "simulators.common.server", "message": "Client disconnected", "server": "scpi", "peer": "('172.18.0.1', 56928)"}

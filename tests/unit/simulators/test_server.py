@@ -224,3 +224,33 @@ def test_bound_port_refuses_sockets_on_different_ports() -> None:
     """Port 0 on several addresses gives several ports; that is refused with a clear message."""
     with pytest.raises(ValueError, match="one address"):
         bound_port(fake_server(50001, 50002))
+
+
+def test_a_delay_waits_before_each_line_without_holding_the_lock() -> None:
+    """With a delay, each line waits first; another server on the same lock answers meanwhile."""
+    delay_s = 0.5
+
+    async def scenario() -> tuple[float, float]:
+        """Ask the slow server and, while it waits, a fast server sharing its lock."""
+        lock = asyncio.Lock()
+        slow = await serve_lines(
+            lambda line: [line], "127.0.0.1", 0, name="scpi", lock=lock, delay_s=lambda: delay_s
+        )
+        fast = await serve_lines(lambda line: [line], "127.0.0.1", 0, name="admin", lock=lock)
+        async with slow, fast:
+            slow_reader, slow_writer = await connect(slow)
+            fast_reader, fast_writer = await connect(fast)
+            started = asyncio.get_running_loop().time()
+            slow_reply = asyncio.create_task(ask(slow_reader, slow_writer, "*IDN?\n"))
+            await asyncio.sleep(0.05)
+            assert await ask(fast_reader, fast_writer, "STATE?\n") == "STATE?"
+            fast_s = asyncio.get_running_loop().time() - started
+            assert await slow_reply == "*IDN?"
+            slow_s = asyncio.get_running_loop().time() - started
+            await close(slow_writer)
+            await close(fast_writer)
+        return fast_s, slow_s
+
+    fast_s, slow_s = asyncio.run(scenario())
+    assert fast_s < delay_s / 2
+    assert slow_s >= delay_s

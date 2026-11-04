@@ -36,7 +36,7 @@ ENV PATH="/opt/venv/bin:${PATH}" \
     PYTHONUNBUFFERED=1 \
     SIMULATOR_FIRMWARE_VERSION="${FIRMWARE_VERSION}"
 USER 10001
-EXPOSE 5025 5125
+EXPOSE 5025 5125 5126
 HEALTHCHECK --interval=5s --timeout=3s --start-period=10s --start-interval=1s --retries=3 \
     CMD ["python", "-m", "simulators.healthcheck", "--port", "5025"]
 CMD ["python", "-m", "simulators.signal_generator", "--host", "0.0.0.0"]

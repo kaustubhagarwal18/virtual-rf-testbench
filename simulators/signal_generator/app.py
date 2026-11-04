@@ -6,16 +6,17 @@ import logging
 import os
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
+from functools import partial
 
-from simulators.common.admin import serve_admin
 from simulators.common.app import (
     SimulatorSettings,
     add_common_arguments,
     parse_common_settings,
-    serve_until_stopped,
+    run_simulator,
+    start_scpi_and_admin,
 )
-from simulators.common.logs import json_logging
-from simulators.common.server import bound_port, serve_lines
+from simulators.common.faults import SLOW_RESPONSES, FaultSwitches
+from simulators.common.server import bound_port
 from simulators.signal_generator.admin import generator_admin_commands
 from simulators.signal_generator.instrument import SignalGeneratorScpi
 
@@ -64,29 +65,26 @@ def parse_settings(
 async def start(settings: Settings) -> tuple[asyncio.Server, asyncio.Server]:
     """Start the generator's SCPI and admin servers, sharing one instrument.
 
+    The admin port reports the generator's state and switches its fault: slow responses.
+
     Args:
         settings: How to run.
 
     Returns:
         The SCPI server and the admin server, both listening.
-
-    Raises:
-        OSError: If a port can't be opened; the SCPI server is closed again first, so a
-            busy admin port doesn't leave the SCPI port taken.
     """
     generator = SignalGeneratorScpi(settings.firmware_version, settings.serial_number)
-    lock = asyncio.Lock()
-    scpi = await serve_lines(
-        generator.process, settings.host, settings.scpi_port, name="scpi", lock=lock
+    switches = FaultSwitches([SLOW_RESPONSES])
+    commands = generator_admin_commands(generator)
+    switches.register_commands(commands)
+    scpi, admin = await start_scpi_and_admin(
+        generator.process,
+        commands,
+        settings.host,
+        settings.scpi_port,
+        settings.admin_port,
+        scpi_delay_s=partial(switches.value, SLOW_RESPONSES.name),
     )
-    try:
-        admin = await serve_admin(
-            generator_admin_commands(generator), settings.host, settings.admin_port, lock=lock
-        )
-    except OSError:
-        scpi.close()
-        await scpi.wait_closed()
-        raise
     _LOGGER.info(
         "Signal generator listening",
         extra={
@@ -99,20 +97,10 @@ async def start(settings: Settings) -> tuple[asyncio.Server, asyncio.Server]:
     return scpi, admin
 
 
-async def serve_forever(settings: Settings) -> None:
-    """Run the generator until the process is stopped.
-
-    Args:
-        settings: How to run.
-    """
-    await serve_until_stopped(*await start(settings))
-
-
 def main(arguments: Sequence[str] | None = None) -> None:
     """Run the generator from the command line, logging JSON to stderr.
 
     Args:
         arguments: The command-line arguments; None reads them from sys.argv.
     """
-    with json_logging():
-        asyncio.run(serve_forever(parse_settings(arguments)))
+    run_simulator(arguments, parse_settings, start)

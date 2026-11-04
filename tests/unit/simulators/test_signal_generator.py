@@ -4,6 +4,7 @@ import pytest
 
 from simulators.common.physics import SourceState
 from simulators.signal_generator.instrument import SignalGeneratorScpi
+from simulators.signal_generator.releases import CHANGED_OUTPUT_RELEASE, RELEASE_CHANGES
 
 
 def make_generator() -> SignalGeneratorScpi:
@@ -113,3 +114,26 @@ def test_source_state_matches_the_settings() -> None:
     assert generator.source_state() == SourceState(
         frequency_hz=2e9, level_dbm=-10.0, output_on=True
     )
+
+
+def test_release_candidate_drops_the_short_output_command() -> None:
+    """In 0.2.0-rc1, OUTP without :STATe is an undefined header; OUTP:STAT still works."""
+    generator = SignalGeneratorScpi(firmware_version=CHANGED_OUTPUT_RELEASE)
+    assert not generator.process("OUTP ON")
+    assert not generator.process("OUTP?")
+    assert errors_of(generator) == ['-113,"Undefined header"'] * 2
+    assert generator.process("OUTP:STAT ON;OUTP:STAT?") == ["1"]
+    assert generator.source_state().output_on
+
+
+@pytest.mark.parametrize("version", ["0.1.0", "0.2.0", "0.2.0-rc2", "9.9.9"])
+def test_every_other_release_keeps_the_short_output_command(version: str) -> None:
+    """Only the named release changes the command; similar version strings don't."""
+    generator = SignalGeneratorScpi(firmware_version=version)
+    assert generator.process("OUTP ON;OUTP?") == ["1"]
+    assert not errors_of(generator)
+
+
+def test_the_changed_release_is_listed() -> None:
+    """The release table names each simulated release and what it changes."""
+    assert CHANGED_OUTPUT_RELEASE in RELEASE_CHANGES

@@ -3,9 +3,13 @@
 import argparse
 import asyncio
 import contextlib
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, version
+
+from simulators.common.admin import AdminCommands, serve_admin
+from simulators.common.logs import json_logging
+from simulators.common.server import LineHandler, serve_lines
 
 FIRMWARE_VERSION_VARIABLE = "SIMULATOR_FIRMWARE_VERSION"
 """Environment variable that sets the reported firmware version, set when an image is built."""
@@ -105,6 +109,44 @@ def parse_common_settings(
     )
 
 
+async def start_scpi_and_admin(
+    handler: LineHandler,
+    commands: AdminCommands,
+    host: str,
+    scpi_port: int,
+    admin_port: int,
+    *,
+    scpi_delay_s: Callable[[], float] | None = None,
+) -> tuple[asyncio.Server, asyncio.Server]:
+    """Start an instrument's SCPI and admin servers, sharing one lock so they never interleave.
+
+    Args:
+        handler: Answers each SCPI line.
+        commands: The admin commands.
+        host: The address to listen on.
+        scpi_port: The SCPI port; 0 picks a free port.
+        admin_port: The admin port; 0 picks a free port.
+        scpi_delay_s: Asked before each SCPI line, for a delay that doesn't hold the lock;
+            None means no delay.
+
+    Returns:
+        The SCPI server and the admin server, both listening.
+
+    Raises:
+        OSError: If a port can't be opened; the SCPI server is closed again first, so a
+            busy admin port doesn't leave the SCPI port taken.
+    """
+    lock = asyncio.Lock()
+    scpi = await serve_lines(handler, host, scpi_port, name="scpi", lock=lock, delay_s=scpi_delay_s)
+    try:
+        admin = await serve_admin(commands, host, admin_port, lock=lock)
+    except OSError:
+        scpi.close()
+        await scpi.wait_closed()
+        raise
+    return scpi, admin
+
+
 async def serve_until_stopped(*servers: asyncio.Server) -> None:
     """Serve on every server until the process is stopped, then close them all.
 
@@ -115,3 +157,28 @@ async def serve_until_stopped(*servers: asyncio.Server) -> None:
         for server in servers:
             await stack.enter_async_context(server)
         await asyncio.gather(*(server.serve_forever() for server in servers))
+
+
+def run_simulator[SettingsT](
+    arguments: Sequence[str] | None,
+    parse_settings: Callable[[Sequence[str] | None], SettingsT],
+    start: Callable[[SettingsT], Awaitable[tuple[asyncio.Server, ...]]],
+) -> None:
+    """Run a simulator from the command line until the process is stopped, logging JSON.
+
+    Args:
+        arguments: The command-line arguments; None reads them from sys.argv.
+        parse_settings: Reads the simulator's settings from those arguments.
+        start: Starts the simulator's servers.
+    """
+
+    async def serve(settings: SettingsT) -> None:
+        """Start the servers and serve until stopped.
+
+        Args:
+            settings: How to run.
+        """
+        await serve_until_stopped(*await start(settings))
+
+    with json_logging():
+        asyncio.run(serve(parse_settings(arguments)))

@@ -1,0 +1,8 @@
+{
+  "fault": "output_command_change",
+  "size": null,
+  "unit": "",
+  "category": "firmware",
+  "cause": "Release 0.2.0-rc1 dropped the short form of the RF output command: OUTP ON now gives -113",
+  "fix": "Reported the regression; the release restored OUTPut without :STATe"
+}

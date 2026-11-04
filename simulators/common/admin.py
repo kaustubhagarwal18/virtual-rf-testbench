@@ -1,9 +1,9 @@
 """The admin port: out-of-band access to a simulator, kept apart from its SCPI interface.
 
-Each admin command is one line and gets one line of JSON back. A simulator's admin port
-reports its state now; fault switches will be added later. Test code never needs it: only
-the other simulators and the fault tooling use it, so the SCPI interface stays exactly what a
-real instrument offers.
+Each admin command is one line, a name followed by any arguments, and gets one line of JSON
+back. The admin port reports a simulator's state and switches its faults. Test code never
+needs it: only the other simulators and the fault tooling use it, so the SCPI interface stays
+exactly what a real instrument offers.
 """
 
 import asyncio
@@ -16,10 +16,28 @@ from simulators.common.server import serve_lines
 AdminReply = dict[str, object]
 """The JSON object an admin command returns."""
 
-AdminHandler = Callable[[], AdminReply]
-"""Runs one admin command and returns its reply."""
+AdminHandler = Callable[[tuple[str, ...]], AdminReply]
+"""Runs one admin command with the words after its name, and returns its reply."""
 
 _LOGGER = logging.getLogger(__name__)
+
+
+class AdminCommandError(Exception):
+    """Raised by an admin handler to refuse a command; its message becomes the error reply."""
+
+
+def expect_no_arguments(name: str, arguments: tuple[str, ...]) -> None:
+    """Refuse arguments for a command that takes none.
+
+    Args:
+        name: The command, for the error message.
+        arguments: The words after the command's name.
+
+    Raises:
+        AdminCommandError: If there are any.
+    """
+    if arguments:
+        raise AdminCommandError(f"{name} takes no arguments")
 
 
 class AdminCommands:
@@ -45,15 +63,21 @@ class AdminCommands:
             line: The received line.
 
         Returns:
-            The command's reply, or an object with an 'error' key for an unknown command or
-            one that failed; a failure is also logged with its traceback.
+            The command's reply, or an object with an 'error' key for an empty line, an
+            unknown command, one its handler refused, or one that failed; an unexpected
+            failure is also logged with its traceback.
         """
-        name = line.strip().upper()
+        words = line.split()
+        if not words:
+            return {"error": "Empty admin command"}
+        name, arguments = words[0].upper(), tuple(words[1:])
         handler = self._handlers.get(name)
         if handler is None:
-            return {"error": f"Unknown admin command: {line.strip()}"}
+            return {"error": f"Unknown admin command: {words[0]}"}
         try:
-            return handler()
+            return handler(arguments)
+        except AdminCommandError as refused:
+            return {"error": str(refused)}
         # A failing admin command must still answer with JSON; it is logged instead of raised.
         except Exception:  # pylint: disable=broad-exception-caught
             _LOGGER.exception("Admin command failed", extra={"admin_command": name})

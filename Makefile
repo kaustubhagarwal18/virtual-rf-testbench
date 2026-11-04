@@ -6,7 +6,7 @@ REVISION ?= $(shell git rev-parse --short HEAD 2>/dev/null)
 export FIRMWARE_VERSION REVISION
 PYTHON_PATHS := $(PACKAGES) tests
 
-.PHONY: setup lint fmt test summary bench-up bench-down bench-logs bench-test bench-summary clean
+.PHONY: setup lint fmt test summary bench-up bench-down bench-logs bench-test bench-summary fault fault-dataset clean
 
 setup:
 	uv sync
@@ -49,6 +49,12 @@ bench-test:
 
 bench-summary:
 	uv run python -m tools.results_summary reports/bench-junit.xml
+
+fault:
+	uv run python -m tools.fault_run $(NAME) $(if $(SIZE),--size $(SIZE)) --out results/faults
+
+fault-dataset:
+	uv run python -m tools.fault_run --dataset triage/data/runs
 
 clean:
 	-uv run --no-sync pre-commit uninstall

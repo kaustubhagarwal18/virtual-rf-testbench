@@ -9,13 +9,16 @@ from simulators.common import app as common_app
 from simulators.spectrum_analyzer.app import parse_settings
 from tests.integration.processes import ask, simulator_process
 
+ANALYZER_ADMIN_PORT = 5126
+"""Not 5125, so the analyzer and the generator can run on one machine."""
+
 
 @pytest.fixture(name="listening")
 def fixture_listening() -> Iterator[dict[str, object]]:
     """Start the analyzer on a free port and return its 'listening' log entry."""
     with simulator_process(
         "simulators.spectrum_analyzer",
-        ["--scpi-port", "0"],
+        ["--scpi-port", "0", "--admin-port", "0"],
         firmware_version="7.8.9",
         ready_message="Spectrum analyzer listening",
     ) as entry:
@@ -26,6 +29,7 @@ def test_process_logs_json_and_answers_on_its_port(listening: dict[str, object])
     """The process logs where it listens and which generator it measures, and answers *IDN?."""
     assert listening["generator_admin"] == "127.0.0.1:5125"
     assert ask(listening["scpi_port"], "*IDN?") == "VirtualRF,SA-1,200001,7.8.9"
+    assert ask(listening["admin_port"], "CLEAR") == '{"cleared": []}'
 
 
 def test_settings_default_to_the_local_generator() -> None:
@@ -33,6 +37,7 @@ def test_settings_default_to_the_local_generator() -> None:
     settings = parse_settings([], environ={"SIMULATOR_FIRMWARE_VERSION": "1.0.0"})
     assert (settings.host, settings.scpi_port) == ("127.0.0.1", 5025)
     assert (settings.generator_admin_host, settings.generator_admin_port) == ("127.0.0.1", 5125)
+    assert settings.admin_port == ANALYZER_ADMIN_PORT
     assert settings.serial_number == "200001"
 
 

@@ -80,6 +80,7 @@ class RsInstrumentSession:
             "SelectVisa='socket', SupportedIdnPatterns='VirtualRF', "
             f"OpenTimeout={timeout_ms}, VisaTimeout={timeout_ms}, OpcTimeout={timeout_ms}"
         )
+        self._out_of_step = False
         try:
             self._instrument = RsInstrument(resource, id_query=True, reset=reset, options=options)
         except OSError as error:
@@ -140,27 +141,68 @@ class RsInstrumentSession:
     def _translated_errors(self, command: str) -> Iterator[None]:
         """Turn RsInstrument's and the socket's errors into InstrumentError.
 
-        The command runs inside the with block.
+        The command runs inside the with block. After a timeout, a late reply may still be on
+        its way, and the next query could read it as its own answer; so a session that timed
+        out refuses every further command, and the caller opens a new one.
 
         Args:
             command: The command being sent, for the error message.
 
         Raises:
-            InstrumentTimeoutError: If the instrument doesn't answer in time, including when it
-                also queued errors, such as -113 for an unknown query.
-            InstrumentError: If it reports an error or the connection fails.
+            InstrumentError: If the session already timed out, if the instrument reports an
+                error, or if the connection fails.
+            InstrumentTimeoutError: If the instrument doesn't answer in time, including when
+                it also queued errors (such as -113 for an unknown query), and when
+                RsInstrument's own error check after the timeout reads a late reply.
         """
+        if self._out_of_step:
+            raise InstrumentError(
+                f"{self.resource}: the session is out of step after a timeout, so {command!r} "
+                "wasn't sent; a late reply may still arrive. Open a new session."
+            )
         try:
             yield
         except TimeoutException as error:
+            self._out_of_step = True
             raise InstrumentTimeoutError(f"{self.resource}: no reply to {command!r}") from error
         except StatusException as error:
             # RsInstrument reads the error queue after a timeout and reports both at once;
             # first_exc says the timeout came first.
             if error.first_exc is not None and issubclass(error.first_exc, TimeoutException):
+                self._out_of_step = True
                 raise InstrumentTimeoutError(
                     f"{self.resource}: no reply to {command!r}; instrument errors: {error}"
                 ) from error
             raise InstrumentError(f"{self.resource}: {command!r} failed: {error}") from error
         except (RsInstrException, OSError) as error:
             raise InstrumentError(f"{self.resource}: {command!r} failed: {error}") from error
+        except ValueError as error:
+            if not _arose_from_timeout(error):
+                raise InstrumentError(f"{self.resource}: {command!r} failed: {error}") from error
+            self._out_of_step = True
+            raise InstrumentTimeoutError(
+                f"{self.resource}: no reply to {command!r} in time; a late reply then "
+                f"confused the error check: {error}"
+            ) from error
+
+
+def _arose_from_timeout(error: BaseException) -> bool:
+    """Check whether an error was raised while a timeout was being handled.
+
+    RsInstrument checks the status byte after a timeout; if the late reply arrives first, it
+    reads that reply as the status byte and raises ValueError, with the timeout as context.
+
+    Args:
+        error: The error to check.
+
+    Returns:
+        True if a socket timeout or RsInstrument timeout is among its causes or context.
+    """
+    seen: set[int] = set()
+    cause: BaseException | None = error
+    while cause is not None and id(cause) not in seen:
+        if isinstance(cause, (TimeoutError, TimeoutException)):
+            return True
+        seen.add(id(cause))
+        cause = cause.__cause__ or cause.__context__
+    return False
