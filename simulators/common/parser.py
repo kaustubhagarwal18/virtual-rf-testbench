@@ -216,3 +216,27 @@ def expect_one_parameter(parameters: tuple[str, ...]) -> str:
     if len(parameters) > 1:
         raise ScpiCommandError(ScpiError(ScpiErrorCode.PARAMETER_NOT_ALLOWED))
     return parameters[0]
+
+
+_TRUE_WORDS = frozenset({"ON", "1"})
+_FALSE_WORDS = frozenset({"OFF", "0"})
+
+
+def parse_boolean(text: str) -> bool:
+    """Read a SCPI boolean: ON, OFF, 1 or 0, in any case.
+
+    Args:
+        text: The parameter as sent by the controller.
+
+    Returns:
+        True for ON or 1, False for OFF or 0.
+
+    Raises:
+        ScpiCommandError: -104 for anything else.
+    """
+    word = text.strip().upper()
+    if word in _TRUE_WORDS:
+        return True
+    if word in _FALSE_WORDS:
+        return False
+    raise ScpiCommandError(ScpiError(ScpiErrorCode.DATA_TYPE_ERROR, text))

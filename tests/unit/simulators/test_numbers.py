@@ -5,7 +5,7 @@ import time
 import pytest
 
 from simulators.common.errors import ScpiCommandError, ScpiErrorCode
-from simulators.common.numbers import FREQUENCY_UNITS, LEVEL_UNITS, parse_number
+from simulators.common.numbers import FREQUENCY_UNITS, LEVEL_UNITS, format_number, parse_number
 
 
 @pytest.mark.parametrize(
@@ -78,3 +78,12 @@ def test_long_malformed_input_is_rejected_quickly(text: str) -> None:
         parse_number(text, FREQUENCY_UNITS)
     assert raised.value.error.code == ScpiErrorCode.DATA_TYPE_ERROR
     assert time.perf_counter() - started < time_limit_s
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [(1e9, "1000000000"), (2.5e9, "2500000000"), (-30.0, "-30"), (-10.5, "-10.5"), (9e3, "9000")],
+)
+def test_numbers_format_without_needless_digits(value: float, expected: str) -> None:
+    """Replies are plain numbers: no trailing zeros, no exponent for bench values."""
+    assert format_number(value) == expected

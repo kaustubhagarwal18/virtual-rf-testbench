@@ -4,6 +4,7 @@ Each simulated instrument subclasses ScpiInstrument and registers its own comman
 answers the IEEE 488.2 common commands and SYST:ERR?, which RsInstrument relies on.
 """
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -24,6 +25,8 @@ WriteHandler = Callable[[tuple[str, ...]], None]
 
 QueryHandler = Callable[[tuple[str, ...]], str]
 """Handles a query; receives the query's parameters and returns the reply."""
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -125,7 +128,9 @@ class ScpiInstrument:
 
         Errors go into the error queue instead of being raised, as on a real instrument. A
         command error (-1xx) also discards the rest of the line, as instrument parsers do;
-        an execution error lets the following commands run.
+        an execution error lets the following commands run. A bug in a handler queues -300,
+        is logged with its traceback and discards the rest of the line, so a controller sees
+        an instrument error instead of a dropped connection.
 
         Args:
             line: The received line, without its line ending.
@@ -139,8 +144,16 @@ class ScpiInstrument:
                 reply = self._execute(parse_command(text))
             except ScpiCommandError as raised:
                 self._report(raised.error)
+                _LOGGER.warning(
+                    "Command rejected", extra={"command": text, "error": raised.error.format()}
+                )
                 if event_bit_for(raised.error.code) == EventStatusBit.COMMAND_ERROR:
                     break
+            # A handler bug must not take the instrument down; it is reported and logged instead.
+            except Exception:  # pylint: disable=broad-exception-caught
+                self._report(ScpiError(ScpiErrorCode.DEVICE_SPECIFIC_ERROR, "internal error"))
+                _LOGGER.exception("Unexpected error in a command handler", extra={"command": text})
+                break
             else:
                 if reply is not None:
                     replies.append(reply)

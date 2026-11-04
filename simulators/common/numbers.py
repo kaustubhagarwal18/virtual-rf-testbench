@@ -45,3 +45,15 @@ def parse_number(text: str, units: Mapping[str, float] | None = None) -> float:
     if not math.isfinite(value):
         raise ScpiCommandError(ScpiError(ScpiErrorCode.DATA_OUT_OF_RANGE, text))
     return value
+
+
+def format_number(value: float) -> str:
+    """Format a value for a query reply, the way instruments do: no needless digits.
+
+    Args:
+        value: The value to report.
+
+    Returns:
+        The value with up to 12 significant digits, for example '1000000000' or '-10.5'.
+    """
+    return f"{value:.12g}"

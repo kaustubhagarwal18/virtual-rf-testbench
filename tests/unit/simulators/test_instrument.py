@@ -238,3 +238,24 @@ def test_execution_error_lets_the_line_continue() -> None:
     """An execution error doesn't stop the commands after it."""
     instrument = LevelInstrument()
     assert instrument.process("OUTP:PROT:CLE;*OPC?") == ["1"]
+
+
+def test_handler_bug_queues_device_error_and_is_logged(caplog: pytest.LogCaptureFixture) -> None:
+    """A bug in a handler queues -300, discards the rest of the line and logs the traceback."""
+    instrument = ScpiInstrument(IDENTITY)
+
+    def broken(_parameters: tuple[str, ...]) -> str:
+        """Fail the way a programming error would."""
+        raise RuntimeError("bug")
+
+    instrument.register("BROKen", query=broken)
+    assert not instrument.process("BROK?;*OPC?")
+    assert drain_errors(instrument) == ['-300,"Device-specific error;internal error"']
+    assert any(record.exc_info for record in caplog.records)
+
+
+def test_rejected_command_is_logged(caplog: pytest.LogCaptureFixture) -> None:
+    """Each rejected command is logged with its text and error, for later triage."""
+    LevelInstrument().process("BOGus 1")
+    record = next(record for record in caplog.records if record.getMessage() == "Command rejected")
+    assert (record.command, record.error) == ("BOGus 1", '-113,"Undefined header"')  # type: ignore[attr-defined]

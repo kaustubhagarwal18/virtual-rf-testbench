@@ -144,6 +144,15 @@ wheels = [
 ]
 
 [[package]]
+name = "defusedxml"
+version = "0.7.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/0f/d5/c66da9b79e5bdb124974bfe172b4daf3c984ebd9c2a06e2b8a4dc7331c72/defusedxml-0.7.1.tar.gz", hash = "sha256:1bb3032db185915b62d7c6209c5a8792be6a32ab2fedacc84e01b52c51aa3e69", size = 75520, upload-time = "2021-03-08T10:59:26.269Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/07/6c/aa3f2f849e01cb6a001cd8554a88d4c77c5c1a31c95bdf1cf9301e6d9ef4/defusedxml-0.7.1-py2.py3-none-any.whl", hash = "sha256:a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61", size = 25604, upload-time = "2021-03-08T10:59:24.45Z" },
+]
+
+[[package]]
 name = "dill"
 version = "0.4.1"
 source = { registry = "https://pypi.org/simple" }
@@ -475,6 +484,18 @@ wheels = [
 ]
 
 [[package]]
+name = "pyvisa"
+version = "1.16.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/13/72/a50adff945e66f2161a44b243970f809de19152a2e7da0473ae8ff96d642/pyvisa-1.16.2.tar.gz", hash = "sha256:75beb93eeafe20a50be5726fa4e3a645948c93d86819f9c1f8c542efa4085a38", size = 238729, upload-time = "2026-02-27T12:14:08.54Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e4/a9/776da4f397003cca093659524c3526590522f81b642936838428c11274e6/pyvisa-1.16.2-py3-none-any.whl", hash = "sha256:54f034adafd3e8d1858d57cdafec64e920444f4b84b31c9fd17487fbad0a197a", size = 181413, upload-time = "2026-02-27T12:14:07.301Z" },
+]
+
+[[package]]
 name = "pyyaml"
 version = "6.0.3"
 source = { registry = "https://pypi.org/simple" }
@@ -503,6 +524,20 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/c0/8f/0722ca900cc807c13a6a0c696dacf35430f72e0ec571c4275d2371fca3e9/rich-15.0.0.tar.gz", hash = "sha256:edd07a4824c6b40189fb7ac9bc4c52536e9780fbbfbddf6f1e2502c31b068c36", size = 230680, upload-time = "2026-04-12T08:24:00.75Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/82/3b/64d4899d73f91ba49a8c18a8ff3f0ea8f1c1d75481760df8c68ef5235bf5/rich-15.0.0-py3-none-any.whl", hash = "sha256:33bd4ef74232fb73fe9279a257718407f169c09b78a87ad3d296f548e27de0bb", size = 310654, upload-time = "2026-04-12T08:24:02.83Z" },
+]
+
+[[package]]
+name = "rsinstrument"
+version = "1.131.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "defusedxml" },
+    { name = "pyvisa" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c8/f5/be9aa2aa87818c7d2dee3a01d728c03b050d044e0d7c1800b1abf333c13f/rsinstrument-1.131.0.tar.gz", hash = "sha256:08f7fbd2e88d52f05fd250ce3464c9a2ae5383818592e48dae12d2b7cac20fbc", size = 161579, upload-time = "2026-08-17T16:38:18.575Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/32/7c/27c424382150f862b67ccfade4b5b8fd6b23c7741ea2d23933e2363a0fb9/rsinstrument-1.131.0-py3-none-any.whl", hash = "sha256:c9021bdc4ade9f39735438cd062bf86eecfc2a3623f9d2ac5fcd7f608f56e347", size = 180630, upload-time = "2026-08-17T16:38:21.164Z" },
 ]
 
 [[package]]
@@ -600,6 +635,7 @@ dev = [
     { name = "pylint" },
     { name = "pytest" },
     { name = "pytest-cov" },
+    { name = "rsinstrument" },
     { name = "ruff" },
 ]
 
@@ -617,6 +653,7 @@ dev = [
     { name = "pylint", specifier = ">=4.1.3" },
     { name = "pytest", specifier = ">=9.2.0" },
     { name = "pytest-cov", specifier = ">=7.1.0" },
+    { name = "rsinstrument", specifier = ">=1.131.0" },
     { name = "ruff", specifier = ">=0.17.3" },
 ]
 

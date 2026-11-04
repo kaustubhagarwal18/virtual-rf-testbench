@@ -54,6 +54,30 @@ Early development. The first milestone is the simulated instruments, their Pytho
 and the first bench tests, running on Docker Compose. Setup instructions will be added here as
 each part starts working.
 
+## Run the signal generator
+
+The simulated signal generator speaks SCPI on port 5025, as networked instruments do, and
+reports its state as JSON on an admin port, 5125:
+
+```
+uv run python -m simulators.signal_generator
+```
+
+From a second terminal, talk to it with `nc`:
+
+```
+printf '*IDN?\n' | nc -w 1 127.0.0.1 5025
+printf 'FREQ 2.5 GHz\nPOW -10\nOUTP ON\nFREQ?;POW?;OUTP?\n' | nc -w 1 127.0.0.1 5025
+printf 'STATE?\n' | nc -w 1 127.0.0.1 5125
+```
+
+It supports the IEEE 488.2 common commands (`*IDN?`, `*RST`, `*CLS`, `*OPC?`, `*ESE`,
+`*SRE`, `*ESR?`, `*STB?`), `SYST:ERR?`, `[SOURce]:FREQuency` (9 kHz to 6 GHz),
+`[SOURce]:POWer` (-120 to +20 dBm) and `OUTPut` (ON or OFF). Several queries on one line get
+one reply line, joined by `;`, as IEEE 488.2 requires. Bad commands queue standard SCPI errors
+instead of failing silently. Logs go to stderr as one JSON object per line.
+`--help` lists the options; `SIMULATOR_FIRMWARE_VERSION` sets the version `*IDN?` reports.
+
 ## Development
 
 You need [uv](https://docs.astral.sh/uv/) and `make`. uv installs Python 3.13 for the project,

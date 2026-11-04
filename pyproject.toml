@@ -69,6 +69,8 @@ markers = [
 [tool.coverage.run]
 source = ["simulators", "drivers"]
 branch = true
+patch = ["subprocess"]
+sigterm = true
 
 [tool.bandit]
 exclude_dirs = ["tests", ".venv"]
@@ -87,6 +89,7 @@ dev = [
     "pylint>=4.1.3",
     "pytest>=9.2.0",
     "pytest-cov>=7.1.0",
+    "rsinstrument>=1.131.0",
     "ruff>=0.17.3",
 ]
 

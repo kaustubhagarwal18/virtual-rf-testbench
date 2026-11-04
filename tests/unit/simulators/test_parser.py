@@ -7,6 +7,7 @@ from simulators.common.parser import (
     CommandPattern,
     expect_no_parameters,
     expect_one_parameter,
+    parse_boolean,
     parse_command,
     split_message,
 )
@@ -134,3 +135,20 @@ def test_patterns_need_a_capital_short_form(text: str) -> None:
     """Every node must start with capitals, which form its short form."""
     with pytest.raises(ValueError, match="short form"):
         CommandPattern.parse(text)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [("ON", True), ("on", True), ("1", True), ("OFF", False), ("off", False), ("0", False)],
+)
+def test_boolean_parameters(text: str, expected: bool) -> None:
+    """ON, OFF, 1 and 0 are SCPI booleans, in any case."""
+    assert parse_boolean(text) is expected
+
+
+@pytest.mark.parametrize("text", ["MAYBE", "2", "", "TRUE"])
+def test_other_boolean_words_are_data_type_errors(text: str) -> None:
+    """Anything other than ON, OFF, 1 or 0 is a -104 data type error."""
+    with pytest.raises(ScpiCommandError) as raised:
+        parse_boolean(text)
+    assert raised.value.error.code == ScpiErrorCode.DATA_TYPE_ERROR

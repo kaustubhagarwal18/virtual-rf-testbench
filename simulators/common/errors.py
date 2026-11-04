@@ -20,6 +20,7 @@ class ScpiErrorCode(IntEnum):
     UNDEFINED_HEADER = -113
     INVALID_SUFFIX = -131
     DATA_OUT_OF_RANGE = -222
+    DEVICE_SPECIFIC_ERROR = -300
     QUEUE_OVERFLOW = -350
 
 
@@ -32,6 +33,7 @@ _STANDARD_MESSAGES: dict[ScpiErrorCode, str] = {
     ScpiErrorCode.UNDEFINED_HEADER: "Undefined header",
     ScpiErrorCode.INVALID_SUFFIX: "Invalid suffix",
     ScpiErrorCode.DATA_OUT_OF_RANGE: "Data out of range",
+    ScpiErrorCode.DEVICE_SPECIFIC_ERROR: "Device-specific error",
     ScpiErrorCode.QUEUE_OVERFLOW: "Queue overflow",
 }
 
