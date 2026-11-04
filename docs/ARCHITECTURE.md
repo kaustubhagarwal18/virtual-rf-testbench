@@ -65,8 +65,9 @@ sequenceDiagram
 - **The instrument base** (`instrument.py`) handles the IEEE 488.2 common commands (`*IDN?`,
   `*RST`, `*CLS`, `*OPC?`, `*ESR?`, `*STB?` and the rest) and dispatches everything else to
   the subclass's command table. Several commands on one line are split on `;`, and their
-  replies are joined with `;`. A command error discards the rest of the line, as the
-  standard says.
+  replies are joined with `;`. Each command is matched from the root, so it needs its full
+  path; SCPI's relative form, which reuses the previous command's path (`CALC:MARK:X?;Y?`),
+  isn't supported. A command error discards the rest of the line, as the standard says.
 - **Errors** (`errors.py`, `status.py`) go into a queue of 10, with -350 when it overflows,
   and set the status bits that RsInstrument checks after every command. Nothing fails
   silently: a bad command or an out-of-range value always leaves an error to read.

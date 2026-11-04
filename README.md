@@ -133,8 +133,10 @@ loss, plus a small flatness error and reading noise.
 | Signal generator (SG-1) | `[SOURce]:FREQuency` (9 kHz to 6 GHz), `[SOURce]:POWer` (-120 to +20 dBm), `OUTPut` (ON or OFF) |
 | Spectrum analyzer (SA-1) | `[SENSe]:FREQuency:CENTer` and `:SPAN`, `[SENSe]:BANDwidth` (RBW), `INITiate` and `INITiate:CONTinuous`, `CALCulate:MARKer:MAXimum`, `:X?` and `:Y?`, channel power with `[SENSe]:POWer:ACHannel:BANDwidth` and `CALCulate:MARKer:FUNCtion:POWer:RESult? CPOWer` |
 
-Several queries on one line get one reply line, joined by `;`, as IEEE 488.2 requires. Bad
-commands queue standard SCPI errors instead of failing silently. If the analyzer can't reach
+Several queries on one line get one reply line, joined by `;`, as IEEE 488.2 requires. Each
+command after a `;` is read from the root, so it needs its full path:
+`CALC:MARK:X?;CALC:MARK:Y?` works, but the short form `CALC:MARK:X?;Y?`, which real
+instruments accept, gives -113 for `Y?`. Bad commands queue standard SCPI errors instead of failing silently. If the analyzer can't reach
 the generator, it measures no signal, as with an unplugged cable, and logs a warning. Logs go
 to stderr as one JSON object per line. `--help` lists each simulator's options, and
 `SIMULATOR_FIRMWARE_VERSION` sets the version `*IDN?` reports.
@@ -253,6 +255,9 @@ Actions are pinned to commit SHAs, and dependencies install from `uv.lock` exact
 
 ## Known issues
 
+- The simulators read every command in a compound line from the root, so the SCPI short
+  form that keeps the previous command's path (`CALC:MARK:X?;Y?`) gives -113. Write each
+  command in full, or start it with `:`. The drivers always send full paths.
 - RsInstrument leaves a socket open when a connection is refused, so a test that connects to
   a closed port shows a `ResourceWarning`. It comes from the library and is harmless in test
   runs; [ADR 0003](docs/adr/0003-rsinstrument-rather-than-plain-pyvisa.md) has the details.

@@ -292,3 +292,21 @@ def test_channel_power_wider_than_the_span_still_reads_a_tone_in_view() -> None:
     analyzer.process("FREQ:SPAN 10 kHz;POW:ACH:BAND 1 MHz")
     replies = analyzer.process("CALC:MARK:FUNC:POW:RES? CPOW")
     assert float(replies[0]) == pytest.approx(EXPECTED_TONE_DBM, abs=LEVEL_TOLERANCE_DB)
+
+
+@pytest.mark.parametrize(
+    ("line", "reply_count", "errors"),
+    [
+        ("CALC:MARK:X?;CALC:MARK:Y?", 2, []),
+        ("CALC:MARK:X?;:CALC:MARK:Y?", 2, []),
+        ("CALC:MARK:X?;Y?", 1, ['-113,"Undefined header"']),
+    ],
+)
+def test_each_command_after_a_semicolon_needs_its_full_path(
+    line: str, reply_count: int, errors: list[str]
+) -> None:
+    """Every command in a compound line is read from the root; relative headers aren't supported."""
+    analyzer = make_analyzer()
+    analyzer.process("CALC:MARK:MAX")
+    assert len(analyzer.process(line)) == reply_count
+    assert errors_of(analyzer) == errors

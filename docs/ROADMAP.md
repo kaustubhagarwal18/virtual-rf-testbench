@@ -30,6 +30,8 @@
 
 ## Known issues
 
+- Every command in a compound line needs its full path: `CALC:MARK:X?;Y?`, which real
+  instruments accept, gives -113 for `Y?`. The drivers always send full paths.
 - RsInstrument leaves a socket open when a connection is refused, so Python reports a
   `ResourceWarning`. It comes from the library, not from this code, and does no harm in
   short test runs. ADR 0003 has the details.
