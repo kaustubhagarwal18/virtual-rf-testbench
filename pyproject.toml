@@ -1,0 +1,120 @@
+[project]
+name = "virtual-rf-testbench"
+version = "0.1.0"
+description = "Automated RF test bench against simulated SCPI instruments, with failure triage"
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Kaustubh Agarwal" }]
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "numpy>=2",
+]
+
+[project.optional-dependencies]
+drivers = [
+    "rsinstrument>=1.131.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["simulators", "drivers", "measurements"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = [
+    "E", "W",  # pycodestyle
+    "F",       # pyflakes
+    "I",       # import order
+    "B",       # bugbear
+    "UP",      # pyupgrade
+    "SIM",     # simplify
+    "C90",     # complexity
+    "D",       # docstrings
+    "N",       # naming
+    "PL",      # pylint rules
+    "RUF",     # ruff-specific
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["simulators", "drivers", "measurements", "tools"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pylint]
+max-args = 7
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+files = ["simulators", "drivers", "measurements", "tools", "tests"]
+
+[tool.pylint.main]
+py-version = "3.13"
+jobs = 0
+
+[tool.pylint.format]
+max-line-length = 100
+
+[tool.pylint.design]
+min-public-methods = 1
+max-args = 7
+
+[tool.pytest.ini_options]
+testpaths = ["tests/unit", "tests/integration"]
+addopts = ["--strict-markers", "--cov", "--cov-report=term-missing"]
+junit_family = "xunit1"
+markers = [
+    "smoke: fast checks that the bench is alive",
+    "regression: the full measurement suite",
+    "negative: bad commands and error handling",
+]
+
+[tool.coverage.run]
+source = ["simulators", "drivers", "measurements", "tools"]
+branch = true
+patch = ["subprocess"]
+sigterm = true
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv"]
+
+[tool.codespell]
+skip = "uv.lock,.venv,.git"
+
+[dependency-groups]
+dev = [
+    "bandit[toml]>=1.9.4",
+    "codespell>=2.4.3",
+    "defusedxml>=0.7.1",
+    "hadolint-py>=2.15.1",
+    "mbake>=1.5.0",
+    "mypy>=2.4.1",
+    "pre-commit>=4.7.0",
+    "pydoclint>=0.12.0",
+    "pylint>=4.1.3",
+    "pytest>=9.2.0",
+    "pytest-cov>=7.1.0",
+    "rsinstrument>=1.131.0",
+    "ruff>=0.17.3",
+    "types-defusedxml>=0.7.0.20260504",
+]
+
+[tool.pydoclint]
+style = "google"
+arg-type-hints-in-signature = true
+arg-type-hints-in-docstring = false
+check-return-types = false
+skip-checking-short-docstrings = false
+skip-checking-private-functions = false
+allow-init-docstring = true
+check-class-attributes = false
