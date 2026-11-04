@@ -7,7 +7,7 @@ floor, plus a little seeded random noise so that runs are reproducible.
 """
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 
@@ -34,6 +34,21 @@ class SourceState:
 
 
 @dataclass(frozen=True)
+class ReadingNoise:
+    """How much a reading scatters, and the seed that makes the scatter repeatable.
+
+    Attributes:
+        repeatability_db: Standard deviation of readings on a strong tone.
+        floor_spread_db: Standard deviation of readings on the bare noise floor.
+        seed: Seed for the reading noise; the same seed gives the same readings.
+    """
+
+    repeatability_db: float = 0.02
+    floor_spread_db: float = 0.5
+    seed: int = 20261103
+
+
+@dataclass(frozen=True)
 class BenchParameters:
     """The bench's physical properties; the defaults describe a short coax cable.
 
@@ -42,18 +57,17 @@ class BenchParameters:
         flatness_ripple_db: Peak size of the analyzer's frequency-response error.
         flatness_period_hz: How far apart in frequency the flatness ripple repeats.
         noise_figure_db: The analyzer's noise figure, which sets its noise floor.
-        repeatability_db: Standard deviation of readings on a strong tone.
-        noise_floor_spread_db: Standard deviation of readings on the bare noise floor.
-        seed: Seed for the reading noise; the same seed gives the same readings.
+        second_harmonic_dbc: The second harmonic's level relative to the carrier, as a
+            generator's harmonic suppression specification states it.
+        noise: How much each reading scatters, and its seed.
     """
 
     cable_loss_at_1ghz_db: float = 1.5
     flatness_ripple_db: float = 0.15
     flatness_period_hz: float = 1.7e9
     noise_figure_db: float = 24.0
-    repeatability_db: float = 0.02
-    noise_floor_spread_db: float = 0.5
-    seed: int = 20261103
+    second_harmonic_dbc: float = -45.0
+    noise: ReadingNoise = field(default_factory=ReadingNoise)
 
 
 def cable_loss_db(frequency_hz: float, loss_at_1ghz_db: float) -> float:
@@ -130,11 +144,36 @@ class PhysicsModel:
             parameters: The bench's physical properties.
         """
         self.parameters = parameters
-        self._random = np.random.default_rng(parameters.seed)
+        self._random = np.random.default_rng(parameters.noise.seed)
+
+    def signals(self, source: SourceState) -> list[SourceState]:
+        """Return every tone the generator puts on the cable, each as a source state of its own.
+
+        A real generator isn't spectrally clean: besides the carrier there is a second
+        harmonic at twice the frequency, below the carrier by the generator's harmonic
+        suppression. Describing it as a source state means the cable's loss and the
+        analyzer's flatness are worked out at the harmonic's own frequency, as they are in
+        reality.
+
+        Args:
+            source: What the generator is set to.
+
+        Returns:
+            The carrier and its second harmonic, strongest first, or nothing with the output
+            switched off.
+        """
+        if not source.output_on:
+            return []
+        harmonic = replace(
+            source,
+            frequency_hz=2 * source.frequency_hz,
+            level_dbm=source.level_dbm + self.parameters.second_harmonic_dbc,
+        )
+        return [source, harmonic]
 
     def reset(self) -> None:
         """Reseed the reading noise, so the readings after *RST always repeat."""
-        self._random = np.random.default_rng(self.parameters.seed)
+        self._random = np.random.default_rng(self.parameters.noise.seed)
 
     def expected_peak_dbm(self, source: SourceState, rbw_hz: float) -> float:
         """Return the peak level the analyzer would read without any reading noise.
@@ -164,9 +203,9 @@ class PhysicsModel:
             one when only the noise floor is visible.
         """
         spread = (
-            self.parameters.repeatability_db
+            self.parameters.noise.repeatability_db
             if self.tone_is_visible(source, rbw_hz)
-            else self.parameters.noise_floor_spread_db
+            else self.parameters.noise.floor_spread_db
         )
         return self.expected_peak_dbm(source, rbw_hz) + float(self._random.normal(0.0, spread))
 
@@ -202,9 +241,9 @@ class PhysicsModel:
         """
         expected_dbm, tone_stands_out = self._channel_power(source, centre_hz, channel_bandwidth_hz)
         spread = (
-            self.parameters.repeatability_db
+            self.parameters.noise.repeatability_db
             if tone_stands_out
-            else self.parameters.noise_floor_spread_db
+            else self.parameters.noise.floor_spread_db
         )
         return expected_dbm + float(self._random.normal(0.0, spread))
 

@@ -18,8 +18,12 @@ MANUFACTURER = "VirtualRF"
 MODEL = "SG-1"
 FREQUENCY_RANGE_HZ = (9e3, 6e9)
 LEVEL_RANGE_DBM = (-120.0, 20.0)
+OFFSET_RANGE_DB = (-50.0, 50.0)
 DEFAULT_STATE = SourceState(frequency_hz=1e9, level_dbm=-30.0, output_on=False)
 """The settings at power-on and after *RST: 1 GHz, -30 dBm, RF off."""
+
+DEFAULT_OFFSET_DB = 0.0
+"""The level offset at power-on and after *RST: none."""
 
 
 class SignalGeneratorScpi(ScpiInstrument):
@@ -35,6 +39,8 @@ class SignalGeneratorScpi(ScpiInstrument):
         """
         super().__init__(Identity(MANUFACTURER, MODEL, serial_number, firmware_version))
         self._state = DEFAULT_STATE
+        self._offset_db = DEFAULT_OFFSET_DB
+        self._reset_clears_offset = True
         self.register(
             "[SOURce]:FREQuency[:CW]", write=self._set_frequency, query=self._query_frequency
         )
@@ -44,19 +50,62 @@ class SignalGeneratorScpi(ScpiInstrument):
             query=self._query_level,
         )
         self.register("OUTPut[:STATe]", write=self._set_output, query=self._query_output)
+        self.register(
+            "[SOURce]:POWer[:LEVel][:IMMediate]:OFFSet",
+            write=self._set_offset,
+            query=self._query_offset,
+        )
         apply_release_changes(self, firmware_version)
 
     def source_state(self) -> SourceState:
-        """Report what the generator is sending, for the analyzer.
+        """Report what leaves the generator's connector, for the analyzer.
+
+        A level offset describes the gain of whatever is attached, so the level asked for is
+        the level wanted at the far end and the connector makes up the difference. An offset
+        of -1.5 dB, for a cable that loses 1.5 dB, puts out 1.5 dB more than requested.
 
         Returns:
-            The current frequency, level and RF output state.
+            The frequency, the level at the connector and the RF output state.
         """
-        return self._state
+        return replace(self._state, level_dbm=self._state.level_dbm - self._offset_db)
 
     def on_reset(self) -> None:
-        """Return to the default settings, as *RST does."""
+        """Return to the default settings, as *RST does.
+
+        The offset is part of that, unless this release keeps it.
+        """
         self._state = DEFAULT_STATE
+        if self._reset_clears_offset:
+            self._offset_db = DEFAULT_OFFSET_DB
+
+    def keep_offset_across_reset(self) -> None:
+        """Stop *RST from clearing the level offset, as a regressed release does.
+
+        Used by a simulated release (see releases.py), never by a healthy instrument.
+        """
+        self._reset_clears_offset = False
+
+    def _set_offset(self, parameters: tuple[str, ...]) -> None:
+        """Handle SOURce:POWer:OFFSet.
+
+        Args:
+            parameters: One offset, with or without a unit.
+        """
+        offset_db = parse_number(expect_one_parameter(parameters), LEVEL_UNITS)
+        check_range(offset_db, OFFSET_RANGE_DB, "dB")
+        self._offset_db = offset_db
+
+    def _query_offset(self, parameters: tuple[str, ...]) -> str:
+        """Answer SOURce:POWer:OFFSet?.
+
+        Args:
+            parameters: The query's parameters; there must be none.
+
+        Returns:
+            The offset in dB.
+        """
+        expect_no_parameters(parameters)
+        return format_number(self._offset_db)
 
     def _set_frequency(self, parameters: tuple[str, ...]) -> None:
         """Handle SOURce:FREQuency.

@@ -2,9 +2,14 @@
 
 import pytest
 
+from simulators.common.instrument import Identity, ScpiInstrument
 from simulators.common.physics import SourceState
 from simulators.signal_generator.instrument import SignalGeneratorScpi
-from simulators.signal_generator.releases import CHANGED_OUTPUT_RELEASE, RELEASE_CHANGES
+from simulators.signal_generator.releases import (
+    CHANGED_OUTPUT_RELEASE,
+    LEAKY_RESET_RELEASE,
+    RELEASE_CHANGES,
+)
 
 
 def make_generator() -> SignalGeneratorScpi:
@@ -137,3 +142,51 @@ def test_every_other_release_keeps_the_short_output_command(version: str) -> Non
 def test_the_changed_release_is_listed() -> None:
     """The release table names each simulated release and what it changes."""
     assert CHANGED_OUTPUT_RELEASE in RELEASE_CHANGES
+
+
+def test_a_level_offset_raises_the_level_at_the_connector() -> None:
+    """An offset describes the attached path, so the connector makes up its loss."""
+    generator = SignalGeneratorScpi(firmware_version="1.2.3")
+    generator.process("POW -10;POW:OFFS -1.5;OUTP ON")
+    assert not errors_of(generator)
+    assert generator.process("POW?;POW:OFFS?") == ["-10", "-1.5"]
+    assert generator.source_state().level_dbm == pytest.approx(-8.5)
+
+
+@pytest.mark.parametrize("command", ["POW:OFFS 60", "POW:OFFS -60", "POW:OFFS loads"])
+def test_an_impossible_offset_is_rejected(command: str) -> None:
+    """An offset beyond ±50 dB, or no number at all, is refused and changes nothing."""
+    generator = SignalGeneratorScpi(firmware_version="1.2.3")
+    assert not generator.process(command)
+    assert errors_of(generator)
+    assert generator.process("POW:OFFS?") == ["0"]
+
+
+def test_reset_clears_the_level_offset() -> None:
+    """*RST puts the offset back to zero, so no test inherits another's offset."""
+    generator = SignalGeneratorScpi(firmware_version="1.2.3")
+    generator.process("POW:OFFS 2;*RST")
+    assert generator.process("POW:OFFS?") == ["0"]
+
+
+def test_the_leaky_release_keeps_the_offset_across_a_reset() -> None:
+    """In 0.2.0-rc2 the offset survives *RST, which is the regression the suite has to catch."""
+    generator = SignalGeneratorScpi(firmware_version=LEAKY_RESET_RELEASE)
+    generator.process("POW -10;POW:OFFS 2;*RST")
+    assert generator.process("POW:OFFS?") == ["2"]
+    assert generator.process("POW?") == ["-30"]
+    assert generator.source_state().level_dbm == pytest.approx(-32.0)
+
+
+def test_the_leaky_release_still_resets_everything_else() -> None:
+    """Only the offset leaks: frequency, level and the output still come back to their defaults."""
+    generator = SignalGeneratorScpi(firmware_version=LEAKY_RESET_RELEASE)
+    generator.process("FREQ 2 GHz;POW -5;OUTP ON;*RST")
+    assert generator.process("FREQ?;POW?;OUTP?") == ["1000000000", "-30", "0"]
+
+
+def test_the_leaky_release_refuses_an_instrument_without_an_offset() -> None:
+    """Applied to an instrument that has no level offset, the change says so instead of passing."""
+    (change,) = RELEASE_CHANGES[LEAKY_RESET_RELEASE]
+    with pytest.raises(TypeError, match="no level offset to keep"):
+        change.apply(ScpiInstrument(Identity("VirtualRF", "X-1", "1", "1.0.0")))

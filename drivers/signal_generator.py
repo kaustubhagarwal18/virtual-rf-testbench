@@ -49,3 +49,20 @@ class SignalGenerator(ScpiDriver):
             True if the RF output is on.
         """
         return self.query_bool("OUTP?")
+
+    def offset_db(self) -> float:
+        """Read the level offset, which describes the gain of whatever is attached.
+
+        Returns:
+            The offset in dB.
+        """
+        return self.query_number("SOUR:POW:OFFS?")
+
+    def set_offset_db(self, offset_db: float) -> None:
+        """Set the level offset, then wait for it to finish.
+
+        Args:
+            offset_db: The offset in dB; negative for a path that loses.
+        """
+        self.session.write(f"SOUR:POW:OFFS {scpi_number(offset_db)}")
+        self.wait_until_complete()

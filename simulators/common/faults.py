@@ -49,6 +49,12 @@ class FaultDefinition:
 EXTRA_CABLE_LOSS = FaultDefinition("EXTRA_CABLE_LOSS_DB", "dB", (0.0, 40.0))
 """Loss added to the cable between generator and analyzer, as from a damaged cable."""
 
+LINK_DOWN = FaultDefinition("LINK_DOWN", "", (0.0, 1.0))
+"""1 disconnects the cable between the instruments: the analyzer then sees no signal."""
+
+LINK_FAILS_EVERY = FaultDefinition("LINK_FAILS_EVERY", "sweeps", (0.0, 1000.0))
+"""A loose connector: every Nth reading of the generator's state fails, and only that one."""
+
 SLOW_RESPONSES = FaultDefinition("SLOW_RESPONSE_S", "s", (0.0, 30.0))
 """A delay before each SCPI line is handled, as from an overloaded instrument. The server
 waits before taking the instrument's lock, so the admin port stays responsive."""

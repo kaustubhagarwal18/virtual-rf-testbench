@@ -16,6 +16,8 @@ from drivers.signal_generator import SignalGenerator
 from drivers.spectrum_analyzer import SpectrumAnalyzer
 from simulators.healthcheck import check_instrument
 from tests.utilities.bench import open_bench
+from tests.utilities.bench_config import load_bench_config
+from tests.utilities.calibration import Calibration, measure_path_loss
 from tests.utilities.results_file import (
     DEFAULT_RESULTS_PATH,
     RESULTS_PATH_VARIABLE,
@@ -23,6 +25,7 @@ from tests.utilities.results_file import (
     ResultsFilePlugin,
     firmware_version_from_identity,
 )
+from tests.utilities.sequencer import Sequencer
 
 BENCH_HOST = os.environ.get("BENCH_HOST", "127.0.0.1")
 GENERATOR_PORT = int(os.environ.get("BENCH_GENERATOR_PORT", "5025"))
@@ -66,8 +69,75 @@ def bench_is_running(request: pytest.FixtureRequest) -> None:
             )
 
 
+@pytest.fixture(scope="session")
+def calibration() -> Calibration:
+    """Measure the bench's path loss once, before any level measurement is judged.
+
+    Returns:
+        The calibration, whose result every level measurement is then compared with.
+    """
+    with open_bench(BENCH_HOST, GENERATOR_PORT, ANALYZER_PORT) as (generator, analyzer):
+        return measure_path_loss(generator, analyzer)
+
+
+@pytest.fixture
+def generator_address() -> tuple[str, int]:
+    """Return where the generator's SCPI port is, for tests that open their own socket.
+
+    Returns:
+        The host and port.
+    """
+    return BENCH_HOST, GENERATOR_PORT
+
+
+@pytest.fixture(name="sequencer", scope="session")
+def fixture_sequencer() -> Sequencer:
+    """Open the sequence log every test's setup sequence writes to.
+
+    Returns:
+        The sequencer, shared by the whole run so its step numbers are continuous.
+    """
+    return Sequencer()
+
+
+def prepare(generator: SignalGenerator, analyzer: SpectrumAnalyzer, sequence: Sequencer) -> None:
+    """Put the instruments into the state the bench configuration asks for, step by step.
+
+    These are the steps a station's sequencer runs before it measures anything: read the
+    configuration, check the generator carries no stale offset, and set the analyzer's
+    channel bandwidth. A step that fails names only itself; its reason goes to the log.
+
+    Args:
+        generator: The generator driver.
+        analyzer: The analyzer driver.
+        sequence: Writes the sequence log.
+    """
+    with sequence.step("read bench configuration", "station"):
+        config = load_bench_config()
+    with sequence.step(
+        "verify level offset",
+        "generator",
+        parameter="level_offset_db",
+        expected=config.level_offset_db,
+    ):
+        offset_db = generator.offset_db()
+        if offset_db != config.level_offset_db:
+            raise AssertionError(
+                f"the generator carries a level offset of {offset_db:g} dB, but the bench "
+                f"configuration expects {config.level_offset_db:g} dB"
+            )
+    with sequence.step(
+        "set channel bandwidth",
+        "analyzer",
+        parameter="channel_bandwidth_hz",
+        value=config.channel_bandwidth_hz,
+    ):
+        analyzer.set_channel_bandwidth_hz(config.channel_bandwidth_hz)
+
+
 @pytest.fixture(name="bench")
-def fixture_bench() -> Iterator[tuple[SignalGenerator, SpectrumAnalyzer]]:
-    """Open reset sessions on both containerised instruments for one test."""
-    with open_bench(BENCH_HOST, GENERATOR_PORT, ANALYZER_PORT) as bench:
-        yield bench
+def fixture_bench(sequencer: Sequencer) -> Iterator[tuple[SignalGenerator, SpectrumAnalyzer]]:
+    """Open reset sessions on both containerised instruments and run the setup sequence."""
+    with open_bench(BENCH_HOST, GENERATOR_PORT, ANALYZER_PORT) as (generator, analyzer):
+        prepare(generator, analyzer, sequencer)
+        yield generator, analyzer

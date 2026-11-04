@@ -12,7 +12,7 @@ from simulators.common.parser import (
     parse_boolean,
     parse_choice,
 )
-from simulators.common.physics import PhysicsModel
+from simulators.common.physics import PhysicsModel, SourceState
 from simulators.spectrum_analyzer.link import GeneratorLink
 
 MANUFACTURER = "VirtualRF"
@@ -329,19 +329,20 @@ class SpectrumAnalyzerScpi(ScpiInstrument):
     def _take_sweep(self) -> SweepResult:
         """Sweep once: ask the generator what it sends, and measure it through the physics model.
 
-        Both results come from the swept span only, as a trace-based measurement does: a
-        tone outside the span is in neither the peak nor the channel power, and a channel
-        wider than the span integrates only the part of it that was swept.
+        Everything comes from the swept span only, as a trace-based measurement does: a
+        signal outside the span is in neither the peak nor the channel power, and a channel
+        wider than the span integrates only the part of it that was swept. The generator puts
+        more than one signal on the cable, so the sweep measures whichever of them is in view.
 
         Returns:
             The new sweep result, which is also kept for single-sweep measurements.
         """
         settings = self._settings
         source = self._generator.source_state()
-        in_view = source if self._in_span(source.frequency_hz) else replace(source, output_on=False)
+        in_view = self._strongest_in_span(source)
         peak_level_dbm = self._physics.peak_reading_dbm(in_view, settings.rbw_hz)
         peak_frequency_hz = (
-            self._nearest_sweep_point(source.frequency_hz)
+            self._nearest_sweep_point(in_view.frequency_hz)
             if self._physics.tone_is_visible(in_view, settings.rbw_hz)
             else settings.centre_hz
         )
@@ -351,6 +352,23 @@ class SpectrumAnalyzerScpi(ScpiInstrument):
         )
         self._sweep = SweepResult(peak_frequency_hz, peak_level_dbm, channel_power_dbm)
         return self._sweep
+
+    def _strongest_in_span(self, source: SourceState) -> SourceState:
+        """Return the signal the sweep measures: the strongest one inside the span.
+
+        Args:
+            source: What the generator is set to.
+
+        Returns:
+            The strongest of the generator's signals that lies within the span, or the source
+            with its output switched off when none does, which leaves only the noise floor.
+        """
+        in_span = [
+            signal for signal in self._physics.signals(source) if self._in_span(signal.frequency_hz)
+        ]
+        if not in_span:
+            return replace(source, output_on=False)
+        return max(in_span, key=lambda signal: signal.level_dbm)
 
     def _in_span(self, frequency_hz: float) -> bool:
         """Check whether a frequency lies within the displayed span.

@@ -78,10 +78,11 @@ sequenceDiagram
   on 5125, the analyzer on 5126. The analyzer reads the generator's `STATE?` there
   (ADR 0002), and the fault tooling switches faults there, so test code can never reach them
   over SCPI.
-- **Faults** (`faults.py`, ADR 0005) are numbers where 0 means off: extra loss in the cable
-  the analyzer reads through, and a delay before the generator handles each SCPI line. A
-  firmware regression is a simulated release instead (`signal_generator/releases.py`): in
-  `0.2.0-rc1`, `OUTP ON` gives -113.
+- **Faults** (`faults.py`, ADR 0005) are numbers where 0 means off: extra cable loss, a
+  disconnected link, a link that drops one reading in N, and a delay before the generator
+  handles each SCPI line. A firmware regression is a simulated release instead
+  (`signal_generator/releases.py`): `0.2.0-rc1` drops the short `OUTP` form, and `0.2.0-rc2`
+  stops clearing the level offset on `*RST`.
 - **Logs** (`logs.py`) are one JSON object per line on stderr, so they can be searched and,
   later, ingested by the triage service. Logging never blocks an instrument: each record
   goes on a bounded queue that a background thread writes to stderr. If nothing reads
@@ -100,6 +101,7 @@ sequenceDiagram
 | Cable loss | grows with the square root of frequency (skin effect) | 1.5 dB at 1 GHz |
 | Analyzer flatness | a smooth sine ripple across frequency | ±0.15 dB, repeating every 1.7 GHz |
 | Noise floor | -174 dBm/Hz + noise figure + 10·log10(RBW) | noise figure 24 dB, so -120 dBm at 1 kHz RBW |
+| Second harmonic | a weaker tone at twice the frequency, which the cable then attenuates more | 45 dB below the carrier |
 | Tone on the floor | the tone and the floor added as powers | |
 | Channel power | the noise over the channel, or over the span if that is narrower, plus the tone when it lies in both | |
 | Reading noise | seeded normal noise; `*RST` reseeds, so readings repeat | 0.02 dB on a tone, 0.5 dB on the bare floor |
@@ -191,8 +193,10 @@ flowchart LR
     results & logs & label --> run[Saved run]
 ```
 
-`make fault` saves a run as `results.json`, the last lines of the instruments' logs, and a
-separate `label.json`, so triage reads the evidence without ever seeing the answer. The data
+`make fault` saves a run as `results.json`, the last lines of the instruments' logs,
+`sequence.log` from the setup sequence, and a separate `label.json`, so triage reads the
+evidence without ever seeing the answer. For the configuration faults and the leaked offset,
+`sequence.log` is the only place the cause appears (ADR 0007). The data
 set in `triage/data/runs/` holds three history runs per fault, which triage may retrieve, and
 one question run per fault at a size no history run has, which it is asked about.
 
@@ -238,6 +242,8 @@ localhost only.
 | The bench suite and its addresses | `tests/bench/` |
 | The image, Compose and healthcheck | `Dockerfile`, `compose.yaml`, `simulators/healthcheck.py` |
 | The JSON results file | `tests/utilities/results_file.py`, `tests/bench/conftest.py` |
+| Path-loss calibration and its limits | `tests/utilities/calibration.py` |
+| The setup sequence and its log | `tests/bench/conftest.py`, `tests/utilities/sequencer.py`, `tests/utilities/bench_config.py` |
 | The fault catalogue, `make fault` and the data set | `tools/faults.py`, `tools/fault_run.py`, `tools/bench_control.py` |
 | CI jobs | `.github/workflows/ci.yml` |
 
@@ -250,5 +256,7 @@ localhost only.
 | [0003](adr/0003-rsinstrument-rather-than-plain-pyvisa.md) | RsInstrument rather than plain PyVISA, behind a small session interface |
 | [0004](adr/0004-one-simulator-image-on-compose.md) | One hardened simulator image, run with Docker Compose |
 | [0005](adr/0005-fault-injection.md) | Fault injection on the admin ports and as simulated releases |
+| [0006](adr/0006-calibrated-level-measurements.md) | Levels are judged against a measured path loss, not a nominal one |
+| [0007](adr/0007-sequence-log.md) | A failed setup step names the step, and the sequence log holds the reason |
 
 What comes next is in the [roadmap](ROADMAP.md).

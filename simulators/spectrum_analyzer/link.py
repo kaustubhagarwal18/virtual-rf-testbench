@@ -7,7 +7,12 @@ import socket
 from dataclasses import replace
 from typing import Protocol, TypeIs
 
-from simulators.common.faults import EXTRA_CABLE_LOSS, FaultSwitches
+from simulators.common.faults import (
+    EXTRA_CABLE_LOSS,
+    LINK_DOWN,
+    LINK_FAILS_EVERY,
+    FaultSwitches,
+)
 from simulators.common.physics import SourceState
 
 NO_SIGNAL = SourceState(frequency_hz=1e9, level_dbm=-200.0, output_on=False)
@@ -131,15 +136,36 @@ class CableWithFaults:
         """
         self._link = link
         self._switches = switches
+        self._readings = 0
 
     def source_state(self) -> SourceState:
         """Report the generator's state as it arrives at the analyzer.
 
         Returns:
-            The generator's state, with its level lowered by the extra cable loss, if any.
+            The generator's state with its level lowered by any extra cable loss, or no
+            signal at all when the cable is disconnected or this reading is one the loose
+            connector drops.
         """
+        self._readings += 1
+        if self._cable_is_disconnected():
+            _LOGGER.warning(
+                "No signal reaching the analyzer: nothing is connected",
+                extra={"reading": self._readings},
+            )
+            return NO_SIGNAL
         state = self._link.source_state()
         extra_loss_db = self._switches.value(EXTRA_CABLE_LOSS.name)
         if not extra_loss_db:
             return state
         return replace(state, level_dbm=state.level_dbm - extra_loss_db)
+
+    def _cable_is_disconnected(self) -> bool:
+        """Check whether this reading sees a disconnected cable.
+
+        Returns:
+            True when the cable is down, or when a loose connector drops this reading.
+        """
+        if self._switches.value(LINK_DOWN.name):
+            return True
+        every = self._switches.value(LINK_FAILS_EVERY.name)
+        return bool(every) and self._readings % int(every) == 0

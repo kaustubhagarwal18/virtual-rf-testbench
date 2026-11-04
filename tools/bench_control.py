@@ -10,6 +10,7 @@ import sys
 from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 from tools.faults import ANALYZER, GENERATOR
@@ -183,12 +184,22 @@ class PytestSuite:
         """
         self._run = run
 
-    def run(self, results_path: Path, firmware_version: str) -> None:
-        """Run every bench test, writing the JSON results file; failing tests are expected.
+    def run(
+        self,
+        results_path: Path,
+        firmware_version: str,
+        environment: Mapping[str, str] = MappingProxyType({}),
+        selection: Sequence[str] = (),
+    ) -> None:
+        """Run the bench tests, writing the JSON results file; failing tests are expected.
 
         Args:
             results_path: Where the results file goes.
             firmware_version: The release the bench runs, which the identity test expects.
+            environment: Extra environment for the run, such as a bench configuration or
+                where to write the sequence log.
+            selection: Extra pytest arguments, to run a subset when a fault makes the whole
+                suite too slow; the results file records what was selected.
 
         Raises:
             BenchControlError: If the suite didn't finish in time, the bench wasn't running,
@@ -203,14 +214,16 @@ class PytestSuite:
             "-p",
             "no:cacheprovider",
             "-q",
+            *selection,
         ]
-        environment = {
+        run_environment = {
             **os.environ,
+            **environment,
             "BENCH_RESULTS_JSON": str(results_path),
             "FIRMWARE_VERSION": firmware_version,
         }
         completed = run_bounded(
-            self._run, command, SUITE_TIMEOUT_S, "the bench suite", env=environment
+            self._run, command, SUITE_TIMEOUT_S, "the bench suite", env=run_environment
         )
         if completed.returncode == BENCH_NOT_RUNNING_EXIT_CODE:
             raise BenchControlError("The bench isn't running; start it with make bench-up")

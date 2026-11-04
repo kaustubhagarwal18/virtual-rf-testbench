@@ -15,7 +15,12 @@ from simulators.common.app import (
     run_simulator,
     start_scpi_and_admin,
 )
-from simulators.common.faults import EXTRA_CABLE_LOSS, FaultSwitches
+from simulators.common.faults import (
+    EXTRA_CABLE_LOSS,
+    LINK_DOWN,
+    LINK_FAILS_EVERY,
+    FaultSwitches,
+)
 from simulators.common.physics import BenchParameters, PhysicsModel
 from simulators.common.server import bound_port
 from simulators.spectrum_analyzer.instrument import SpectrumAnalyzerScpi
@@ -116,7 +121,7 @@ async def start(settings: Settings) -> tuple[asyncio.Server, asyncio.Server]:
     Returns:
         The SCPI server and the admin server, both listening.
     """
-    switches = FaultSwitches([EXTRA_CABLE_LOSS])
+    switches = FaultSwitches([EXTRA_CABLE_LOSS, LINK_DOWN, LINK_FAILS_EVERY])
     cable = CableWithFaults(
         AdminPortLink(settings.generator_admin_host, settings.generator_admin_port), switches
     )
