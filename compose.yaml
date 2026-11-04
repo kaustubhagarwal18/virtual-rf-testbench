@@ -1,0 +1,41 @@
+# The simulated bench: a signal generator and a spectrum analyzer on one network.
+# Start with make bench-up, stop with make bench-down. Ports are published on localhost only.
+
+name: virtual-rf-bench
+
+x-simulator: &simulator
+  image: virtual-rf-testbench-simulators:${FIRMWARE_VERSION:-dev}
+  build:
+    context: .
+    args:
+      FIRMWARE_VERSION: ${FIRMWARE_VERSION:-}
+      REVISION: ${REVISION:-unknown}
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  mem_limit: 256m
+  restart: "no"
+
+services:
+  signal-generator:
+    <<: *simulator
+    command: ["python", "-m", "simulators.signal_generator", "--host", "0.0.0.0"]
+    ports:
+      - "127.0.0.1:5025:5025"
+      - "127.0.0.1:5125:5125"
+
+  spectrum-analyzer:
+    <<: *simulator
+    command:
+      - python
+      - -m
+      - simulators.spectrum_analyzer
+      - --host
+      - 0.0.0.0
+      - --generator-admin
+      - signal-generator:5125
+    ports:
+      - "127.0.0.1:5026:5025"
+    depends_on:
+      signal-generator:
+        condition: service_healthy

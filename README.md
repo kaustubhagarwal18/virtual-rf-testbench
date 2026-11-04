@@ -92,6 +92,27 @@ the generator, it measures no signal, as with an unplugged cable, and logs a war
 to stderr as one JSON object per line. `--help` lists each simulator's options, and
 `SIMULATOR_FIRMWARE_VERSION` sets the version `*IDN?` reports.
 
+## Run the bench in Docker
+
+The same two instruments run as containers from one image, which is how CI and the cluster
+run them. With Docker Desktop running:
+
+```
+make bench-up
+```
+
+It builds the image, starts both instruments, and returns once each answers `*IDN?`. They
+listen on localhost only: the generator on 5025 (admin port 5125) and the analyzer on 5026.
+The `nc` and Python examples on this page work against them unchanged.
+
+```
+make bench-logs
+make bench-down
+```
+
+Each container runs as an unprivileged user on a read-only filesystem, and reports the
+image's version in `*IDN?`. ADR 0004 explains the choices.
+
 ## Drive the instruments from Python
 
 The drivers in `drivers/` control the instruments the way bench tests will: over SCPI
@@ -140,10 +161,11 @@ make test
 | Command | What it does |
 |---|---|
 | `make setup` | Installs Python 3.13 and the dependencies, and installs the pre-commit hooks |
-| `make lint` | Runs ruff, mypy (strict), pylint, pydoclint (docstring Args, Returns and Raises), bandit and codespell, and checks the Makefile's syntax and formatting with mbake |
+| `make lint` | Runs ruff, mypy (strict), pylint, pydoclint (docstring Args, Returns and Raises), bandit and codespell, checks the Makefile with mbake and the Dockerfile with hadolint |
 | `make fmt` | Formats the code and the Makefile, and applies safe lint fixes |
 | `make test` | Runs the tests and fails if coverage is below 80%; writes `reports/junit.xml` and `reports/coverage.xml` |
 | `make summary` | Prints a results summary from those files: tests run, passed, failed and skipped per suite, coverage, failures and the slowest tests |
+| `make bench-up` / `bench-down` / `bench-logs` | Starts, stops or follows the containerised bench |
 | `make clean` | Removes the virtual environment, the tool caches and the pre-commit hook; `make setup` restores them |
 
 The pre-commit hooks run `make lint` before every commit, so the same checks run locally and

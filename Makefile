@@ -1,8 +1,12 @@
 PACKAGES := simulators drivers measurements tools
 COVERAGE_FLOOR := 80
+FIRMWARE_VERSION ?= $(shell uv version --short 2>/dev/null)
+REVISION ?= $(shell git rev-parse --short HEAD 2>/dev/null)
+
+export FIRMWARE_VERSION REVISION
 PYTHON_PATHS := $(PACKAGES) tests
 
-.PHONY: setup lint fmt test summary clean
+.PHONY: setup lint fmt test summary bench-up bench-down bench-logs clean
 
 setup:
 	uv sync
@@ -16,6 +20,7 @@ lint:
 	uv run pydoclint $(PACKAGES)
 	uv run bandit -q -c pyproject.toml -r $(PACKAGES)
 	uv run codespell
+	uv run hadolint Dockerfile
 	uv run mbake validate Makefile
 	uv run mbake format --check Makefile
 
@@ -29,6 +34,15 @@ test:
 
 summary:
 	uv run python -m tools.results_summary reports/junit.xml --coverage reports/coverage.xml --coverage-floor $(COVERAGE_FLOOR)
+
+bench-up:
+	docker compose up --build --detach --wait --wait-timeout 90
+
+bench-down:
+	docker compose down --remove-orphans
+
+bench-logs:
+	docker compose logs --follow
 
 clean:
 	-uv run --no-sync pre-commit uninstall

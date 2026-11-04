@@ -1,0 +1,9 @@
+# Allowlist: the image gets only what the build needs.
+*
+!pyproject.toml
+!uv.lock
+!README.md
+!simulators/
+!drivers/
+!measurements/
+**/__pycache__
