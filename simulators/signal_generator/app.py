@@ -75,10 +75,13 @@ async def start(settings: Settings) -> tuple[asyncio.Server, asyncio.Server]:
             busy admin port doesn't leave the SCPI port taken.
     """
     generator = SignalGeneratorScpi(settings.firmware_version, settings.serial_number)
-    scpi = await serve_lines(generator.process, settings.host, settings.scpi_port, name="scpi")
+    lock = asyncio.Lock()
+    scpi = await serve_lines(
+        generator.process, settings.host, settings.scpi_port, name="scpi", lock=lock
+    )
     try:
         admin = await serve_admin(
-            generator_admin_commands(generator), settings.host, settings.admin_port
+            generator_admin_commands(generator), settings.host, settings.admin_port, lock=lock
         )
     except OSError:
         scpi.close()

@@ -160,3 +160,48 @@ def test_noise_floor_readings_scatter_more() -> None:
     silent = SourceState(frequency_hz=1e9, level_dbm=-10.0, output_on=False)
     readings = [model.peak_reading_dbm(silent, RBW_HZ) for _ in range(2000)]
     assert statistics.stdev(readings) == pytest.approx(PARAMETERS.noise_floor_spread_db, rel=0.2)
+
+
+CHANNEL_BANDWIDTH_HZ = 1e5
+
+
+def test_strong_tone_in_the_channel_sets_the_channel_power() -> None:
+    """A strong tone inside the channel dominates its power: level minus loss plus flatness."""
+    model = PhysicsModel(PARAMETERS)
+    expected = model.expected_peak_dbm(STRONG_TONE, RBW_HZ)
+    assert model.expected_channel_power_dbm(
+        STRONG_TONE, centre_hz=1e9, channel_bandwidth_hz=CHANNEL_BANDWIDTH_HZ
+    ) == pytest.approx(expected, abs=0.001)
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        SourceState(frequency_hz=1.2e9, level_dbm=-10.0, output_on=True),
+        SourceState(frequency_hz=1e9, level_dbm=-10.0, output_on=False),
+    ],
+)
+def test_channel_without_a_tone_holds_only_noise(source: SourceState) -> None:
+    """With the tone outside the channel or RF off, channel power is the noise in the channel."""
+    model = PhysicsModel(PARAMETERS)
+    assert model.expected_channel_power_dbm(
+        source, centre_hz=1e9, channel_bandwidth_hz=CHANNEL_BANDWIDTH_HZ
+    ) == pytest.approx(noise_floor_dbm(CHANNEL_BANDWIDTH_HZ, PARAMETERS.noise_figure_db))
+
+
+def test_channel_power_readings_scatter_by_the_repeatability() -> None:
+    """Channel power readings on a strong tone have the 0.02 dB spread."""
+    model = PhysicsModel(PARAMETERS)
+    readings = [
+        model.channel_power_reading_dbm(STRONG_TONE, 1e9, CHANNEL_BANDWIDTH_HZ) for _ in range(2000)
+    ]
+    assert statistics.stdev(readings) == pytest.approx(PARAMETERS.repeatability_db, rel=0.2)
+
+
+def test_tone_visibility_needs_ten_db_above_the_floor() -> None:
+    """A tone is visible when it stands 10 dB or more above the noise floor."""
+    model = PhysicsModel(PARAMETERS)
+    floor = noise_floor_dbm(RBW_HZ, PARAMETERS.noise_figure_db)
+    weak = SourceState(frequency_hz=1e9, level_dbm=floor + 5.0, output_on=True)
+    assert model.tone_is_visible(STRONG_TONE, RBW_HZ)
+    assert not model.tone_is_visible(weak, RBW_HZ)

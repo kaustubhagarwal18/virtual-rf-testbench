@@ -258,4 +258,7 @@ def test_rejected_command_is_logged(caplog: pytest.LogCaptureFixture) -> None:
     """Each rejected command is logged with its text and error, for later triage."""
     LevelInstrument().process("BOGus 1")
     record = next(record for record in caplog.records if record.getMessage() == "Command rejected")
-    assert (record.command, record.error) == ("BOGus 1", '-113,"Undefined header"')  # type: ignore[attr-defined]
+    assert (record.__dict__["command"], record.__dict__["error"]) == (
+        "BOGus 1",
+        '-113,"Undefined header"',
+    )

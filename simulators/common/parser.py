@@ -1,21 +1,26 @@
 """SCPI command patterns, message splitting and parameter checks.
 
+Numeric suffixes are written <n> in a pattern, as in 'CALCulate<n>:MARKer<m>:X'. These
+instruments have one window and one marker, so only suffix 1, or none, is accepted.
+
 Known simplifications: every command in a compound message is read from the root of the
-command tree, parameters can't contain quoted strings, and nodes can't have numeric
-suffixes such as MARKer1. Nothing on the bench sends any of these yet.
+command tree, and parameters can't contain quoted strings. Nothing on the bench sends either.
 """
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from string import ascii_uppercase
 
 from simulators.common.errors import ScpiCommandError, ScpiError, ScpiErrorCode
 
+_NAME = r"[A-Za-z]+(?:<[a-z]+>)?"
 _PATTERN = re.compile(
-    r"(?:\[\*?[A-Za-z]+\]|\*?[A-Za-z]+)"  # first node, optionally in brackets
-    r"(?:\[:[A-Za-z]+\]|:[A-Za-z]+)*"  # later nodes, each after a colon
+    rf"(?:\[\*?{_NAME}\]|\*?{_NAME})"  # first node, optionally in brackets
+    rf"(?:\[:{_NAME}\]|:{_NAME})*"  # later nodes, each after a colon
 )
-_PATTERN_NODE = re.compile(r"(\[)?:?(\*?[A-Za-z]+)\]?")
+_PATTERN_NODE = re.compile(rf"(\[)?:?(\*?{_NAME})\]?")
+_ACCEPTED_SUFFIXES = frozenset({"", "1"})
 
 
 @dataclass(frozen=True)
@@ -26,11 +31,13 @@ class _Node:
         short_form: The capital letters of the mnemonic, for example 'FREQ'.
         long_form: The whole mnemonic in capitals, for example 'FREQUENCY'.
         optional: Whether the node may be left out of a header.
+        takes_suffix: Whether the node accepts a numeric suffix, written <n> in the pattern.
     """
 
     short_form: str
     long_form: str
     optional: bool
+    takes_suffix: bool = False
 
     @classmethod
     def from_mnemonic(cls, mnemonic: str, *, optional: bool) -> "_Node":
@@ -46,12 +53,14 @@ class _Node:
         Raises:
             ValueError: If the mnemonic doesn't start with capitals, so it has no short form.
         """
+        takes_suffix = mnemonic.endswith(">")
+        mnemonic = mnemonic.partition("<")[0]
         if mnemonic.startswith("*"):
             return cls(mnemonic.upper(), mnemonic.upper(), optional)
         short_form = mnemonic[: len(mnemonic) - len(mnemonic.lstrip(ascii_uppercase))]
         if not short_form:
             raise ValueError(f"Mnemonic {mnemonic!r} needs capitals for its short form")
-        return cls(short_form, mnemonic.upper(), optional)
+        return cls(short_form, mnemonic.upper(), optional, takes_suffix)
 
     def accepts(self, token: str) -> bool:
         """Check one header token against this node.
@@ -60,9 +69,12 @@ class _Node:
             token: One colon-separated part of a received header, in any case.
 
         Returns:
-            True if the token is this node's short or long form.
+            True if the token is this node's short or long form, followed by suffix 1 or
+            none when the node takes a suffix.
         """
-        return token.upper() in {self.short_form, self.long_form}
+        name = token.rstrip("0123456789") if self.takes_suffix else token
+        suffix = token[len(name) :]
+        return suffix in _ACCEPTED_SUFFIXES and name.upper() in {self.short_form, self.long_form}
 
 
 @dataclass(frozen=True)
@@ -92,7 +104,7 @@ class CommandPattern:
                 programming error, caught when the command is registered.
         """
         if re.search(r"\d", text):
-            raise ValueError(f"Numeric suffixes aren't supported yet in pattern {text!r}")
+            raise ValueError(f"Write numeric suffixes as <n>, not digits, in pattern {text!r}")
         if not _PATTERN.fullmatch(text):
             raise ValueError(f"Malformed command pattern: {text!r}")
         nodes = tuple(
@@ -240,3 +252,23 @@ def parse_boolean(text: str) -> bool:
     if word in _FALSE_WORDS:
         return False
     raise ScpiCommandError(ScpiError(ScpiErrorCode.DATA_TYPE_ERROR, text))
+
+
+def parse_choice(text: str, mnemonics: Sequence[str]) -> str:
+    """Read a keyword parameter, such as CPOWer, in its short or long form.
+
+    Args:
+        text: The parameter as sent by the controller.
+        mnemonics: The keywords the command accepts, in manual notation.
+
+    Returns:
+        The matching keyword's long form in capitals, for example 'CPOWER'.
+
+    Raises:
+        ScpiCommandError: -224 if the text matches none of the keywords.
+    """
+    for mnemonic in mnemonics:
+        node = _Node.from_mnemonic(mnemonic, optional=False)
+        if node.accepts(text.strip()):
+            return node.long_form
+    raise ScpiCommandError(ScpiError(ScpiErrorCode.ILLEGAL_PARAMETER_VALUE, text))

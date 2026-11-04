@@ -56,8 +56,11 @@ jobs:
           cache-python: true
       - name: Install dependencies from the lockfile
         run: uv sync --locked
-      - name: Unit tests with an 80% coverage floor
+      - name: Tests with an 80% coverage floor
         run: make test
+      - name: Results summary on the run page
+        if: ${{ !cancelled() }}
+        run: make --silent summary >> "$GITHUB_STEP_SUMMARY"
 
   secrets:
     name: Secret scan

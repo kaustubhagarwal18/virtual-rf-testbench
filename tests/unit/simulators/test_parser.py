@@ -8,6 +8,7 @@ from simulators.common.parser import (
     expect_no_parameters,
     expect_one_parameter,
     parse_boolean,
+    parse_choice,
     parse_command,
     split_message,
 )
@@ -124,8 +125,8 @@ def test_blank_command_is_a_syntax_error(text: str) -> None:
     assert raised.value.error.code == ScpiErrorCode.SYNTAX_ERROR
 
 
-def test_numeric_suffixes_are_refused_until_supported() -> None:
-    """A pattern with a numeric suffix fails loudly instead of matching inconsistently."""
+def test_literal_numeric_suffixes_are_refused() -> None:
+    """A pattern with a literal digit is refused; suffixes are written as <n>."""
     with pytest.raises(ValueError, match="suffix"):
         CommandPattern.parse("CALCulate:MARKer1:X")
 
@@ -152,3 +153,40 @@ def test_other_boolean_words_are_data_type_errors(text: str) -> None:
     with pytest.raises(ScpiCommandError) as raised:
         parse_boolean(text)
     assert raised.value.error.code == ScpiErrorCode.DATA_TYPE_ERROR
+
+
+SUFFIXED = CommandPattern.parse("CALCulate<n>:MARKer<m>:X")
+
+
+@pytest.mark.parametrize(
+    "header", ["CALC:MARK:X", "CALC1:MARK1:X", "calculate1:marker:x", "CALC:MARK1:X"]
+)
+def test_suffix_one_or_none_matches(header: str) -> None:
+    """A node written with <n> accepts no suffix or suffix 1, in short or long form."""
+    assert SUFFIXED.matches(header)
+
+
+@pytest.mark.parametrize(
+    "header", ["CALC2:MARK:X", "CALC:MARK2:X", "CALC0:MARK:X", "CALCU1:MARK:X", "CALC1X:MARK:X"]
+)
+def test_other_suffixes_do_not_match(header: str) -> None:
+    """Window or marker numbers other than 1 don't exist on this instrument."""
+    assert not SUFFIXED.matches(header)
+
+
+def test_suffix_only_where_the_pattern_allows_one() -> None:
+    """A node written without <n> doesn't accept a suffix."""
+    assert not CommandPattern.parse("SOURce:FREQuency").matches("SOUR1:FREQ")
+
+
+@pytest.mark.parametrize("text", ["CPOW", "cpower", " CPOWer "])
+def test_choice_accepts_short_and_long_forms(text: str) -> None:
+    """A keyword parameter matches its short or long form, in any case."""
+    assert parse_choice(text, ("CPOWer", "ACPower")) == "CPOWER"
+
+
+def test_unknown_choice_is_an_illegal_parameter_value() -> None:
+    """A keyword the command doesn't offer is -224 illegal parameter value."""
+    with pytest.raises(ScpiCommandError) as raised:
+        parse_choice("OBW", ("CPOWer",))
+    assert raised.value.error.format() == '-224,"Illegal parameter value;OBW"'

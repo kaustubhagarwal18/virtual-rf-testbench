@@ -2,12 +2,18 @@
 
 Both the SCPI port and the admin port use it. Every connection shares the one handler, as
 every controller on a real instrument shares its one set of settings.
+
+Handlers run in a worker thread, so a handler that blocks (the analyzer asking the generator
+for its state) never stalls the event loop. Each instrument runs one handler at a time: the
+others wait on an asyncio lock on the loop, as a busy instrument queues commands, without
+holding a worker thread while they wait. A generator sharing the analyzer's loop and thread
+pool therefore always has a thread free to answer.
 """
 
 import asyncio
 import contextlib
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 
 MAX_LINE_BYTES = 64 * 1024
 """The longest line accepted; a longer one closes that connection."""
@@ -18,7 +24,15 @@ LineHandler = Callable[[str], list[str]]
 _LOGGER = logging.getLogger(__name__)
 
 
-async def serve_lines(handler: LineHandler, host: str, port: int, *, name: str) -> asyncio.Server:
+async def serve_lines(
+    handler: LineHandler,
+    host: str,
+    port: int,
+    *,
+    name: str,
+    lock: asyncio.Lock | None = None,
+    connection_log_level: int = logging.INFO,
+) -> asyncio.Server:
     """Start a server that runs each received line through a handler.
 
     All replies to one line go back as one line joined by ';', as IEEE 488.2 requires for a
@@ -29,10 +43,27 @@ async def serve_lines(handler: LineHandler, host: str, port: int, *, name: str) 
         host: The address to listen on.
         port: The port to listen on; 0 picks a free port.
         name: What this server is, for the logs, for example 'scpi' or 'admin'.
+        lock: Held while the handler runs; servers on one instrument share it. None gives
+            this server its own.
+        connection_log_level: The level for 'client connected' and 'disconnected' logs.
 
     Returns:
         The started server.
     """
+    instrument_lock = asyncio.Lock() if lock is None else lock
+
+    async def run_one_at_a_time(line: str, peer: str) -> list[str]:
+        """Wait for the instrument, then run the handler on one line in a worker thread.
+
+        Args:
+            line: The received line.
+            peer: The client's address, for the logs.
+
+        Returns:
+            The handler's replies.
+        """
+        async with instrument_lock:
+            return await asyncio.to_thread(_run_handler, handler, line, name, peer)
 
     async def handle_connection(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         """Serve one client connection until it closes.
@@ -41,7 +72,7 @@ async def serve_lines(handler: LineHandler, host: str, port: int, *, name: str) 
             reader: The connection's incoming stream.
             writer: The connection's outgoing stream.
         """
-        await _serve_connection(handler, name, reader, writer)
+        await _serve_connection(run_one_at_a_time, name, connection_log_level, reader, writer)
 
     return await asyncio.start_server(handle_connection, host, port, limit=MAX_LINE_BYTES)
 
@@ -92,18 +123,23 @@ def _run_handler(handler: LineHandler, line: str, name: str, peer: str) -> list[
 
 
 async def _serve_connection(
-    handler: LineHandler, name: str, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    run_line: Callable[[str, str], Awaitable[list[str]]],
+    name: str,
+    connection_log_level: int,
+    reader: asyncio.StreamReader,
+    writer: asyncio.StreamWriter,
 ) -> None:
     """Read lines, run each through the handler and send its replies, until the client leaves.
 
     Args:
-        handler: Turns a received line into replies.
+        run_line: Turns a received line and the client's address into replies.
         name: What this server is, for the logs.
+        connection_log_level: The level for 'client connected' and 'disconnected' logs.
         reader: The connection's incoming stream.
         writer: The connection's outgoing stream.
     """
     peer = str(writer.get_extra_info("peername"))
-    _LOGGER.info("Client connected", extra={"server": name, "peer": peer})
+    _LOGGER.log(connection_log_level, "Client connected", extra={"server": name, "peer": peer})
     try:
         while True:
             try:
@@ -118,7 +154,7 @@ async def _serve_connection(
             if not received:
                 break
             line = received.decode("ascii", errors="replace").rstrip("\r\n")
-            replies = _run_handler(handler, line, name, peer)
+            replies = await run_line(line, peer)
             if replies:
                 writer.write((";".join(replies) + "\n").encode("ascii", errors="replace"))
                 await writer.drain()
@@ -128,4 +164,6 @@ async def _serve_connection(
         writer.close()
         with contextlib.suppress(ConnectionError):
             await writer.wait_closed()
-        _LOGGER.info("Client disconnected", extra={"server": name, "peer": peer})
+        _LOGGER.log(
+            connection_log_level, "Client disconnected", extra={"server": name, "peer": peer}
+        )

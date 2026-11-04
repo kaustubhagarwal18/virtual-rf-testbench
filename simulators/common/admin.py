@@ -60,13 +60,19 @@ class AdminCommands:
             return {"error": f"Internal error in admin command: {name}"}
 
 
-async def serve_admin(commands: AdminCommands, host: str, port: int) -> asyncio.Server:
+async def serve_admin(
+    commands: AdminCommands, host: str, port: int, *, lock: asyncio.Lock | None = None
+) -> asyncio.Server:
     """Start an admin server that answers each line with one line of JSON.
+
+    Connections are logged at debug level: the analyzer connects for every measurement.
 
     Args:
         commands: The admin commands to offer.
         host: The address to listen on.
         port: The port to listen on; 0 picks a free port.
+        lock: The instrument's lock, shared with its SCPI server; None gives the admin
+            server its own.
 
     Returns:
         The started server.
@@ -83,4 +89,6 @@ async def serve_admin(commands: AdminCommands, host: str, port: int) -> asyncio.
         """
         return [json.dumps(commands.handle(line))]
 
-    return await serve_lines(handle_line, host, port, name="admin")
+    return await serve_lines(
+        handle_line, host, port, name="admin", lock=lock, connection_log_level=logging.DEBUG
+    )

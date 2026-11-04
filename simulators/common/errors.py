@@ -19,7 +19,10 @@ class ScpiErrorCode(IntEnum):
     MISSING_PARAMETER = -109
     UNDEFINED_HEADER = -113
     INVALID_SUFFIX = -131
+    SETTINGS_CONFLICT = -221
     DATA_OUT_OF_RANGE = -222
+    ILLEGAL_PARAMETER_VALUE = -224
+    DATA_CORRUPT_OR_STALE = -230
     DEVICE_SPECIFIC_ERROR = -300
     QUEUE_OVERFLOW = -350
 
@@ -32,7 +35,10 @@ _STANDARD_MESSAGES: dict[ScpiErrorCode, str] = {
     ScpiErrorCode.MISSING_PARAMETER: "Missing parameter",
     ScpiErrorCode.UNDEFINED_HEADER: "Undefined header",
     ScpiErrorCode.INVALID_SUFFIX: "Invalid suffix",
+    ScpiErrorCode.SETTINGS_CONFLICT: "Settings conflict",
     ScpiErrorCode.DATA_OUT_OF_RANGE: "Data out of range",
+    ScpiErrorCode.ILLEGAL_PARAMETER_VALUE: "Illegal parameter value",
+    ScpiErrorCode.DATA_CORRUPT_OR_STALE: "Data corrupt or stale",
     ScpiErrorCode.DEVICE_SPECIFIC_ERROR: "Device-specific error",
     ScpiErrorCode.QUEUE_OVERFLOW: "Queue overflow",
 }

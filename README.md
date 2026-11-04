@@ -54,29 +54,77 @@ Early development. The first milestone is the simulated instruments, their Pytho
 and the first bench tests, running on Docker Compose. Setup instructions will be added here as
 each part starts working.
 
-## Run the signal generator
+## Run the simulators
 
-The simulated signal generator speaks SCPI on port 5025, as networked instruments do, and
-reports its state as JSON on an admin port, 5125:
+Each simulated instrument speaks SCPI over TCP, as networked instruments do. The signal
+generator also reports its state as JSON on an admin port (5125), which the spectrum analyzer
+reads to know what it is measuring. Start each in its own terminal; on one machine the
+analyzer needs a different SCPI port:
 
 ```
 uv run python -m simulators.signal_generator
 ```
 
-From a second terminal, talk to it with `nc`:
-
 ```
-printf '*IDN?\n' | nc -w 1 127.0.0.1 5025
-printf 'FREQ 2.5 GHz\nPOW -10\nOUTP ON\nFREQ?;POW?;OUTP?\n' | nc -w 1 127.0.0.1 5025
-printf 'STATE?\n' | nc -w 1 127.0.0.1 5125
+uv run python -m simulators.spectrum_analyzer --scpi-port 5026
 ```
 
-It supports the IEEE 488.2 common commands (`*IDN?`, `*RST`, `*CLS`, `*OPC?`, `*ESE`,
-`*SRE`, `*ESR?`, `*STB?`), `SYST:ERR?`, `[SOURce]:FREQuency` (9 kHz to 6 GHz),
-`[SOURce]:POWer` (-120 to +20 dBm) and `OUTPut` (ON or OFF). Several queries on one line get
-one reply line, joined by `;`, as IEEE 488.2 requires. Bad commands queue standard SCPI errors
-instead of failing silently. Logs go to stderr as one JSON object per line.
-`--help` lists the options; `SIMULATOR_FIRMWARE_VERSION` sets the version `*IDN?` reports.
+From a third terminal, switch the generator on and measure it with the analyzer:
+
+```
+printf 'FREQ 1 GHz\nPOW -10\nOUTP ON\n' | nc -w 1 127.0.0.1 5025
+printf 'CALC:MARK:MAX\nCALC:MARK:X?;CALC:MARK:Y?\n' | nc -w 1 127.0.0.1 5026
+printf 'CALC:MARK:FUNC:POW:RES? CPOW\n' | nc -w 1 127.0.0.1 5026
+```
+
+The analyzer reads about -11.5 dBm at 1 GHz: the generator's -10 dBm, minus 1.5 dB of cable
+loss, plus a small flatness error and reading noise.
+
+| Instrument | Commands |
+|---|---|
+| Both | `*IDN?`, `*RST`, `*CLS`, `*OPC?`, `*ESE`, `*SRE`, `*ESR?`, `*STB?`, `SYST:ERR?` |
+| Signal generator (SG-1) | `[SOURce]:FREQuency` (9 kHz to 6 GHz), `[SOURce]:POWer` (-120 to +20 dBm), `OUTPut` (ON or OFF) |
+| Spectrum analyzer (SA-1) | `[SENSe]:FREQuency:CENTer` and `:SPAN`, `[SENSe]:BANDwidth` (RBW), `INITiate` and `INITiate:CONTinuous`, `CALCulate:MARKer:MAXimum`, `:X?` and `:Y?`, channel power with `[SENSe]:POWer:ACHannel:BANDwidth` and `CALCulate:MARKer:FUNCtion:POWer:RESult? CPOWer` |
+
+Several queries on one line get one reply line, joined by `;`, as IEEE 488.2 requires. Bad
+commands queue standard SCPI errors instead of failing silently. If the analyzer can't reach
+the generator, it measures no signal, as with an unplugged cable, and logs a warning. Logs go
+to stderr as one JSON object per line. `--help` lists each simulator's options, and
+`SIMULATOR_FIRMWARE_VERSION` sets the version `*IDN?` reports.
+
+## Drive the instruments from Python
+
+The drivers in `drivers/` control the instruments the way bench tests will: over SCPI
+through R&S's RsInstrument library, with every command group synchronised on `*OPC?` and
+every instrument error raised as `InstrumentError`. With both simulators running as above,
+save this as `measure.py`:
+
+```python
+from drivers.session import RsInstrumentSession, socket_resource
+from drivers.signal_generator import SignalGenerator
+from drivers.spectrum_analyzer import SpectrumAnalyzer
+
+with (
+    RsInstrumentSession(socket_resource("127.0.0.1", 5025)) as generator_session,
+    RsInstrumentSession(socket_resource("127.0.0.1", 5026)) as analyzer_session,
+):
+    generator = SignalGenerator(generator_session)
+    analyzer = SpectrumAnalyzer(analyzer_session)
+    generator.configure(frequency_hz=1e9, level_dbm=-10.0)
+    generator.set_output(on=True)
+    analyzer.configure(centre_hz=1e9, span_hz=1e6, rbw_hz=1e3)
+    print(analyzer.measure_peak())
+```
+
+Then run it:
+
+```
+uv run python measure.py
+```
+
+Bench tests turn each reading into a `Measurement` from `measurements/record.py`: the value,
+its limit, the margin, pass or fail, and both instruments' firmware versions. Each one is
+written into the JUnit XML, so a failure always says by how much it missed.
 
 ## Development
 
@@ -94,7 +142,8 @@ make test
 | `make setup` | Installs Python 3.13 and the dependencies, and installs the pre-commit hooks |
 | `make lint` | Runs ruff, mypy (strict), pylint, pydoclint (docstring Args, Returns and Raises), bandit and codespell, and checks the Makefile's syntax and formatting with mbake |
 | `make fmt` | Formats the code and the Makefile, and applies safe lint fixes |
-| `make test` | Runs the tests and fails if coverage is below 80% |
+| `make test` | Runs the tests and fails if coverage is below 80%; writes `reports/junit.xml` and `reports/coverage.xml` |
+| `make summary` | Prints a results summary from those files: tests run, passed, failed and skipped per suite, coverage, failures and the slowest tests |
 | `make clean` | Removes the virtual environment, the tool caches and the pre-commit hook; `make setup` restores them |
 
 The pre-commit hooks run `make lint` before every commit, so the same checks run locally and
@@ -107,7 +156,7 @@ GitHub Actions runs on every pull request and on every push to `main`:
 | Job | What it checks |
 |---|---|
 | Lint | Every pre-commit hook on all files: trailing whitespace, final newlines, YAML and TOML syntax, large files, merge conflict markers, then `make lint` |
-| Test (Python 3.13) | `make test`, including the 80% coverage floor |
+| Test (Python 3.13) | `make test`, including the 80% coverage floor, then `make summary`, whose table appears on the run's summary page |
 | Secret scan | gitleaks 8.30.1 over the full git history, including merge commits; the download is checksum-verified |
 
 Actions are pinned to commit SHAs, and dependencies install from `uv.lock` exactly

@@ -69,3 +69,24 @@ def test_failing_admin_command_returns_an_error_object(caplog: pytest.LogCapture
     commands.register("BROKEN?", broken)
     assert commands.handle("BROKEN?") == {"error": "Internal error in admin command: BROKEN?"}
     assert any(record.exc_info for record in caplog.records)
+
+
+def test_admin_connections_are_logged_at_debug_level(caplog: pytest.LogCaptureFixture) -> None:
+    """The analyzer connects for every measurement, so admin connections stay out of INFO logs."""
+    caplog.set_level("INFO")
+
+    async def scenario() -> None:
+        """Connect to the admin port once."""
+        generator = SignalGeneratorScpi(firmware_version="1.2.3")
+        server = await serve_admin(generator_admin_commands(generator), "127.0.0.1", 0)
+        async with server:
+            reader, writer = await asyncio.open_connection("127.0.0.1", bound_port(server))
+            writer.write(b"STATE?\n")
+            await writer.drain()
+            await asyncio.wait_for(reader.readline(), 5.0)
+            writer.close()
+            await writer.wait_closed()
+        await asyncio.sleep(0.05)
+
+    asyncio.run(scenario())
+    assert not [record for record in caplog.records if record.getMessage().startswith("Client ")]

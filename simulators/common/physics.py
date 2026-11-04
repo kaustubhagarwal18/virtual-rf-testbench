@@ -165,10 +165,68 @@ class PhysicsModel:
         """
         spread = (
             self.parameters.repeatability_db
-            if self._tone_is_visible(source, rbw_hz)
+            if self.tone_is_visible(source, rbw_hz)
             else self.parameters.noise_floor_spread_db
         )
         return self.expected_peak_dbm(source, rbw_hz) + float(self._random.normal(0.0, spread))
+
+    def expected_channel_power_dbm(
+        self, source: SourceState, centre_hz: float, channel_bandwidth_hz: float
+    ) -> float:
+        """Return the channel power the analyzer would read without any reading noise.
+
+        Args:
+            source: What the generator is sending.
+            centre_hz: The channel's centre frequency.
+            channel_bandwidth_hz: The channel's width.
+
+        Returns:
+            The noise in the channel, plus the tone when it lies inside the channel.
+        """
+        expected_dbm, _ = self._channel_power(source, centre_hz, channel_bandwidth_hz)
+        return expected_dbm
+
+    def channel_power_reading_dbm(
+        self, source: SourceState, centre_hz: float, channel_bandwidth_hz: float
+    ) -> float:
+        """Return one channel power reading, with the noise a real measurement would add.
+
+        Args:
+            source: What the generator is sending.
+            centre_hz: The channel's centre frequency.
+            channel_bandwidth_hz: The channel's width.
+
+        Returns:
+            The expected channel power plus random noise: the small spread when a tone stands
+            clearly above the channel noise, the wider one otherwise.
+        """
+        expected_dbm, tone_stands_out = self._channel_power(source, centre_hz, channel_bandwidth_hz)
+        spread = (
+            self.parameters.repeatability_db
+            if tone_stands_out
+            else self.parameters.noise_floor_spread_db
+        )
+        return expected_dbm + float(self._random.normal(0.0, spread))
+
+    def _channel_power(
+        self, source: SourceState, centre_hz: float, channel_bandwidth_hz: float
+    ) -> tuple[float, bool]:
+        """Work out a channel's power and whether a tone stands out in it, in one pass.
+
+        Args:
+            source: What the generator is sending.
+            centre_hz: The channel's centre frequency.
+            channel_bandwidth_hz: The channel's width.
+
+        Returns:
+            The expected channel power, and whether a tone in the channel stands at least
+            10 dB above the channel noise.
+        """
+        noise_dbm = noise_floor_dbm(channel_bandwidth_hz, self.parameters.noise_figure_db)
+        if not _tone_in_channel(source, centre_hz, channel_bandwidth_hz):
+            return noise_dbm, False
+        expected_dbm = power_sum_dbm(self._level_at_analyzer_dbm(source), noise_dbm)
+        return expected_dbm, self._stands_out(source, noise_dbm)
 
     def _level_at_analyzer_dbm(self, source: SourceState) -> float:
         """Return the tone level at the analyzer's input, after the cable and flatness error.
@@ -188,7 +246,7 @@ class PhysicsModel:
             )
         )
 
-    def _tone_is_visible(self, source: SourceState, rbw_hz: float) -> bool:
+    def tone_is_visible(self, source: SourceState, rbw_hz: float) -> bool:
         """Check whether the tone stands clearly above the noise floor.
 
         Args:
@@ -200,5 +258,30 @@ class PhysicsModel:
         """
         if not source.output_on:
             return False
-        floor = noise_floor_dbm(rbw_hz, self.parameters.noise_figure_db)
-        return self._level_at_analyzer_dbm(source) - floor >= _VISIBLE_TONE_MARGIN_DB
+        return self._stands_out(source, noise_floor_dbm(rbw_hz, self.parameters.noise_figure_db))
+
+    def _stands_out(self, source: SourceState, floor_dbm: float) -> bool:
+        """Check whether the tone stands at least 10 dB above a noise level.
+
+        Args:
+            source: What the generator is sending.
+            floor_dbm: The noise level to compare with.
+
+        Returns:
+            True if the tone at the analyzer is 10 dB or more above the noise.
+        """
+        return self._level_at_analyzer_dbm(source) - floor_dbm >= _VISIBLE_TONE_MARGIN_DB
+
+
+def _tone_in_channel(source: SourceState, centre_hz: float, channel_bandwidth_hz: float) -> bool:
+    """Check whether the generator's tone is on and inside a channel.
+
+    Args:
+        source: What the generator is sending.
+        centre_hz: The channel's centre frequency.
+        channel_bandwidth_hz: The channel's width.
+
+    Returns:
+        True if the output is on and the tone lies within half a bandwidth of the centre.
+    """
+    return source.output_on and abs(source.frequency_hz - centre_hz) <= channel_bandwidth_hz / 2
