@@ -60,6 +60,9 @@ give the answer away in the evidence.
 - The bench suite's start-up check waits up to 10 s, so a slow instrument fails the tests'
   own timeouts instead of looking like a stopped bench.
 - Every child process the tooling starts is bounded (building the bench, reading the logs,
-  running the suite). A stalled one is reported, so the fault is always switched off again.
+  running the suite), so a stalled one is reported and the tooling always reaches its attempt
+  to switch the fault off. That attempt can itself fail, on a bench that has stopped
+  answering; it is then reported as a warning naming the fault that may still be set, and
+  never replaces the failure that caused it.
 - A run pytest couldn't finish, such as one where collection failed, is kept and reported
   rather than being read as "nothing failed" and deleted.

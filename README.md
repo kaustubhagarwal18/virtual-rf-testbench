@@ -190,12 +190,14 @@ make fault NAME=cable_loss SIZE=1.5
 ```
 
 `make fault` starts the bench on the release the fault needs, so the examples above can be
-run in any order. The run lands in `results/faults/` as `results.json`, the last lines of the
-instruments' logs, and a separate `label.json` with the known cause, which a closed ticket
-would hold. A run in which nothing failed isn't saved, and one pytest couldn't finish is kept
-and reported rather than counted as a pass. `make fault-dataset` builds the triage data set in
-`triage/data/runs/`: three history runs per fault at different sizes, and one question run
-each at a size of its own. ADR 0005 explains the design.
+run in any order. Each run lands in its own folder, `results/faults/<fault>-<timestamp>/`,
+holding `results.json`, `logs.txt` with the last lines of both instruments' logs, and a
+separate `label.json` with the known cause, which a closed ticket would hold. A run in which
+nothing failed isn't saved, and one pytest couldn't finish is kept and reported rather than
+counted as a pass. `make fault-dataset` builds the triage data set in
+`triage/data/runs/`: three history runs per fault, and one question run each. For the two
+faults with a size, the question uses a size no history run has; the firmware fault has no
+size, so its question repeats release `0.2.0-rc1`. ADR 0005 explains the design.
 
 ### The bench suite
 

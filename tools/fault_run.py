@@ -69,6 +69,25 @@ class NothingFailedError(Exception):
     """The fault was on, yet every test passed: the run has no failure to label."""
 
 
+def try_restore(fault: Fault, bench: Bench, default_version: str) -> None:
+    """Switch the fault off, reporting a failure instead of raising it.
+
+    It is called from a finally block, so it must never raise: a restore that failed would
+    otherwise replace the failure that caused it, and the real cause would be lost.
+
+    Args:
+        fault: The fault to switch off.
+        bench: The bench.
+        default_version: The bench's normal release.
+    """
+    try:
+        fault.restore(bench, default_version)
+    except BenchControlError as error:
+        sys.stdout.write(
+            f"warning: couldn't switch {fault.name} off, so the bench may still carry it: {error}\n"
+        )
+
+
 class UnusableRunError(Exception):
     """The suite didn't produce a usable run, so its evidence is kept instead of deleted."""
 
@@ -127,7 +146,7 @@ def run_fault(
         suite.run(run_folder / "results.json", firmware_version)
         logs = bench.logs_since(started)
     finally:
-        fault.restore(bench, default_version)
+        try_restore(fault, bench, default_version)
     results: dict[str, Any] = json.loads((run_folder / "results.json").read_text())
     if (problem := unusable_reason(results)) is not None:
         raise UnusableRunError(f"{problem}; kept {run_folder}")
@@ -167,6 +186,8 @@ def build_dataset(
 
     The runs are built in a staging folder and only moved into place once every one of them
     has been saved, so a bench that fails part-way leaves the previous data set untouched.
+    A run pytest couldn't finish keeps its evidence, so the staging folder is kept too, and
+    the next build clears it.
 
     Args:
         root: The data set's folder.
@@ -176,10 +197,15 @@ def build_dataset(
 
     Returns:
         Every saved run's folder.
+
+    Raises:
+        UnusableRunError: Re-raised after keeping the staging folder, so the evidence of the
+            run pytest couldn't finish survives for inspection.
     """
     staging = root / STAGING
     shutil.rmtree(staging, ignore_errors=True)
     completed = False
+    keep_evidence = False
     try:
         for relative, fault, size in dataset_plan():
             run_fault(
@@ -191,8 +217,11 @@ def build_dataset(
                 default_version=default_version,
             )
         completed = True
+    except UnusableRunError:
+        keep_evidence = True
+        raise
     finally:
-        if not completed:
+        if not completed and not keep_evidence:
             shutil.rmtree(staging, ignore_errors=True)
     for part in (HISTORY, QUESTIONS):
         shutil.rmtree(root / part, ignore_errors=True)

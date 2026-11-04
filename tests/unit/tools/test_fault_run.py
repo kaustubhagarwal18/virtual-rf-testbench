@@ -21,6 +21,8 @@ from tools.faults import ANALYZER, CATALOGUE, GENERATOR
 
 DEFAULT_VERSION = "0.1.0"
 USAGE_ERROR_EXIT_CODE = 2
+CLEARS_WHILE_APPLYING = 2
+"""Applying a bench fault clears both instruments before setting its switch."""
 
 
 def test_a_saved_run_keeps_results_logs_and_a_separate_label(tmp_path: Path) -> None:
@@ -219,3 +221,50 @@ def test_a_failure_part_way_leaves_the_previous_data_set_in_place(tmp_path: Path
         build_dataset(tmp_path, FakeBench(), FakeSuite(fail_after=2), DEFAULT_VERSION)
     assert kept.read_text(encoding="utf-8") == "previous run"
     assert sorted(path.name for path in tmp_path.iterdir()) == ["history"]
+
+
+def test_an_unusable_run_keeps_its_evidence_and_the_previous_data_set(tmp_path: Path) -> None:
+    """A run pytest couldn't finish stays under staging, named in the error, data set intact."""
+    kept = tmp_path / "history" / "cable_loss-1" / "results.json"
+    kept.parent.mkdir(parents=True)
+    kept.write_text("previous run", encoding="utf-8")
+    with pytest.raises(UnusableRunError) as raised:
+        build_dataset(tmp_path, FakeBench(), FakeSuite(unusable_after=2), DEFAULT_VERSION)
+    evidence = Path(str(raised.value).split("kept ")[1])
+    assert (evidence / "results.json").exists()
+    assert evidence.is_relative_to(tmp_path / ".building")
+    assert kept.read_text(encoding="utf-8") == "previous run"
+
+
+def test_a_restore_that_fails_does_not_hide_the_real_failure(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """When the suite fails and CLEAR fails too, the suite's error is raised, with a warning."""
+    with pytest.raises(BenchControlError, match="no bench"):
+        run_fault(
+            CATALOGUE["cable_loss"],
+            1.0,
+            tmp_path / "run",
+            bench=FakeBench(clear_fails_after=CLEARS_WHILE_APPLYING),
+            suite=FakeSuite(error=BenchControlError("no bench")),
+            default_version=DEFAULT_VERSION,
+        )
+    assert "couldn't switch cable_loss off" in capsys.readouterr().out
+
+
+def test_a_run_is_still_saved_when_the_bench_cannot_be_restored(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A failed restore is reported but doesn't lose a run that was otherwise complete."""
+    folder = tmp_path / "run"
+    totals = run_fault(
+        CATALOGUE["cable_loss"],
+        1.0,
+        folder,
+        bench=FakeBench(clear_fails_after=CLEARS_WHILE_APPLYING),
+        suite=FakeSuite(),
+        default_version=DEFAULT_VERSION,
+    )
+    assert totals == FAILING_TOTALS
+    assert (folder / "label.json").exists()
+    assert "the bench may still carry it" in capsys.readouterr().out
