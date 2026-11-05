@@ -46,13 +46,40 @@ like with like.
   percentages. The report's conclusions are derived from the outcomes in code, so they can't
   drift from the numbers above them when the evaluation is re-run on another machine.
 
+- **Retrieve with an in-memory cosine index for now.** The labelled history runs are embedded
+  (nomic-embed-text, local under Ollama) and searched by cosine similarity in process, behind
+  a small `Retriever` interface. At the data set's current size this needs no new
+  infrastructure. A pgvector-backed retriever is a later option behind the same interface —
+  the service can't tell which it was given (Liskov) — and is deferred until the data set is
+  large enough to warrant it.
+
 ## Consequences
 
-- The baseline (no retrieval) is measurable on its own, and the retrieval scenario will be
-  measured against it by changing one argument, so any gain is attributable to retrieval.
-- The first baseline run scored 4 of 9 (error text only) and 3 of 9 (full evidence): fuller
-  context did not help this model, which falls back to one category when unsure. That is the
-  floor retrieval has to beat, recorded in `triage/results/baseline.md`.
+- The baseline (no retrieval) is measurable on its own, and the retrieval scenario is measured
+  against it by changing one argument, so any gain is attributable to retrieval.
+- The baseline run scored 4 of 9 (error text only) and 3 of 9 (full evidence): fuller context
+  did not help this model, which falls back to one category when unsure. That is the floor
+  retrieval has to beat, recorded in `triage/results/baseline.md`.
+- Full evidence plus the three most similar past runs scored 6 of 9 on the same questions and
+  model — above the 4-of-9 floor, and reversing the "more context hurt" effect (3 to 6). It
+  fixed the bench and configuration faults where a cited past run breaks the model's firmware
+  default (`cable_loss`, `config_parameter_out_of_range`, `config_decimal_error`). The
+  three-way comparison is in `triage/results/rag.md`.
+- The three remaining misses show the ceiling is the model, not retrieval. On `link_flaky`
+  and `slow_responses` the retriever cited the matching past failures — the runs labelled LINK
+  and TIMEOUT — and the model still chose `CABLE` and `FIRMWARE`; the precedent was in front of
+  it and it did not act on it. `link_down` returned an answer that named no action at all and
+  was refused as unusable. So 6 of 9 is a limit of a 3B model's reasoning and output
+  discipline on an 8 GB machine, not of what retrieval surfaced. A stronger model, run where
+  there is room for it, is the lever — not a change to the retriever. The report states this
+  as a computed finding, so it cannot drift from the numbers.
+- Testing that lever locally is not possible on the 8 GB machine. `qwen2.5:7b-instruct` (q4,
+  4.7 GB) was pulled and run through the same eval, but it offloads partly to CPU and a single
+  answer exceeds the 300 s per-call timeout, so the run aborts with no result; RAM, not disk,
+  is the binding limit. The eval takes a `--model` flag (`make eval MODEL=…`) so the 3B-vs-7B
+  comparison can be run where there is RAM for a 7B, or against a hosted model — a follow-up,
+  not something this machine can do.
 - A verdict whose reasoning is sound but whose category is wrong still counts as a miss, so
   the counts, if anything, understate the model. The evaluation is a measurement, not a merge
-  gate, and is not run in CI.
+  gate, and is not run in CI (it needs a local Ollama; surfacing the score in CI from recorded
+  model outputs is a possible follow-up).

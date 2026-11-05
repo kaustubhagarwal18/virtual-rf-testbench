@@ -1,5 +1,6 @@
 PACKAGES := simulators drivers measurements tools triage
 COVERAGE_FLOOR := 80
+EVAL_REPORT ?= triage/results/rag.md
 FIRMWARE_VERSION ?= $(shell uv version --short 2>/dev/null)
 REVISION ?= $(shell git rev-parse --short HEAD 2>/dev/null)
 
@@ -60,7 +61,7 @@ triage:
 	uv run python -m triage.service $(RUN)
 
 eval:
-	uv run python -m triage.evaluate --report triage/results/baseline.md
+	uv run python -m triage.evaluate $(if $(MODEL),--model $(MODEL)) --report $(EVAL_REPORT)
 
 clean:
 	-uv run --no-sync pre-commit uninstall
