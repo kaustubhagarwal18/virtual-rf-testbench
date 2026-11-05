@@ -74,6 +74,8 @@ class RsInstrumentSession:
 
         Raises:
             InstrumentError: If the instrument can't be reached or isn't accepted.
+            InstrumentTimeoutError: If it doesn't answer within the timeout while the session
+                opens, which is what a slow instrument looks like.
         """
         self.resource = resource
         options = (
@@ -85,6 +87,13 @@ class RsInstrumentSession:
             self._instrument = RsInstrument(resource, id_query=True, reset=reset, options=options)
         except OSError as error:
             raise InstrumentError(f"Can't connect to {resource}: {error}") from error
+        except TimeoutException as error:
+            # RsInstrument's own message names only the query, so the reason is spelled out:
+            # a session that times out while opening is the signature of a slow instrument.
+            raise InstrumentTimeoutError(
+                f"{resource}: no reply within the {timeout_ms} ms timeout while opening a "
+                f"session ({error})"
+            ) from error
         except RsInstrException as error:
             raise InstrumentError(f"Can't open {resource}: {error}") from error
 

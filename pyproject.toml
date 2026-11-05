@@ -78,6 +78,7 @@ markers = [
     "smoke: fast checks that the bench is alive",
     "regression: the full measurement suite",
     "negative: bad commands and error handling",
+    "ollama: needs the local model running; skipped when it isn't",
 ]
 
 [tool.coverage.run]

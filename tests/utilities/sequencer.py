@@ -83,6 +83,8 @@ class Sequencer:
         """
         self.steps += 1
         number = self.steps
+        # The reason is written last on purpose: it is free text that may contain '=', and a
+        # reader (triage/evidence.py) takes everything after 'reason=' as one value.
         try:
             yield
         except Exception as error:
