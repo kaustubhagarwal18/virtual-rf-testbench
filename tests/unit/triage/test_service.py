@@ -1,6 +1,8 @@
 """Tests for the pipeline: evidence, prompt, answer."""
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -8,9 +10,9 @@ import pytest
 from tests.unit.triage.test_evidence import FAILING_TEST, write_run
 from triage.answer import MalformedAnswerError
 from triage.evidence import ERROR_ONLY, FULL, SavedRun
-from triage.llm import FakeProvider
+from triage.llm import FakeProvider, ModelUnavailableError
 from triage.prompt import Fix, Source
-from triage.service import triage_run
+from triage.service import main, triage_run
 
 VERDICT = json.dumps(
     {"fix": "CABLE", "where": "the bench cable", "because": "the loss is high", "cited": []}
@@ -64,3 +66,50 @@ def test_a_malformed_reply_is_not_retried(tmp_path: Path) -> None:
     with pytest.raises(MalformedAnswerError):
         triage_run(saved_run(tmp_path), provider)
     assert len(provider.prompts) == 1
+
+
+def test_the_cli_prints_the_verdict(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Make triage RUN=... prints the chosen fix, where, why and what it cited."""
+    run = write_run(tmp_path / "run", [FAILING_TEST])
+    reply = json.dumps({"fix": "CABLE", "where": "the cable", "because": "loss high", "cited": []})
+    assert main([str(run)], FakeProvider([reply])) == 0
+    out = capsys.readouterr().out
+    assert "fix:   CABLE" in out
+    assert "cited: nothing" in out
+
+
+def test_the_cli_reports_an_unusable_answer_without_a_traceback(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A reply that can't be parsed exits 1 with one line, not a stack trace."""
+    run = write_run(tmp_path / "run", [FAILING_TEST])
+    assert main([str(run)], FakeProvider(["not json"])) == 1
+    assert "couldn't be used" in capsys.readouterr().out
+
+
+def test_the_cli_reports_an_unreachable_model(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A model that can't be reached exits 1 with one line, not a traceback."""
+
+    class Down:
+        """A provider that is never reachable."""
+
+        def complete(self, system: str, user: str) -> str:
+            """Fail as an unreachable model does."""
+            raise ModelUnavailableError("start it with 'ollama serve'")
+
+    run = write_run(tmp_path / "run", [FAILING_TEST])
+    assert main([str(run)], Down()) == 1
+    assert "ollama serve" in capsys.readouterr().out
+
+
+def test_service_runs_as_a_module() -> None:
+    """Python -m triage.service works the way make triage calls it."""
+    completed = subprocess.run(
+        [sys.executable, "-m", "triage.service", "--help"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert "Explain one failed bench run" in completed.stdout

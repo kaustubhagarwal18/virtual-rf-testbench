@@ -1,7 +1,7 @@
 {
-  "run_id": "20261104T171051.709337Z",
-  "started": "2026-11-04T17:10:51+00:00",
-  "duration_s": 0.772,
+  "run_id": "20261105T044541.444785Z",
+  "started": "2026-11-05T04:45:41+00:00",
+  "duration_s": 0.896,
   "firmware_versions": {
     "generator": "0.1.0",
     "analyzer": "0.1.0"
@@ -25,7 +25,7 @@
     {
       "id": "tests/bench/test_bench.py::test_instruments_identify_as_the_release_under_test",
       "outcome": "passed",
-      "duration_s": 0.028,
+      "duration_s": 0.032,
       "message": "",
       "instrument_errors": [],
       "measurements": []
@@ -66,7 +66,7 @@
     {
       "id": "tests/bench/test_bench.py::test_path_loss_calibration_matches_the_cable_datasheet",
       "outcome": "failed",
-      "duration_s": 0.07,
+      "duration_s": 0.074,
       "message": "Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL",
       "instrument_errors": [],
       "measurements": [
@@ -127,7 +127,7 @@
     {
       "id": "tests/bench/test_bench.py::test_a_level_offset_shifts_the_level_at_the_connector",
       "outcome": "failed",
-      "duration_s": 0.049,
+      "duration_s": 0.048,
       "message": "Failed: level_offset_shift: -109.333190229 dB, limit 1.7 to 2.3 dB, margin -111.033 dB, FAIL",
       "instrument_errors": [],
       "measurements": [
@@ -149,7 +149,7 @@
     {
       "id": "tests/bench/test_bench.py::test_level_and_frequency_across_the_band[100000000.0]",
       "outcome": "passed",
-      "duration_s": 0.032,
+      "duration_s": 0.03,
       "message": "",
       "instrument_errors": [],
       "measurements": [
@@ -219,7 +219,7 @@
     {
       "id": "tests/bench/test_bench.py::test_level_and_frequency_across_the_band[2400000000.0]",
       "outcome": "passed",
-      "duration_s": 0.032,
+      "duration_s": 0.074,
       "message": "",
       "instrument_errors": [],
       "measurements": [
@@ -254,7 +254,7 @@
     {
       "id": "tests/bench/test_bench.py::test_level_and_frequency_across_the_band[5000000000.0]",
       "outcome": "failed",
-      "duration_s": 0.03,
+      "duration_s": 0.046,
       "message": "Failed: level_5000mhz_minus10dbm: -119.243158555 dBm, limit -13.7135990255 to -13.1135990255 dBm, margin -105.53 dB, FAIL",
       "instrument_errors": [],
       "measurements": [
@@ -324,7 +324,7 @@
     {
       "id": "tests/bench/test_bench.py::test_level_accuracy_across_levels[-20.0]",
       "outcome": "failed",
-      "duration_s": 0.032,
+      "duration_s": 0.101,
       "message": "Failed: level_1000mhz_minus20dbm: -21.548691166 dBm, limit -131.181881396 to -130.581881396 dBm, margin -109.033 dB, FAIL",
       "instrument_errors": [],
       "measurements": [
@@ -359,7 +359,7 @@
     {
       "id": "tests/bench/test_bench.py::test_level_accuracy_across_levels[0.0]",
       "outcome": "failed",
-      "duration_s": 0.032,
+      "duration_s": 0.038,
       "message": "Failed: level_1000mhz_0dbm: -1.54869116663 dBm, limit -111.181881396 to -110.581881396 dBm, margin -109.033 dB, FAIL",
       "instrument_errors": [],
       "measurements": [
@@ -394,7 +394,7 @@
     {
       "id": "tests/bench/test_bench.py::test_channel_power_at_the_carrier",
       "outcome": "failed",
-      "duration_s": 0.036,
+      "duration_s": 0.039,
       "message": "Failed: channel_power_1ghz_100khz: -11.5381252087 dBm, limit -121.381881396 to -120.381881396 dBm, margin -108.844 dB, FAIL",
       "instrument_errors": [],
       "measurements": [
@@ -416,7 +416,7 @@
     {
       "id": "tests/bench/test_bench.py::test_noise_floor_with_rf_off[1000.0--110.0]",
       "outcome": "passed",
-      "duration_s": 0.029,
+      "duration_s": 0.032,
       "message": "",
       "instrument_errors": [],
       "measurements": [
@@ -438,7 +438,7 @@
     {
       "id": "tests/bench/test_bench.py::test_noise_floor_with_rf_off[100000.0--90.0]",
       "outcome": "passed",
-      "duration_s": 0.034,
+      "duration_s": 0.032,
       "message": "",
       "instrument_errors": [],
       "measurements": [
@@ -460,7 +460,7 @@
     {
       "id": "tests/bench/test_bench.py::test_second_harmonic_is_below_its_limit",
       "outcome": "failed",
-      "duration_s": 0.045,
+      "duration_s": 0.06,
       "message": "Failed: second_harmonic_1000mhz: 62.2208396194 dBc, limit <= -40 dBc, margin -102.221 dBc, FAIL",
       "instrument_errors": [],
       "measurements": [
@@ -482,7 +482,7 @@
     {
       "id": "tests/bench/test_bench.py::test_switching_the_output_off_removes_the_carrier",
       "outcome": "passed",
-      "duration_s": 0.041,
+      "duration_s": 0.043,
       "message": "",
       "instrument_errors": [],
       "measurements": [
@@ -504,7 +504,7 @@
     {
       "id": "tests/bench/test_bench.py::test_out_of_range_level_is_rejected_and_changes_nothing",
       "outcome": "passed",
-      "duration_s": 0.022,
+      "duration_s": 0.023,
       "message": "",
       "instrument_errors": [],
       "measurements": []
@@ -512,7 +512,7 @@
     {
       "id": "tests/bench/test_bench.py::test_unknown_command_is_reported",
       "outcome": "passed",
-      "duration_s": 0.022,
+      "duration_s": 0.02,
       "message": "",
       "instrument_errors": [],
       "measurements": []
@@ -520,7 +520,7 @@
     {
       "id": "tests/bench/test_bench.py::test_a_parameter_of_the_wrong_type_is_reported",
       "outcome": "passed",
-      "duration_s": 0.021,
+      "duration_s": 0.017,
       "message": "",
       "instrument_errors": [],
       "measurements": []
@@ -528,7 +528,7 @@
     {
       "id": "tests/bench/test_bench.py::test_the_bench_recovers_after_a_dropped_connection",
       "outcome": "failed",
-      "duration_s": 0.038,
+      "duration_s": 0.028,
       "message": "Failed: level_1000mhz_minus10dbm: -119.243158555 dBm, limit -121.181881396 to -120.581881396 dBm, margin -1.33872 dB, FAIL",
       "instrument_errors": [],
       "measurements": [

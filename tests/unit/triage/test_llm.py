@@ -116,3 +116,9 @@ def test_the_fake_provider_answers_in_order_and_records_the_prompts() -> None:
         "second",
     ]
     assert [user for _system, user in fake.prompts] == ["a", "b", "c"]
+
+
+def test_a_non_http_host_is_refused() -> None:
+    """A file: or custom scheme is a misconfiguration, not a model, so it is refused."""
+    with pytest.raises(ModelUnavailableError, match="non-http"):
+        OllamaProvider(host="file:///etc/passwd").complete("s", "u")

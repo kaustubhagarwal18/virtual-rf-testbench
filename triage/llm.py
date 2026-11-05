@@ -8,6 +8,7 @@ to Ollama.
 
 import json
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -26,8 +27,35 @@ CONTEXT_TOKENS = 4096
 """Enough for a run's evidence and several retrieved sources."""
 
 
+ALLOWED_SCHEMES = ("http", "https")
+"""The host is configurable, so only http(s) is opened: never file: or a custom scheme."""
+
+
 class ModelUnavailableError(Exception):
     """The model couldn't be reached; the message says how to start it."""
+
+
+def _open(request: "urllib.request.Request | str", timeout_s: float) -> bytes:
+    """Open an http(s) URL and return its body, refusing any other scheme.
+
+    Args:
+        request: The request or URL to open.
+        timeout_s: How long it may take.
+
+    Returns:
+        The response body.
+
+    Raises:
+        ModelUnavailableError: If the URL isn't http(s); a file: or custom scheme would be a
+            misconfiguration, not a model to reach.
+    """
+    url = request.full_url if isinstance(request, urllib.request.Request) else request
+    if urllib.parse.urlparse(url).scheme not in ALLOWED_SCHEMES:
+        raise ModelUnavailableError(f"refusing to open a non-http(s) URL: {url}")
+    # The scheme is checked on the line above; bandit can't see that, so B310 is silenced here.
+    with urllib.request.urlopen(request, timeout=timeout_s) as response:  # nosec B310
+        body: bytes = response.read()
+    return body
 
 
 class LLMProvider(Protocol):
@@ -97,8 +125,7 @@ class OllamaProvider:
             {"Content-Type": "application/json"},
         )
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout_s) as response:
-                answer = json.loads(response.read())
+            answer = json.loads(_open(request, self.timeout_s))
         except urllib.error.HTTPError as error:
             raise ModelUnavailableError(
                 f"{self.host} refused the request ({error.code}); is {self.model} pulled?"
@@ -121,10 +148,10 @@ class OllamaProvider:
             True if it answers.
         """
         try:
-            with urllib.request.urlopen(f"{self.host}/api/version", timeout=2.0):
-                return True
-        except (urllib.error.URLError, TimeoutError):
+            _open(f"{self.host}/api/version", timeout_s=2.0)
+        except (urllib.error.URLError, TimeoutError, ModelUnavailableError):
             return False
+        return True
 
 
 @dataclass

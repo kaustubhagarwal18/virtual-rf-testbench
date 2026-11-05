@@ -1,4 +1,4 @@
-PACKAGES := simulators drivers measurements tools
+PACKAGES := simulators drivers measurements tools triage
 COVERAGE_FLOOR := 80
 FIRMWARE_VERSION ?= $(shell uv version --short 2>/dev/null)
 REVISION ?= $(shell git rev-parse --short HEAD 2>/dev/null)
@@ -6,7 +6,7 @@ REVISION ?= $(shell git rev-parse --short HEAD 2>/dev/null)
 export FIRMWARE_VERSION REVISION
 PYTHON_PATHS := $(PACKAGES) tests
 
-.PHONY: setup lint fmt test summary bench-up bench-down bench-logs bench-test bench-summary fault fault-dataset clean
+.PHONY: setup lint fmt test summary bench-up bench-down bench-logs bench-test bench-summary fault fault-dataset triage eval clean
 
 setup:
 	uv sync
@@ -55,6 +55,12 @@ fault:
 
 fault-dataset:
 	uv run python -m tools.fault_run --dataset triage/data/runs
+
+triage:
+	uv run python -m triage.service $(RUN)
+
+eval:
+	uv run python -m triage.evaluate
 
 clean:
 	-uv run --no-sync pre-commit uninstall

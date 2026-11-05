@@ -156,3 +156,16 @@ def test_an_unknown_evidence_level_is_refused(tmp_path: Path) -> None:
     run = SavedRun.load(write_run(tmp_path / "x", [FAILING_TEST]))
     with pytest.raises(ValueError, match="unknown evidence level"):
         build_evidence(run, "everything")
+
+
+def test_evidence_for_a_clean_run_says_so(tmp_path: Path) -> None:
+    """A run where everything passed has no failure to describe, at either level."""
+    run = SavedRun.load(write_run(tmp_path / "clean", [PASSING_TEST]))
+    assert build_evidence(run, ERROR_ONLY) == "Every test passed."
+    assert build_evidence(run, FULL) == "Every test passed."
+
+
+def test_consequences_are_counted_in_the_evidence(tmp_path: Path) -> None:
+    """When failures follow the first, the evidence says how many may be consequences."""
+    run = SavedRun.load(write_run(tmp_path / "many", [FAILING_TEST, FAILING_TEST, FAILING_TEST]))
+    assert "2 further tests failed after it" in build_evidence(run, FULL)

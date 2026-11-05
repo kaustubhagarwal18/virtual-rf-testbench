@@ -42,7 +42,7 @@ select = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["simulators", "drivers", "measurements", "tools"]
+known-first-party = ["simulators", "drivers", "measurements", "tools", "triage"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -56,7 +56,7 @@ max-args = 7
 [tool.mypy]
 python_version = "3.13"
 strict = true
-files = ["simulators", "drivers", "measurements", "tools", "tests"]
+files = ["simulators", "drivers", "measurements", "tools", "triage", "tests"]
 
 [tool.pylint.main]
 py-version = "3.13"
@@ -82,7 +82,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["simulators", "drivers", "measurements", "tools"]
+source = ["simulators", "drivers", "measurements", "tools", "triage"]
 branch = true
 patch = ["subprocess"]
 sigterm = true

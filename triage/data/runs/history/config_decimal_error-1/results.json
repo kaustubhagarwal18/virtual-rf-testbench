@@ -1,7 +1,7 @@
 {
-  "run_id": "20261104T171100.789257Z",
-  "started": "2026-11-04T17:11:00+00:00",
-  "duration_s": 0.595,
+  "run_id": "20261105T044551.823527Z",
+  "started": "2026-11-05T04:45:51+00:00",
+  "duration_s": 0.661,
   "firmware_versions": {
     "generator": "0.1.0",
     "analyzer": "0.1.0"
@@ -25,7 +25,7 @@
     {
       "id": "tests/bench/test_bench.py::test_instruments_identify_as_the_release_under_test",
       "outcome": "error",
-      "duration_s": 0.026,
+      "duration_s": 0.027,
       "message": "tests.utilities.sequencer.StepFailedError: Step 2 (verify level offset) failed on the generator",
       "instrument_errors": [],
       "measurements": []
@@ -33,7 +33,7 @@
     {
       "id": "tests/bench/test_bench.py::test_reset_leaves_the_generator_at_safe_defaults",
       "outcome": "error",
-      "duration_s": 0.015,
+      "duration_s": 0.016,
       "message": "tests.utilities.sequencer.StepFailedError: Step 4 (verify level offset) failed on the generator",
       "instrument_errors": [],
       "measurements": []
@@ -41,7 +41,7 @@
     {
       "id": "tests/bench/test_bench.py::test_path_loss_calibration_matches_the_cable_datasheet",
       "outcome": "passed",
-      "duration_s": 0.076,
+      "duration_s": 0.077,
       "message": "",
       "instrument_errors": [],
       "measurements": [
@@ -102,7 +102,7 @@
     {
       "id": "tests/bench/test_bench.py::test_a_level_offset_shifts_the_level_at_the_connector",
       "outcome": "error",
-      "duration_s": 0.013,
+      "duration_s": 0.015,
       "message": "tests.utilities.sequencer.StepFailedError: Step 6 (verify level offset) failed on the generator",
       "instrument_errors": [],
       "measurements": []
@@ -118,7 +118,7 @@
     {
       "id": "tests/bench/test_bench.py::test_level_and_frequency_across_the_band[1000000000.0]",
       "outcome": "error",
-      "duration_s": 0.015,
+      "duration_s": 0.018,
       "message": "tests.utilities.sequencer.StepFailedError: Step 10 (verify level offset) failed on the generator",
       "instrument_errors": [],
       "measurements": []
@@ -126,7 +126,7 @@
     {
       "id": "tests/bench/test_bench.py::test_level_and_frequency_across_the_band[2400000000.0]",
       "outcome": "error",
-      "duration_s": 0.015,
+      "duration_s": 0.018,
       "message": "tests.utilities.sequencer.StepFailedError: Step 12 (verify level offset) failed on the generator",
       "instrument_errors": [],
       "measurements": []
@@ -134,7 +134,7 @@
     {
       "id": "tests/bench/test_bench.py::test_level_and_frequency_across_the_band[5000000000.0]",
       "outcome": "error",
-      "duration_s": 0.015,
+      "duration_s": 0.014,
       "message": "tests.utilities.sequencer.StepFailedError: Step 14 (verify level offset) failed on the generator",
       "instrument_errors": [],
       "measurements": []
@@ -142,7 +142,7 @@
     {
       "id": "tests/bench/test_bench.py::test_level_accuracy_across_levels[-30.0]",
       "outcome": "error",
-      "duration_s": 0.014,
+      "duration_s": 0.015,
       "message": "tests.utilities.sequencer.StepFailedError: Step 16 (verify level offset) failed on the generator",
       "instrument_errors": [],
       "measurements": []
@@ -150,7 +150,7 @@
     {
       "id": "tests/bench/test_bench.py::test_level_accuracy_across_levels[-20.0]",
       "outcome": "error",
-      "duration_s": 0.014,
+      "duration_s": 0.015,
       "message": "tests.utilities.sequencer.StepFailedError: Step 18 (verify level offset) failed on the generator",
       "instrument_errors": [],
       "measurements": []
@@ -158,7 +158,7 @@
     {
       "id": "tests/bench/test_bench.py::test_level_accuracy_across_levels[0.0]",
       "outcome": "error",
-      "duration_s": 0.015,
+      "duration_s": 0.014,
       "message": "tests.utilities.sequencer.StepFailedError: Step 20 (verify level offset) failed on the generator",
       "instrument_errors": [],
       "measurements": []
@@ -166,7 +166,7 @@
     {
       "id": "tests/bench/test_bench.py::test_channel_power_at_the_carrier",
       "outcome": "error",
-      "duration_s": 0.014,
+      "duration_s": 0.015,
       "message": "tests.utilities.sequencer.StepFailedError: Step 22 (verify level offset) failed on the generator",
       "instrument_errors": [],
       "measurements": []
@@ -174,7 +174,7 @@
     {
       "id": "tests/bench/test_bench.py::test_noise_floor_with_rf_off[1000.0--110.0]",
       "outcome": "error",
-      "duration_s": 0.013,
+      "duration_s": 0.02,
       "message": "tests.utilities.sequencer.StepFailedError: Step 24 (verify level offset) failed on the generator",
       "instrument_errors": [],
       "measurements": []
@@ -182,7 +182,7 @@
     {
       "id": "tests/bench/test_bench.py::test_noise_floor_with_rf_off[100000.0--90.0]",
       "outcome": "error",
-      "duration_s": 0.016,
+      "duration_s": 0.018,
       "message": "tests.utilities.sequencer.StepFailedError: Step 26 (verify level offset) failed on the generator",
       "instrument_errors": [],
       "measurements": []
@@ -190,7 +190,7 @@
     {
       "id": "tests/bench/test_bench.py::test_second_harmonic_is_below_its_limit",
       "outcome": "error",
-      "duration_s": 0.014,
+      "duration_s": 0.015,
       "message": "tests.utilities.sequencer.StepFailedError: Step 28 (verify level offset) failed on the generator",
       "instrument_errors": [],
       "measurements": []
@@ -198,7 +198,7 @@
     {
       "id": "tests/bench/test_bench.py::test_switching_the_output_off_removes_the_carrier",
       "outcome": "error",
-      "duration_s": 0.014,
+      "duration_s": 0.016,
       "message": "tests.utilities.sequencer.StepFailedError: Step 30 (verify level offset) failed on the generator",
       "instrument_errors": [],
       "measurements": []
@@ -206,7 +206,7 @@
     {
       "id": "tests/bench/test_bench.py::test_out_of_range_level_is_rejected_and_changes_nothing",
       "outcome": "error",
-      "duration_s": 0.015,
+      "duration_s": 0.014,
       "message": "tests.utilities.sequencer.StepFailedError: Step 32 (verify level offset) failed on the generator",
       "instrument_errors": [],
       "measurements": []
@@ -214,7 +214,7 @@
     {
       "id": "tests/bench/test_bench.py::test_unknown_command_is_reported",
       "outcome": "error",
-      "duration_s": 0.014,
+      "duration_s": 0.015,
       "message": "tests.utilities.sequencer.StepFailedError: Step 34 (verify level offset) failed on the generator",
       "instrument_errors": [],
       "measurements": []
@@ -230,7 +230,7 @@
     {
       "id": "tests/bench/test_bench.py::test_the_bench_recovers_after_a_dropped_connection",
       "outcome": "error",
-      "duration_s": 0.014,
+      "duration_s": 0.018,
       "message": "tests.utilities.sequencer.StepFailedError: Step 38 (verify level offset) failed on the generator",
       "instrument_errors": [],
       "measurements": []

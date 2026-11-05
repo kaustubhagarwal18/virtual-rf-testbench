@@ -43,7 +43,7 @@ def _json_object(reply: str) -> dict[str, object]:
         The object.
 
     Raises:
-        MalformedAnswerError: If there is no JSON object, or it isn't an object.
+        MalformedAnswerError: If there is no JSON object in the reply, or it isn't valid JSON.
     """
     start, end = reply.find("{"), reply.rfind("}")
     if start < 0 or end < start:
@@ -52,7 +52,7 @@ def _json_object(reply: str) -> dict[str, object]:
         parsed = json.loads(reply[start : end + 1])
     except json.JSONDecodeError as error:
         raise MalformedAnswerError(f"the reply isn't valid JSON: {error}") from error
-    if not isinstance(parsed, dict):
+    if not isinstance(parsed, dict):  # pragma: no cover - only a {...} span is extracted
         raise MalformedAnswerError(f"the reply is {type(parsed).__name__}, not an object")
     return parsed
 
