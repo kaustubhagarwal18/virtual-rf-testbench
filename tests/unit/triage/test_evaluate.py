@@ -9,7 +9,17 @@ import pytest
 
 from tests.unit.triage.test_evidence import FAILING_TEST, write_run
 from tools.faults import CATALOGUE
-from triage.evaluate import EXPECTED_FIX, MALFORMED, evaluate, expected_fix, main, render
+from triage.evaluate import (
+    EXPECTED_FIX,
+    MALFORMED,
+    _clip,
+    evaluate,
+    expected_fix,
+    findings,
+    main,
+    render,
+    render_report,
+)
 from triage.evidence import ERROR_ONLY, FULL, SavedRun
 from triage.llm import FakeProvider
 from triage.prompt import Fix
@@ -109,3 +119,47 @@ def test_evaluate_runs_as_a_module() -> None:
         check=True,
     )
     assert "Score triage" in completed.stdout
+
+
+def test_the_report_shows_the_error_and_the_answer(tmp_path: Path) -> None:
+    """The detailed report pairs each failure the model saw with what it answered, and a diagram."""
+    question(tmp_path / "q" / "cable_loss", "cable_loss")
+    result = evaluate(tmp_path / "q", FakeProvider([verdict(Fix.LINK)]), [FULL])[0]
+    report = render_report([result], "qwen2.5:3b")
+    assert "mermaid" in report
+    assert "never shown" in report
+    assert "LINK" in report
+    assert "Wrong choices" in report
+
+
+def test_the_cli_writes_a_report_file(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Make eval --report writes the detailed report where it is told."""
+    question(tmp_path / "q" / "cable_loss", "cable_loss")
+    report = tmp_path / "out" / "baseline.md"
+    main(
+        ["--questions", str(tmp_path / "q"), "--level", "full", "--report", str(report)],
+        FakeProvider([verdict(Fix.CABLE)]),
+    )
+    assert report.exists()
+    assert "Triage baseline" in report.read_text(encoding="utf-8")
+    assert f"wrote {report}" in capsys.readouterr().out
+
+
+def test_findings_are_computed_from_the_outcomes(tmp_path: Path) -> None:
+    """The report's findings are derived, so they can't drift from the numbers above them."""
+    questions = tmp_path / "q"
+    question(questions / "cable_loss", "cable_loss")
+    question(questions / "slow_responses", "slow_responses")
+    # error-only: both wrong (CABLE on both); full: cable right, slow wrong.
+    provider = FakeProvider([verdict(Fix.CABLE)])
+    results = evaluate(questions, provider, [ERROR_ONLY, FULL])
+    text = " ".join(findings(results))
+    assert "Best scenario" in text
+    assert "Most common wrong choice: CABLE" in text
+    assert "cable_loss" in text  # solved under full evidence
+
+
+def test_clip_shortens_at_a_word_boundary() -> None:
+    """Long text is cut to whole words with an ellipsis; short text is returned unchanged."""
+    assert _clip("one two three four", 100) == "one two three four"
+    assert _clip("one two three four", 9) == "one two..."

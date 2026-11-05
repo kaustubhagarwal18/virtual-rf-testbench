@@ -15,11 +15,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from triage.answer import MalformedAnswerError
-from triage.evidence import ERROR_ONLY, FULL, LEVELS, SavedRun
+from triage.answer import MalformedAnswerError, parse_verdict
+from triage.evidence import ERROR_ONLY, FULL, LEVELS, SavedRun, build_evidence, first_failure
 from triage.llm import DEFAULT_MODEL, LLMProvider, OllamaProvider
-from triage.prompt import Fix
-from triage.service import triage_run
+from triage.prompt import Fix, build_prompt
 
 DEFAULT_QUESTIONS = Path("triage/data/runs/questions")
 MALFORMED = "malformed"
@@ -52,12 +51,16 @@ class Outcome:
         expected: The fix that resolves it.
         chosen: The fix the model chose, or MALFORMED when the reply couldn't be used.
         right: Whether the chosen fix is the one that resolves the fault.
+        error: The failure the model was shown, as one line.
+        answer: What the model said: its chosen fix, where and why, or the unusable reply.
     """
 
     fault: str
     expected: Fix
     chosen: str
     right: bool
+    error: str = ""
+    answer: str = ""
 
 
 @dataclass
@@ -127,14 +130,23 @@ def evaluate_question(run: SavedRun, provider: LLMProvider, level: str) -> Outco
         level: The evidence level.
 
     Returns:
-        The outcome; a reply that couldn't be parsed counts as MALFORMED, not right.
+        The outcome, which keeps the failure the model was shown and what it answered, so a
+        report can show both; a reply that couldn't be parsed counts as MALFORMED, not right.
     """
     expected = expected_fix(run)
+    failure = first_failure(run)
+    error = (failure.detail or failure.where) if failure is not None else "every test passed"
+    evidence = build_evidence(run, level)
+    system, user = build_prompt(evidence)
+    reply = provider.complete(system, user)
     try:
-        verdict = triage_run(run, provider, level)
-    except MalformedAnswerError:
-        return Outcome(run.folder.name, expected, MALFORMED, right=False)
-    return Outcome(run.folder.name, expected, verdict.fix.name, verdict.fix is expected)
+        verdict = parse_verdict(reply)
+    except MalformedAnswerError as unusable:
+        return Outcome(run.folder.name, expected, MALFORMED, False, error, f"unusable: {unusable}")
+    answer = f"{verdict.fix.name} ({verdict.where}) because {verdict.because}"
+    return Outcome(
+        run.folder.name, expected, verdict.fix.name, verdict.fix is expected, error, answer
+    )
 
 
 def evaluate(
@@ -189,6 +201,138 @@ def render(results: Sequence[ScenarioResult], model: str) -> str:
     return "\n".join(lines)
 
 
+PIPELINE_DIAGRAM = """```mermaid
+flowchart LR
+    run["Saved run<br/>results, logs, sequence"] --> ev["evidence.py<br/>first failure"]
+    ev --> pr["prompt.py<br/>instructions + fix list"]
+    pr --> llm["qwen2.5:3b<br/>(Ollama, local)"]
+    llm --> an["answer.py<br/>parse + refuse unusable"]
+    an --> score["evaluate.py<br/>right fix?"]
+    label["label.json"] -. answer key, never shown .-> score
+```"""
+"""The pipeline, drawn once for the report. The label reaches only the scoring, never qwen."""
+
+
+def _clip(text: str, limit: int) -> str:
+    """Shorten text to a limit at a word boundary, so no word is cut mid-way.
+
+    Args:
+        text: The text to shorten.
+        limit: The longest result, before the ellipsis.
+
+    Returns:
+        The text, or its first whole words within the limit followed by an ellipsis.
+    """
+    collapsed = " ".join(text.split())
+    if len(collapsed) <= limit:
+        return collapsed
+    clipped = collapsed[:limit].rsplit(" ", 1)[0]
+    return f"{clipped}..."
+
+
+def render_report(results: Sequence[ScenarioResult], model: str) -> str:
+    """Write a detailed Markdown report: the pipeline, the scores, and every question's answer.
+
+    Args:
+        results: The scenario results.
+        model: The model that answered.
+
+    Returns:
+        The report, showing for each question the failure the model saw and what it answered.
+    """
+    total = len(results[0].outcomes) if results else 0
+    lines = [
+        "# Triage baseline (no retrieval)",
+        "",
+        f"Model: `{model}`, temperature 0, fixed seed. Scored on whether the model named the "
+        "fix that resolves each failure. Counts, not percentages: nine questions.",
+        "",
+        PIPELINE_DIAGRAM,
+        "",
+    ]
+    for result in results:
+        lines += [f"## {SCENARIOS.get(result.level, result.level)}: {result.right} of {total}", ""]
+        lines += [
+            "| Fault | Expected | Chosen | | Error shown → the model's answer |",
+            "|---|---|---|---|---|",
+        ]
+        for outcome in result.outcomes:
+            mark = "✓" if outcome.right else "✗"
+            detail = f"`{_clip(outcome.error, 90)}` -> {_clip(outcome.answer, 130)}"
+            lines.append(
+                f"| {outcome.fault} | {outcome.expected.name} | {outcome.chosen} | {mark} | "
+                f"{detail} |"
+            )
+        if result.wrong_choices:
+            tally = ", ".join(
+                f"{choice} x{count}" for choice, count in result.wrong_choices.items()
+            )
+            lines += ["", f"Wrong choices: {tally}.", ""]
+    lines += ["## Findings", ""]
+    lines += [f"- {finding}" for finding in findings(results)]
+    lines += [
+        "",
+        "These are one machine's deterministic numbers (temperature 0, fixed seed); another "
+        "machine's model may differ in wording and the odd verdict. A verdict whose reasoning "
+        "is sound but whose category is wrong still counts as a miss, so the counts, if "
+        "anything, understate the model.",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def findings(results: Sequence[ScenarioResult]) -> list[str]:
+    """Draw conclusions from the scores, computed so they can't drift from the data.
+
+    Args:
+        results: The scenario results.
+
+    Returns:
+        One sentence per finding: the best scenario, whether more evidence helped, the most
+        common wrong choice, and which faults were solved in every scenario.
+    """
+    total = len(results[0].outcomes) if results else 0
+    conclusions: list[str] = []
+    best = max(results, key=lambda result: result.right)
+    conclusions.append(
+        f"Best scenario: {SCENARIOS.get(best.level, best.level)}, {best.right} of {total}."
+    )
+    if len(results) > 1:
+        first, last = results[0], results[-1]
+        verb = (
+            "raised"
+            if last.right > first.right
+            else "lowered"
+            if last.right < first.right
+            else "left"
+        )
+        conclusions.append(
+            f"More evidence {verb} the score ({first.right} to {last.right} of {total}): on "
+            "this model, fuller context did not help."
+            if verb != "raised"
+            else f"More evidence {verb} the score ({first.right} to {last.right} of {total})."
+        )
+    wrong: dict[str, int] = {}
+    for result in results:
+        for choice, count in result.wrong_choices.items():
+            wrong[choice] = wrong.get(choice, 0) + count
+    if wrong:
+        choice, count = max(wrong.items(), key=lambda item: item[1])
+        conclusions.append(
+            f"Most common wrong choice: {choice} ({count} times across the scenarios); the "
+            "model falls back to one answer when unsure."
+        )
+    solved = sorted(
+        {outcome.fault for outcome in results[0].outcomes}.intersection(
+            *({outcome.fault for outcome in result.outcomes if outcome.right} for result in results)
+        )
+    )
+    conclusions.append(
+        f"Solved in every scenario: {', '.join(solved) or 'none'} — the failures whose error "
+        "text names the fix almost literally."
+    )
+    return conclusions
+
+
 def main(arguments: Sequence[str] | None = None, provider: LLMProvider | None = None) -> int:
     """Run the evaluation from the command line.
 
@@ -206,12 +350,19 @@ def main(arguments: Sequence[str] | None = None, provider: LLMProvider | None = 
     parser.add_argument(
         "--level", choices=LEVELS, action="append", help="evidence level(s); default: both"
     )
+    parser.add_argument(
+        "--report", type=Path, help="also write a detailed Markdown report to this file"
+    )
     parsed = parser.parse_args(arguments)
     provider = provider or OllamaProvider()
     levels = parsed.level or list(SCENARIOS)
     results = evaluate(parsed.questions, provider, levels)
     model = getattr(provider, "model", DEFAULT_MODEL)
     sys.stdout.write(render(results, model))
+    if parsed.report is not None:
+        parsed.report.parent.mkdir(parents=True, exist_ok=True)
+        parsed.report.write_text(render_report(results, model), encoding="utf-8")
+        sys.stdout.write(f"\nwrote {parsed.report}\n")
     return 0
 
 

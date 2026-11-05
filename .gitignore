@@ -19,7 +19,7 @@ coverage.xml
 htmlcov/
 
 # Bench run output
-results/
+/results/
 reports/
 
 # Terraform and cluster state

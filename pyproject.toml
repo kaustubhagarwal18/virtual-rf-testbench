@@ -91,7 +91,7 @@ sigterm = true
 exclude_dirs = ["tests", ".venv"]
 
 [tool.codespell]
-skip = "uv.lock,.venv,.git"
+skip = "uv.lock,.venv,.git,*/results/*"
 
 [dependency-groups]
 dev = [

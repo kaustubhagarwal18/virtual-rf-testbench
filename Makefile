@@ -60,7 +60,7 @@ triage:
 	uv run python -m triage.service $(RUN)
 
 eval:
-	uv run python -m triage.evaluate
+	uv run python -m triage.evaluate --report triage/results/baseline.md
 
 clean:
 	-uv run --no-sync pre-commit uninstall
