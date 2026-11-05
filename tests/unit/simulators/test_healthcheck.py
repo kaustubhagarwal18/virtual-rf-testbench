@@ -1,6 +1,5 @@
 """Tests for the container healthcheck: is a VirtualRF instrument answering SCPI on a port?"""
 
-import socket
 import socketserver
 import subprocess
 import sys
@@ -10,7 +9,7 @@ from contextlib import contextmanager
 import pytest
 
 from simulators.healthcheck import check_instrument, main
-from tests.utilities.tcp import serving_in_background
+from tests.utilities.tcp import closed_port, serving_in_background
 
 
 class _OneReplyHandler(socketserver.StreamRequestHandler):
@@ -46,14 +45,6 @@ def instrument_answering(reply: bytes | None) -> Iterator[int]:
     """Run a fake instrument and yield its port."""
     with serving_in_background(_FakeInstrument(reply)) as port:
         yield port
-
-
-def closed_port() -> int:
-    """Return a local port nothing listens on."""
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        port: int = probe.getsockname()[1]
-    return port
 
 
 def test_virtualrf_instrument_is_healthy() -> None:

@@ -1,7 +1,7 @@
 {
-  "run_id": "20261104T171059.759354Z",
-  "started": "2026-11-04T17:10:59+00:00",
-  "duration_s": 0.641,
+  "run_id": "20261105T044550.749535Z",
+  "started": "2026-11-05T04:45:50+00:00",
+  "duration_s": 0.602,
   "firmware_versions": {
     "generator": "0.1.0",
     "analyzer": "0.1.0"
@@ -25,7 +25,7 @@
     {
       "id": "tests/bench/test_bench.py::test_instruments_identify_as_the_release_under_test",
       "outcome": "error",
-      "duration_s": 0.024,
+      "duration_s": 0.03,
       "message": "tests.utilities.sequencer.StepFailedError: Step 1 (read bench configuration) failed on the station",
       "instrument_errors": [],
       "measurements": []
@@ -33,7 +33,7 @@
     {
       "id": "tests/bench/test_bench.py::test_reset_leaves_the_generator_at_safe_defaults",
       "outcome": "error",
-      "duration_s": 0.015,
+      "duration_s": 0.014,
       "message": "tests.utilities.sequencer.StepFailedError: Step 2 (read bench configuration) failed on the station",
       "instrument_errors": [],
       "measurements": []
@@ -41,7 +41,7 @@
     {
       "id": "tests/bench/test_bench.py::test_path_loss_calibration_matches_the_cable_datasheet",
       "outcome": "passed",
-      "duration_s": 0.076,
+      "duration_s": 0.079,
       "message": "",
       "instrument_errors": [],
       "measurements": [
@@ -110,7 +110,7 @@
     {
       "id": "tests/bench/test_bench.py::test_level_and_frequency_across_the_band[100000000.0]",
       "outcome": "error",
-      "duration_s": 0.027,
+      "duration_s": 0.013,
       "message": "tests.utilities.sequencer.StepFailedError: Step 4 (read bench configuration) failed on the station",
       "instrument_errors": [],
       "measurements": []
@@ -118,7 +118,7 @@
     {
       "id": "tests/bench/test_bench.py::test_level_and_frequency_across_the_band[1000000000.0]",
       "outcome": "error",
-      "duration_s": 0.016,
+      "duration_s": 0.014,
       "message": "tests.utilities.sequencer.StepFailedError: Step 5 (read bench configuration) failed on the station",
       "instrument_errors": [],
       "measurements": []
@@ -134,7 +134,7 @@
     {
       "id": "tests/bench/test_bench.py::test_level_and_frequency_across_the_band[5000000000.0]",
       "outcome": "error",
-      "duration_s": 0.025,
+      "duration_s": 0.013,
       "message": "tests.utilities.sequencer.StepFailedError: Step 7 (read bench configuration) failed on the station",
       "instrument_errors": [],
       "measurements": []
@@ -142,7 +142,7 @@
     {
       "id": "tests/bench/test_bench.py::test_level_accuracy_across_levels[-30.0]",
       "outcome": "error",
-      "duration_s": 0.015,
+      "duration_s": 0.014,
       "message": "tests.utilities.sequencer.StepFailedError: Step 8 (read bench configuration) failed on the station",
       "instrument_errors": [],
       "measurements": []
@@ -158,7 +158,7 @@
     {
       "id": "tests/bench/test_bench.py::test_level_accuracy_across_levels[0.0]",
       "outcome": "error",
-      "duration_s": 0.02,
+      "duration_s": 0.013,
       "message": "tests.utilities.sequencer.StepFailedError: Step 10 (read bench configuration) failed on the station",
       "instrument_errors": [],
       "measurements": []
@@ -166,7 +166,7 @@
     {
       "id": "tests/bench/test_bench.py::test_channel_power_at_the_carrier",
       "outcome": "error",
-      "duration_s": 0.016,
+      "duration_s": 0.014,
       "message": "tests.utilities.sequencer.StepFailedError: Step 11 (read bench configuration) failed on the station",
       "instrument_errors": [],
       "measurements": []
@@ -198,7 +198,7 @@
     {
       "id": "tests/bench/test_bench.py::test_switching_the_output_off_removes_the_carrier",
       "outcome": "error",
-      "duration_s": 0.013,
+      "duration_s": 0.018,
       "message": "tests.utilities.sequencer.StepFailedError: Step 15 (read bench configuration) failed on the station",
       "instrument_errors": [],
       "measurements": []
@@ -222,7 +222,7 @@
     {
       "id": "tests/bench/test_bench.py::test_a_parameter_of_the_wrong_type_is_reported",
       "outcome": "error",
-      "duration_s": 0.019,
+      "duration_s": 0.012,
       "message": "tests.utilities.sequencer.StepFailedError: Step 18 (read bench configuration) failed on the station",
       "instrument_errors": [],
       "measurements": []
@@ -230,7 +230,7 @@
     {
       "id": "tests/bench/test_bench.py::test_the_bench_recovers_after_a_dropped_connection",
       "outcome": "error",
-      "duration_s": 0.014,
+      "duration_s": 0.013,
       "message": "tests.utilities.sequencer.StepFailedError: Step 19 (read bench configuration) failed on the station",
       "instrument_errors": [],
       "measurements": []

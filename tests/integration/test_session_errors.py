@@ -38,3 +38,12 @@ def test_dropped_connection_is_an_instrument_error() -> None:
         pytest.raises(InstrumentError, match="'DROP' failed"),
     ):
         session.write("DROP")
+
+
+def test_a_session_that_times_out_while_opening_says_so() -> None:
+    """An instrument too slow to answer *STB? at startup reads as a timeout, not a bad address."""
+    with (
+        fake_instrument(Script(silent={"*STB?"})) as port,
+        pytest.raises(InstrumentTimeoutError, match="no reply within the 300 ms timeout"),
+    ):
+        RsInstrumentSession(socket_resource("127.0.0.1", port), timeout_ms=300)

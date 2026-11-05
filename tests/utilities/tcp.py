@@ -1,6 +1,7 @@
 """TCP helpers for tests: a socketserver in a background thread, and asking a port one line."""
 
 import asyncio
+import socket
 import socketserver
 import threading
 from collections.abc import Iterator
@@ -44,3 +45,15 @@ async def ask_line(port: int, line: str, timeout_s: float = 5.0) -> str:
     writer.close()
     await writer.wait_closed()
     return reply.decode().strip()
+
+
+def closed_port() -> int:
+    """Return a local port nothing listens on, for testing what happens when a connect fails.
+
+    Returns:
+        The port, free at the moment it is returned.
+    """
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port: int = probe.getsockname()[1]
+    return port

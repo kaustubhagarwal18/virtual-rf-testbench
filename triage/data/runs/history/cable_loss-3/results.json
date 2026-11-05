@@ -1,7 +1,7 @@
 {
-  "run_id": "20261104T170954.333419Z",
-  "started": "2026-11-04T17:09:54+00:00",
-  "duration_s": 0.74,
+  "run_id": "20261105T044443.723546Z",
+  "started": "2026-11-05T04:44:43+00:00",
+  "duration_s": 0.742,
   "firmware_versions": {
     "generator": "0.1.0",
     "analyzer": "0.1.0"
@@ -25,7 +25,7 @@
     {
       "id": "tests/bench/test_bench.py::test_instruments_identify_as_the_release_under_test",
       "outcome": "passed",
-      "duration_s": 0.03,
+      "duration_s": 0.031,
       "message": "",
       "instrument_errors": [],
       "measurements": []
@@ -33,7 +33,7 @@
     {
       "id": "tests/bench/test_bench.py::test_reset_leaves_the_generator_at_safe_defaults",
       "outcome": "passed",
-      "duration_s": 0.018,
+      "duration_s": 0.023,
       "message": "",
       "instrument_errors": [],
       "measurements": [
@@ -66,7 +66,7 @@
     {
       "id": "tests/bench/test_bench.py::test_path_loss_calibration_matches_the_cable_datasheet",
       "outcome": "failed",
-      "duration_s": 0.073,
+      "duration_s": 0.075,
       "message": "Failed: path_loss_100mhz: 2.3898817412 dB, limit 0 to 0.974341649025 dB, margin -1.41554 dB, FAIL\npath_loss_1000mhz: 3.6142400802 dB, limit 1 to 2 dB, margin -1.61424 dB, FAIL\npath_loss_2400mhz: 4.2531277448 dB, limit 1.82379000772 to 2.82379000772 dB, margin -1.42934 dB, FAIL\npath_loss_5000mhz: 5.4135990254 dB, limit 2.85410196625 to 3.85410196625 dB, margin -1.5595 dB, FAIL",
       "instrument_errors": [],
       "measurements": [
@@ -127,7 +127,7 @@
     {
       "id": "tests/bench/test_bench.py::test_a_level_offset_shifts_the_level_at_the_connector",
       "outcome": "passed",
-      "duration_s": 0.049,
+      "duration_s": 0.047,
       "message": "",
       "instrument_errors": [],
       "measurements": [
@@ -219,7 +219,7 @@
     {
       "id": "tests/bench/test_bench.py::test_level_and_frequency_across_the_band[2400000000.0]",
       "outcome": "passed",
-      "duration_s": 0.033,
+      "duration_s": 0.037,
       "message": "",
       "instrument_errors": [],
       "measurements": [
@@ -254,7 +254,7 @@
     {
       "id": "tests/bench/test_bench.py::test_level_and_frequency_across_the_band[5000000000.0]",
       "outcome": "passed",
-      "duration_s": 0.032,
+      "duration_s": 0.038,
       "message": "",
       "instrument_errors": [],
       "measurements": [
@@ -289,7 +289,7 @@
     {
       "id": "tests/bench/test_bench.py::test_level_accuracy_across_levels[-30.0]",
       "outcome": "passed",
-      "duration_s": 0.031,
+      "duration_s": 0.033,
       "message": "",
       "instrument_errors": [],
       "measurements": [
@@ -324,7 +324,7 @@
     {
       "id": "tests/bench/test_bench.py::test_level_accuracy_across_levels[-20.0]",
       "outcome": "passed",
-      "duration_s": 0.031,
+      "duration_s": 0.032,
       "message": "",
       "instrument_errors": [],
       "measurements": [
@@ -394,7 +394,7 @@
     {
       "id": "tests/bench/test_bench.py::test_channel_power_at_the_carrier",
       "outcome": "passed",
-      "duration_s": 0.035,
+      "duration_s": 0.038,
       "message": "",
       "instrument_errors": [],
       "measurements": [
@@ -416,7 +416,7 @@
     {
       "id": "tests/bench/test_bench.py::test_noise_floor_with_rf_off[1000.0--110.0]",
       "outcome": "passed",
-      "duration_s": 0.029,
+      "duration_s": 0.039,
       "message": "",
       "instrument_errors": [],
       "measurements": [
@@ -438,7 +438,7 @@
     {
       "id": "tests/bench/test_bench.py::test_noise_floor_with_rf_off[100000.0--90.0]",
       "outcome": "passed",
-      "duration_s": 0.036,
+      "duration_s": 0.029,
       "message": "",
       "instrument_errors": [],
       "measurements": [
@@ -460,7 +460,7 @@
     {
       "id": "tests/bench/test_bench.py::test_second_harmonic_is_below_its_limit",
       "outcome": "passed",
-      "duration_s": 0.052,
+      "duration_s": 0.051,
       "message": "",
       "instrument_errors": [],
       "measurements": [
@@ -482,7 +482,7 @@
     {
       "id": "tests/bench/test_bench.py::test_switching_the_output_off_removes_the_carrier",
       "outcome": "passed",
-      "duration_s": 0.043,
+      "duration_s": 0.044,
       "message": "",
       "instrument_errors": [],
       "measurements": [
@@ -504,7 +504,7 @@
     {
       "id": "tests/bench/test_bench.py::test_out_of_range_level_is_rejected_and_changes_nothing",
       "outcome": "passed",
-      "duration_s": 0.021,
+      "duration_s": 0.02,
       "message": "",
       "instrument_errors": [],
       "measurements": []
@@ -512,7 +512,7 @@
     {
       "id": "tests/bench/test_bench.py::test_unknown_command_is_reported",
       "outcome": "passed",
-      "duration_s": 0.021,
+      "duration_s": 0.017,
       "message": "",
       "instrument_errors": [],
       "measurements": []
@@ -520,7 +520,7 @@
     {
       "id": "tests/bench/test_bench.py::test_a_parameter_of_the_wrong_type_is_reported",
       "outcome": "passed",
-      "duration_s": 0.018,
+      "duration_s": 0.016,
       "message": "",
       "instrument_errors": [],
       "measurements": []
@@ -528,7 +528,7 @@
     {
       "id": "tests/bench/test_bench.py::test_the_bench_recovers_after_a_dropped_connection",
       "outcome": "passed",
-      "duration_s": 0.044,
+      "duration_s": 0.03,
       "message": "",
       "instrument_errors": [],
       "measurements": [

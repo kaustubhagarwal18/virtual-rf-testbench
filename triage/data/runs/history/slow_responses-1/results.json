@@ -1,7 +1,7 @@
 {
-  "run_id": "20261104T170956.961011Z",
-  "started": "2026-11-04T17:09:56+00:00",
-  "duration_s": 10.297,
+  "run_id": "20261105T044446.336384Z",
+  "started": "2026-11-05T04:44:46+00:00",
+  "duration_s": 10.313,
   "firmware_versions": {
     "generator": "0.1.0",
     "analyzer": "0.1.0"
@@ -25,24 +25,24 @@
     {
       "id": "tests/bench/test_bench.py::test_instruments_identify_as_the_release_under_test",
       "outcome": "error",
-      "duration_s": 5.025,
-      "message": "drivers.session.InstrumentError: Can't open TCPIP::127.0.0.1::5025::SOCKET: Query '*STB?'",
+      "duration_s": 5.023,
+      "message": "drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within the 2000 ms timeout while opening a session (Query '*STB?')",
       "instrument_errors": [],
       "measurements": []
     },
     {
       "id": "tests/bench/test_bench.py::test_reset_leaves_the_generator_at_safe_defaults",
       "outcome": "error",
-      "duration_s": 2.503,
-      "message": "drivers.session.InstrumentError: Can't open TCPIP::127.0.0.1::5025::SOCKET: Query '*STB?'",
+      "duration_s": 2.504,
+      "message": "drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within the 2000 ms timeout while opening a session (Query '*STB?')",
       "instrument_errors": [],
       "measurements": []
     },
     {
       "id": "tests/bench/test_bench.py::test_path_loss_calibration_matches_the_cable_datasheet",
       "outcome": "error",
-      "duration_s": 2.503,
-      "message": "drivers.session.InstrumentError: Can't open TCPIP::127.0.0.1::5025::SOCKET: Query '*STB?'",
+      "duration_s": 2.505,
+      "message": "drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within the 2000 ms timeout while opening a session (Query '*STB?')",
       "instrument_errors": [],
       "measurements": []
     }
