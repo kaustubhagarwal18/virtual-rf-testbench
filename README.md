@@ -50,11 +50,13 @@ assistant's accuracy be measured rather than guessed.
 
 ## Status
 
-The virtual bench works: the simulated instruments, their drivers, measurement records, and
-a bench suite that runs against the instruments in Docker, locally and in CI. Fault injection
-and calibration come next, then the triage assistant. The [roadmap](docs/ROADMAP.md) has the
-plan, and [ARCHITECTURE.md](docs/ARCHITECTURE.md) explains how the pieces fit
-together.
+Built and running, locally and in CI: the simulated instruments, their drivers, measurement
+records, and a calibrated 20-test bench suite against the containers; fault injection with a
+labelled dataset of known-cause failures; and a triage assistant that names the likely cause
+and fix, citing the past runs it drew on, with its accuracy measured on those faults. Still
+to come is the service around it — a triage API and the deployment. The
+[roadmap](docs/ROADMAP.md) has the plan, and [ARCHITECTURE.md](docs/ARCHITECTURE.md) explains
+how the pieces fit together.
 
 ## Quick start
 
@@ -91,12 +93,21 @@ make bench-test
 make bench-summary
 ```
 
-The summary shows 7 tests passed. Each reading, with its limit and margin, is in
+The summary shows 20 tests passed. Each reading, with its limit and margin, is in
 `reports/bench-junit.xml`. Stop the bench when you're done:
 
 ```
 make bench-down
 ```
+
+Triage is scored against the labelled failures with a local [Ollama](https://ollama.com)
+model, writing `triage/results/rag.md`:
+
+```
+make eval
+```
+
+It's a measurement needing a local model, not a CI gate, so it isn't part of `make test`.
 
 The sections below go further: talking to the instruments by hand, driving them from
 Python, and the development commands.
@@ -133,18 +144,17 @@ loss, plus a small flatness error and reading noise.
 | Signal generator (SG-1) | `[SOURce]:FREQuency` (9 kHz to 6 GHz), `[SOURce]:POWer` (-120 to +20 dBm), `OUTPut` (ON or OFF) |
 | Spectrum analyzer (SA-1) | `[SENSe]:FREQuency:CENTer` and `:SPAN`, `[SENSe]:BANDwidth` (RBW), `INITiate` and `INITiate:CONTinuous`, `CALCulate:MARKer:MAXimum`, `:X?` and `:Y?`, channel power with `[SENSe]:POWer:ACHannel:BANDwidth` and `CALCulate:MARKer:FUNCtion:POWer:RESult? CPOWer` |
 
-Several queries on one line get one reply line, joined by `;`, as IEEE 488.2 requires. Each
-command after a `;` is read from the root, so it needs its full path:
-`CALC:MARK:X?;CALC:MARK:Y?` works, but the short form `CALC:MARK:X?;Y?`, which real
-instruments accept, gives -113 for `Y?`. Bad commands queue standard SCPI errors instead of failing silently. If the analyzer can't reach
-the generator, it measures no signal, as with an unplugged cable, and logs a warning. Logs go
-to stderr as one JSON object per line. `--help` lists each simulator's options, and
+Several queries on one line get one reply line joined by `;`, as IEEE 488.2 requires (one
+caveat about compound commands is under [Known issues](#known-issues)). Bad commands queue
+standard SCPI errors instead of failing silently, and if the analyzer can't reach the
+generator it measures no signal, as with an unplugged cable, and logs a warning. Logs go to
+stderr as one JSON object per line. `--help` lists each simulator's options, and
 `SIMULATOR_FIRMWARE_VERSION` sets the version `*IDN?` reports.
 
 ## Run the bench in Docker
 
-The same two instruments run as containers from one image, which is how CI and the cluster
-run them. With Docker Desktop running:
+The same two instruments run as containers from one image, which is how CI runs them. With
+Docker Desktop running:
 
 ```
 make bench-up
@@ -200,13 +210,11 @@ runs the bench suite, saves the run, and restores the bench.
 make fault NAME=cable_loss SIZE=1.5
 ```
 
-`make fault` starts the bench on the release the fault needs, so the examples above can be
-run in any order. Each run lands in its own folder, `results/faults/<fault>-<timestamp>/`,
-holding `results.json`, `logs.txt` with the last lines of both instruments' logs, and a
-separate `label.json` with the known cause, which a closed ticket would hold. A run in which
-nothing failed isn't saved, and one pytest couldn't finish is kept and reported rather than
-counted as a pass. Runs also keep `sequence.log`, the setup sequence's own log, which for
-four of the faults is the only place the cause appears.
+`make fault` starts the bench on the release each fault needs, so the examples run in any
+order. Each run lands in `results/faults/<fault>-<timestamp>/` with `results.json`,
+`logs.txt`, `sequence.log` and a separate `label.json` holding the known cause — what a
+closed ticket would carry. A run where nothing failed isn't saved; one pytest couldn't finish
+is kept and reported, never counted as a pass.
 
 `make fault-dataset` builds the triage data set in `triage/data/runs/`: three history runs
 per fault, and one question run each. Where a fault has a size, the question uses one no
@@ -222,27 +230,23 @@ make bench-summary
 ```
 
 The suite treats the instruments as black boxes, reaching them only over SCPI through the
-drivers. It measures the bench's path loss first and judges every level against it
-(ADR 0006), then checks identity and release, reset defaults, level and frequency at four
-frequencies and three levels, channel power, the noise floor at two bandwidths, the second
-harmonic, that the output really switches, that bad commands are rejected, and that a
-dropped connection doesn't take an instrument down. Before each test a short sequence reads
-the bench configuration and puts the instruments into the state it asks for, logging each
-step to `sequence.log`. Every
-reading is recorded with its limit and margin in `reports/bench-junit.xml`, and every run
-writes `reports/bench-results.json`: the firmware versions, which tests were selected, each
-test's outcome and message, the instrument errors in it, and every measurement. Tests are
-marked `smoke`, `regression` or `negative`, so `uv run pytest tests/bench -m smoke --no-cov`
-runs just the quick checks. If the bench isn't running, the suite stops at once and says to
-run `make bench-up`. Set `BENCH_HOST`, `BENCH_GENERATOR_PORT` and `BENCH_ANALYZER_PORT` to
-point it at another bench.
+drivers. It calibrates the bench's path loss first and judges every level against it
+(ADR 0006), then checks identity and release, reset defaults, level and frequency across the
+band, channel power, the noise floor, the second harmonic, output switching, error handling
+and recovery from a dropped connection — 20 tests in all. Each reading is recorded with its
+limit and margin in `reports/bench-junit.xml`, and every run also writes
+`reports/bench-results.json`: the firmware versions, each test's outcome and message, the
+instrument errors, and every measurement. Tests are marked `smoke`, `regression` or
+`negative`, so `uv run pytest tests/bench -m smoke --no-cov` runs just the quick checks. If
+the bench isn't running the suite stops at once and says to run `make bench-up`; set
+`BENCH_HOST`, `BENCH_GENERATOR_PORT` and `BENCH_ANALYZER_PORT` to point it at another bench.
 
 ## Drive the instruments from Python
 
-The drivers in `drivers/` control the instruments the way bench tests will: over SCPI
-through R&S's RsInstrument library, with every command group synchronised on `*OPC?` and
-every instrument error raised as `InstrumentError`. With both simulators running as above,
-save this as `measure.py`:
+The drivers in `drivers/` control the instruments the way the bench suite does: over SCPI
+through R&S's RsInstrument library, each command group synchronised on `*OPC?` and every
+instrument error raised as `InstrumentError`. With both simulators running as above, save
+this as `measure.py`:
 
 ```python
 from drivers.session import RsInstrumentSession, socket_resource
@@ -294,6 +298,8 @@ make test
 | `make fault NAME=… [SIZE=…]` | Runs the bench suite with one fault on and saves the run with its label in `results/faults/` |
 | `BENCH_LEVEL_OFFSET_DB`, `BENCH_CHANNEL_BANDWIDTH_HZ` | The bench configuration the setup sequence applies; unset means a healthy bench |
 | `make fault-dataset` | Rebuilds the triage data set in `triage/data/runs/`: every fault, three history runs and one question run each |
+| `make triage RUN=…` | Explains one saved run: names the likely cause and fix from its evidence, citing past runs (needs a local Ollama model) |
+| `make eval [MODEL=…]` | Scores the triage against the labelled question runs and writes `triage/results/rag.md` (needs a local Ollama model) |
 | `make clean` | Removes the virtual environment, the tool caches and the pre-commit hook; `make setup` restores them |
 
 The pre-commit hooks run `make lint` before every commit, so the same checks run locally and
