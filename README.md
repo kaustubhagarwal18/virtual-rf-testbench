@@ -50,11 +50,11 @@ assistant's accuracy be measured rather than guessed.
 
 ## Status
 
-Built and running, locally and in CI: the simulated instruments, their drivers, measurement
-records, and a calibrated 20-test bench suite against the containers; fault injection with a
+Built and running: the simulated instruments, their drivers, measurement records, and a
+calibrated 20-test bench suite against the containers, all run in CI; fault injection with a
 labelled dataset of known-cause failures; and a triage assistant that names the likely cause
-and fix, citing the past runs it drew on, with its accuracy measured on those faults. Still
-to come is the service around it — a triage API and the deployment. The
+and fix, citing the past runs it drew on, with its accuracy measured locally on those faults.
+Still to come is the service around it — a triage API and the deployment. The
 [roadmap](docs/ROADMAP.md) has the plan, and [ARCHITECTURE.md](docs/ARCHITECTURE.md) explains
 how the pieces fit together.
 
@@ -100,14 +100,17 @@ The summary shows 20 tests passed. Each reading, with its limit and margin, is i
 make bench-down
 ```
 
-Triage is scored against the labelled failures with a local [Ollama](https://ollama.com)
-model, writing `triage/results/rag.md`:
+Triage is scored against the labelled failures with local [Ollama](https://ollama.com)
+models, writing `triage/results/rag.md`. Start Ollama and pull both the answering model and
+the embedding model (retrieval needs the latter) first:
 
 ```
+ollama pull qwen2.5:3b
+ollama pull nomic-embed-text
 make eval
 ```
 
-It's a measurement needing a local model, not a CI gate, so it isn't part of `make test`.
+It's a measurement needing local models, not a CI gate, so it isn't part of `make test`.
 
 The sections below go further: talking to the instruments by hand, driving them from
 Python, and the development commands.
@@ -210,8 +213,10 @@ runs the bench suite, saves the run, and restores the bench.
 make fault NAME=cable_loss SIZE=1.5
 ```
 
-`make fault` starts the bench on the release each fault needs, so the examples run in any
-order. Each run lands in `results/faults/<fault>-<timestamp>/` with `results.json`,
+`make fault` starts the bench on the release each fault needs, so the bench and config faults
+run in any order. The two firmware faults (`reset_leaks_offset`, `output_command_change`)
+rebuild a running bench, so start it with `make bench-up` first if it's down. Each run lands
+in `results/faults/<fault>-<timestamp>/` with `results.json`,
 `logs.txt`, `sequence.log` and a separate `label.json` holding the known cause — what a
 closed ticket would carry. A run where nothing failed isn't saved; one pytest couldn't finish
 is kept and reported, never counted as a pass.
@@ -298,8 +303,8 @@ make test
 | `make fault NAME=… [SIZE=…]` | Runs the bench suite with one fault on and saves the run with its label in `results/faults/` |
 | `BENCH_LEVEL_OFFSET_DB`, `BENCH_CHANNEL_BANDWIDTH_HZ` | The bench configuration the setup sequence applies; unset means a healthy bench |
 | `make fault-dataset` | Rebuilds the triage data set in `triage/data/runs/`: every fault, three history runs and one question run each |
-| `make triage RUN=…` | Explains one saved run: names the likely cause and fix from its evidence, citing past runs (needs a local Ollama model) |
-| `make eval [MODEL=…]` | Scores the triage against the labelled question runs and writes `triage/results/rag.md` (needs a local Ollama model) |
+| `make triage RUN=…` | Explains one saved run: names the likely cause and fix from its evidence alone, without retrieving past runs (needs a local Ollama model) |
+| `make eval [MODEL=…]` | Scores the triage against the labelled question runs and writes `triage/results/rag.md` (needs local Ollama answering and embedding models) |
 | `make clean` | Removes the virtual environment, the tool caches and the pre-commit hook; `make setup` restores them |
 
 The pre-commit hooks run `make lint` before every commit, so the same checks run locally and
