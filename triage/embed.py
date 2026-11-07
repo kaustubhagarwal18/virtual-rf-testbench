@@ -8,7 +8,6 @@ so it gets its own small interface rather than being forced through LLMProvider.
 import hashlib
 import json
 import urllib.error
-import urllib.request
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Protocol
@@ -72,13 +71,8 @@ class OllamaEmbedder:
             ModelUnavailableError: If the request fails or the reply has no embedding.
         """
         body = {"model": self.model, "prompt": text}
-        request = urllib.request.Request(
-            f"{self.host}/api/embeddings",
-            json.dumps(body).encode(),
-            {"Content-Type": "application/json"},
-        )
         try:
-            answer = json.loads(open_url(request, self.timeout_s))
+            answer = json.loads(open_url(f"{self.host}/api/embeddings", self.timeout_s, body))
         except (urllib.error.URLError, TimeoutError) as error:
             raise ModelUnavailableError(unreachable_message(self.host, error)) from error
         embedding = answer.get("embedding")

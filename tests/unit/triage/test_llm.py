@@ -118,7 +118,25 @@ def test_the_fake_provider_answers_in_order_and_records_the_prompts() -> None:
     assert [user for _system, user in fake.prompts] == ["a", "b", "c"]
 
 
-def test_a_non_http_host_is_refused() -> None:
-    """A file: or custom scheme is a misconfiguration, not a model, so it is refused."""
+BAD_HOSTS = (
+    "file:///etc/passwd",
+    "ftp://127.0.0.1",
+    "localhost",
+    "127.0.0.1",
+    "localhost:11434",
+    "",
+)
+"""Hosts a str allows that aren't an http(s) URL: a custom scheme, or no scheme at all."""
+
+
+@pytest.mark.parametrize("host", BAD_HOSTS)
+def test_a_non_http_host_is_refused(host: str) -> None:
+    """Any host that isn't an http(s) URL is refused with one clear error, never a traceback."""
     with pytest.raises(ModelUnavailableError, match="non-http"):
-        OllamaProvider(host="file:///etc/passwd").complete("s", "u")
+        OllamaProvider(host=host).complete("s", "u")
+
+
+@pytest.mark.parametrize("host", BAD_HOSTS)
+def test_a_non_http_host_is_reported_unavailable(host: str) -> None:
+    """The availability check treats a misconfigured host as not available, not an error."""
+    assert not OllamaProvider(host=host).available()
