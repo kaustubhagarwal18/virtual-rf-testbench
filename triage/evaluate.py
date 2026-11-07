@@ -10,7 +10,6 @@ Nine questions give counts, not percentages: '6 of 9' is honest where '67%' is n
 """
 
 import argparse
-import json
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -19,6 +18,7 @@ from pathlib import Path
 from triage.answer import MalformedAnswerError, parse_verdict
 from triage.embed import OllamaEmbedder
 from triage.evidence import ERROR_ONLY, FULL, SavedRun, build_evidence, error_only_evidence
+from triage.label import load_label
 from triage.llm import DEFAULT_MODEL, LLMProvider, OllamaProvider
 from triage.prompt import Fix, Source, build_prompt
 from triage.retrieval import (
@@ -153,7 +153,7 @@ def expected_fix(run: SavedRun) -> Fix:
         KeyError: If the run's fault has no expected fix, which means a fault was added
             without saying how it is fixed.
     """
-    label = json.loads((run.folder / "label.json").read_text(encoding="utf-8"))
+    label = load_label(run)
     fault = label["fault"]
     if fault not in EXPECTED_FIX:
         raise KeyError(f"{fault} has no expected fix in EXPECTED_FIX")
