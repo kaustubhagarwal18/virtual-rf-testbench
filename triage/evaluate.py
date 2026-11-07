@@ -18,7 +18,7 @@ from pathlib import Path
 
 from triage.answer import MalformedAnswerError, parse_verdict
 from triage.embed import OllamaEmbedder
-from triage.evidence import ERROR_ONLY, FULL, SavedRun, build_evidence, first_failure
+from triage.evidence import ERROR_ONLY, FULL, SavedRun, build_evidence, error_only_evidence
 from triage.llm import DEFAULT_MODEL, LLMProvider, OllamaProvider
 from triage.prompt import Fix, Source, build_prompt
 from triage.retrieval import (
@@ -27,6 +27,7 @@ from triage.retrieval import (
     InMemoryRetriever,
     Retriever,
 )
+from triage.textfmt import clip
 
 DEFAULT_QUESTIONS = Path("triage/data/runs/questions")
 MALFORMED = "malformed"
@@ -178,8 +179,7 @@ def evaluate_question(
         ValueError: If the scenario retrieves but no retriever was given.
     """
     expected = expected_fix(run)
-    failure = first_failure(run)
-    error = (failure.detail or failure.where) if failure is not None else "every test passed"
+    error = error_only_evidence(run)
     sources: tuple[Source, ...] = ()
     if scenario.retrieve:
         if retriever is None:
@@ -272,23 +272,6 @@ flowchart LR
 """The pipeline, drawn once for the report. The label reaches only the scoring, never qwen."""
 
 
-def _clip(text: str, limit: int) -> str:
-    """Shorten text to a limit at a word boundary, so no word is cut mid-way.
-
-    Args:
-        text: The text to shorten.
-        limit: The longest result, before the ellipsis.
-
-    Returns:
-        The text, or its first whole words within the limit followed by an ellipsis.
-    """
-    collapsed = " ".join(text.split())
-    if len(collapsed) <= limit:
-        return collapsed
-    clipped = collapsed[:limit].rsplit(" ", 1)[0]
-    return f"{clipped}..."
-
-
 def render_report(
     results: Sequence[ScenarioResult], model: str, title: str = BASELINE_TITLE
 ) -> str:
@@ -321,7 +304,7 @@ def render_report(
         ]
         for outcome in result.outcomes:
             mark = "✓" if outcome.right else "✗"
-            detail = f"`{_clip(outcome.error, 90)}` -> {_clip(outcome.answer, 130)}"
+            detail = f"`{clip(outcome.error, 90)}` -> {clip(outcome.answer, 130)}"
             lines.append(
                 f"| {outcome.fault} | {outcome.expected.name} | {outcome.chosen} | {mark} | "
                 f"{detail} |"

@@ -14,7 +14,6 @@ from triage.evaluate import (
     EXPECTED_FIX,
     MALFORMED,
     Scenario,
-    _clip,
     evaluate,
     expected_fix,
     findings,
@@ -222,12 +221,6 @@ def test_findings_flag_a_cited_precedent_the_model_did_not_act_on(tmp_path: Path
     text = " ".join(findings([result]))
     assert "Cited the matching past failure yet still chose wrong: cable_loss" in text
     assert "the ceiling here is the model, not retrieval" in text
-
-
-def test_clip_shortens_at_a_word_boundary() -> None:
-    """Long text is cut to whole words with an ellipsis; short text is returned unchanged."""
-    assert _clip("one two three four", 100) == "one two three four"
-    assert _clip("one two three four", 9) == "one two..."
 
 
 def test_a_retrieval_scenario_offers_sources_the_model_may_cite(tmp_path: Path) -> None:
