@@ -7,6 +7,7 @@ from typing import Any
 import numpy as np
 import pytest
 
+from tests.unit.triage.test_llm import BAD_HOSTS
 from tests.utilities.tcp import closed_port, serving_in_background
 from triage.embed import FAKE_WIDTH, FakeEmbedder, OllamaEmbedder
 from triage.llm import ModelUnavailableError
@@ -78,7 +79,8 @@ def test_an_unreachable_embedder_says_how_to_start_it() -> None:
         OllamaEmbedder(host=f"http://127.0.0.1:{closed_port()}").embed(["text"])
 
 
-def test_a_non_http_host_is_refused() -> None:
-    """A file: or custom scheme is refused before anything is opened."""
+@pytest.mark.parametrize("host", BAD_HOSTS)
+def test_a_non_http_host_is_refused(host: str) -> None:
+    """Any host that isn't an http(s) URL is refused before anything is opened."""
     with pytest.raises(ModelUnavailableError, match="non-http"):
-        OllamaEmbedder(host="file:///etc/passwd").embed(["text"])
+        OllamaEmbedder(host=host).embed(["text"])

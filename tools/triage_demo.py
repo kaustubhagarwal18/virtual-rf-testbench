@@ -17,17 +17,15 @@ from pathlib import Path
 from triage.answer import MalformedAnswerError
 from triage.embed import OllamaEmbedder
 from triage.evaluate import expected_fix
-from triage.evidence import FULL, SavedRun, first_failure
+from triage.evidence import FULL, SavedRun, error_only_evidence
 from triage.llm import DEFAULT_MODEL, LLMProvider, ModelUnavailableError, OllamaProvider
 from triage.prompt import Fix, Source
 from triage.retrieval import DEFAULT_HISTORY, DEFAULT_TOP_K, InMemoryRetriever, Retriever
 from triage.service import triage_run
+from triage.textfmt import clip
 
 DEFAULT_RUN = Path("triage/data/runs/questions/cable_loss")
 """The run the demo shows when none is named: retrieval flips its verdict to the right fix."""
-
-MISSING_FAILURE = "every test passed"
-"""What the demo shows as the error when a run has no failure; it should never reach here."""
 
 UNUSABLE = "unusable"
 """The chosen-action label for a reply that could not be parsed, so the demo shows it as a
@@ -116,27 +114,10 @@ def run_demo(
         The two answers and the key they are marked against.
     """
     expected = expected_fix(run)
-    failure = first_failure(run)
-    error = (failure.detail or failure.where) if failure is not None else MISSING_FAILURE
+    error = error_only_evidence(run)
     baseline = _answer(run, provider, expected, ())
     retrieval = _answer(run, provider, expected, retriever.similar_to(run, top_k))
     return DemoResult(run.folder.name, expected, error, baseline, retrieval)
-
-
-def _clip(text: str, limit: int) -> str:
-    """Shorten text to a limit at a word boundary, so no word is cut mid-way.
-
-    Args:
-        text: The text to shorten.
-        limit: The longest result, before the ellipsis.
-
-    Returns:
-        The text, or its first whole words within the limit followed by an ellipsis.
-    """
-    collapsed = " ".join(text.split())
-    if len(collapsed) <= limit:
-        return collapsed
-    return f"{collapsed[:limit].rsplit(' ', 1)[0]}..."
 
 
 def _answer_lines(title: str, answer: Answer, expected: Fix) -> list[str]:
@@ -157,7 +138,7 @@ def _answer_lines(title: str, answer: Answer, expected: Fix) -> list[str]:
         f"{title}:",
         f"  fix:   {answer.chosen}  [{mark}]{expected_note}",
         f"  where: {answer.where or '-'}",
-        f"  why:   {_clip(answer.because, 160)}",
+        f"  why:   {clip(answer.because, 160)}",
         f"  cited: {cited}",
     ]
 
@@ -173,7 +154,7 @@ def render(result: DemoResult) -> str:
     """
     lines = [
         f"Run: {result.fault}  (resolving fix: {result.expected.name} — {result.expected.value})",
-        f"Error shown to the model: {_clip(result.error, 120)}",
+        f"Error shown to the model: {clip(result.error, 120)}",
         "",
         *_answer_lines("Without retrieval (evidence alone)", result.baseline, result.expected),
         "",

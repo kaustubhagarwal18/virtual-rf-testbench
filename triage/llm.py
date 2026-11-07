@@ -12,7 +12,7 @@ import urllib.parse
 import urllib.request
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Any, Protocol
 
 DEFAULT_MODEL = "qwen2.5:3b"
 """The largest model that runs comfortably on an 8 GB machine (see the Ollama spike)."""
@@ -35,27 +35,51 @@ class ModelUnavailableError(Exception):
     """The model couldn't be reached; the message says how to start it."""
 
 
-def _open(request: "urllib.request.Request | str", timeout_s: float) -> bytes:
+def open_url(url: str, timeout_s: float, payload: dict[str, Any] | None = None) -> bytes:
     """Open an http(s) URL and return its body, refusing any other scheme.
 
+    The scheme is checked on the URL's text before a request is built, because urllib
+    can't even build a request for a host with no scheme ("localhost") and would raise a
+    bare ValueError instead of saying what is misconfigured.
+
     Args:
-        request: The request or URL to open.
+        url: The URL to open.
         timeout_s: How long it may take.
+        payload: A JSON body to POST; None sends a GET.
 
     Returns:
         The response body.
 
     Raises:
-        ModelUnavailableError: If the URL isn't http(s); a file: or custom scheme would be a
-            misconfiguration, not a model to reach.
+        ModelUnavailableError: If the URL isn't http(s); a missing, file: or custom scheme
+            is a misconfiguration, not a model to reach.
     """
-    url = request.full_url if isinstance(request, urllib.request.Request) else request
     if urllib.parse.urlparse(url).scheme not in ALLOWED_SCHEMES:
-        raise ModelUnavailableError(f"refusing to open a non-http(s) URL: {url}")
-    # The scheme is checked on the line above; bandit can't see that, so B310 is silenced here.
+        raise ModelUnavailableError(
+            f"refusing to open a non-http(s) URL: {url!r}; set the host to a URL such as "
+            f"{DEFAULT_HOST}"
+        )
+    data = None if payload is None else json.dumps(payload).encode()
+    request = urllib.request.Request(url, data, {"Content-Type": "application/json"})
+    # The scheme is checked above; bandit can't see that, so B310 is silenced here.
     with urllib.request.urlopen(request, timeout=timeout_s) as response:  # nosec B310
         body: bytes = response.read()
     return body
+
+
+def unreachable_message(host: str, error: object) -> str:
+    """Build the one-line hint shown when a local Ollama can't be reached.
+
+    Shared by the answering model and the embedder, so both name the same fix.
+
+    Args:
+        host: Where Ollama was expected to listen.
+        error: The connection error that was raised.
+
+    Returns:
+        One line naming the host, the error, and the command that starts Ollama.
+    """
+    return f"can't reach Ollama at {host} ({error}); start it with 'ollama serve'"
 
 
 class LLMProvider(Protocol):
@@ -119,21 +143,14 @@ class OllamaProvider:
                 "num_ctx": CONTEXT_TOKENS,
             },
         }
-        request = urllib.request.Request(
-            f"{self.host}/api/chat",
-            json.dumps(body).encode(),
-            {"Content-Type": "application/json"},
-        )
         try:
-            answer = json.loads(_open(request, self.timeout_s))
+            answer = json.loads(open_url(f"{self.host}/api/chat", self.timeout_s, body))
         except urllib.error.HTTPError as error:
             raise ModelUnavailableError(
                 f"{self.host} refused the request ({error.code}); is {self.model} pulled?"
             ) from error
         except (urllib.error.URLError, TimeoutError) as error:
-            raise ModelUnavailableError(
-                f"can't reach Ollama at {self.host} ({error}); start it with 'ollama serve'"
-            ) from error
+            raise ModelUnavailableError(unreachable_message(self.host, error)) from error
         except json.JSONDecodeError as error:
             raise ModelUnavailableError(f"{self.host} didn't answer with JSON: {error}") from error
         content = answer.get("message", {}).get("content")
@@ -148,7 +165,7 @@ class OllamaProvider:
             True if it answers.
         """
         try:
-            _open(f"{self.host}/api/version", timeout_s=2.0)
+            open_url(f"{self.host}/api/version", timeout_s=2.0)
         except (urllib.error.URLError, TimeoutError, ModelUnavailableError):
             return False
         return True

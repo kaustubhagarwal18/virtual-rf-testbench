@@ -8,19 +8,14 @@ so it gets its own small interface rather than being forced through LLMProvider.
 import hashlib
 import json
 import urllib.error
-import urllib.parse
-import urllib.request
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from triage.llm import DEFAULT_HOST, ModelUnavailableError
+from triage.llm import DEFAULT_HOST, ModelUnavailableError, open_url, unreachable_message
 
 DEFAULT_EMBED_MODEL = "nomic-embed-text"
 """The embedding model pulled for this project; small, and runs locally."""
-
-ALLOWED_SCHEMES = ("http", "https")
-"""Only http(s) is opened: the host is configurable, never a file: or custom scheme."""
 
 
 class Embedder(Protocol):
@@ -75,21 +70,11 @@ class OllamaEmbedder:
         Raises:
             ModelUnavailableError: If the request fails or the reply has no embedding.
         """
-        if urllib.parse.urlparse(self.host).scheme not in ALLOWED_SCHEMES:
-            raise ModelUnavailableError(f"refusing to open a non-http(s) URL: {self.host}")
         body = {"model": self.model, "prompt": text}
-        request = urllib.request.Request(
-            f"{self.host}/api/embeddings",
-            json.dumps(body).encode(),
-            {"Content-Type": "application/json"},
-        )
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout_s) as response:  # nosec B310
-                answer = json.loads(response.read())
+            answer = json.loads(open_url(f"{self.host}/api/embeddings", self.timeout_s, body))
         except (urllib.error.URLError, TimeoutError) as error:
-            raise ModelUnavailableError(
-                f"can't reach Ollama at {self.host} ({error}); start it with 'ollama serve'"
-            ) from error
+            raise ModelUnavailableError(unreachable_message(self.host, error)) from error
         embedding = answer.get("embedding")
         if not isinstance(embedding, list) or not embedding:
             raise ModelUnavailableError(f"no embedding in the reply: {str(answer)[:200]}")

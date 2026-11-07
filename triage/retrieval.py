@@ -5,7 +5,6 @@ The interface is deliberately small, so an in-memory index now and a pgvector-ba
 later are interchangeable (Liskov: the service can't tell which it was given).
 """
 
-import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -14,6 +13,7 @@ import numpy as np
 
 from triage.embed import Embedder
 from triage.evidence import FULL, SavedRun, build_evidence
+from triage.label import load_label
 from triage.prompt import Source
 
 DEFAULT_HISTORY = Path("triage/data/runs/history")
@@ -48,7 +48,7 @@ def history_source(run: SavedRun) -> Source:
     Returns:
         The source: the run's evidence, plus its recorded cause and fix.
     """
-    label = json.loads((run.folder / "label.json").read_text(encoding="utf-8"))
+    label = load_label(run)
     text = f"{build_evidence(run, FULL)}\nCause: {label['cause']}\nFix applied: {label['fix']}"
     return Source(source_id=run.folder.name, text=text)
 
