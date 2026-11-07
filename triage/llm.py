@@ -35,7 +35,7 @@ class ModelUnavailableError(Exception):
     """The model couldn't be reached; the message says how to start it."""
 
 
-def _open(request: "urllib.request.Request | str", timeout_s: float) -> bytes:
+def open_url(request: "urllib.request.Request | str", timeout_s: float) -> bytes:
     """Open an http(s) URL and return its body, refusing any other scheme.
 
     Args:
@@ -56,6 +56,21 @@ def _open(request: "urllib.request.Request | str", timeout_s: float) -> bytes:
     with urllib.request.urlopen(request, timeout=timeout_s) as response:  # nosec B310
         body: bytes = response.read()
     return body
+
+
+def unreachable_message(host: str, error: object) -> str:
+    """Build the one-line hint shown when a local Ollama can't be reached.
+
+    Shared by the answering model and the embedder, so both name the same fix.
+
+    Args:
+        host: Where Ollama was expected to listen.
+        error: The connection error that was raised.
+
+    Returns:
+        One line naming the host, the error, and the command that starts Ollama.
+    """
+    return f"can't reach Ollama at {host} ({error}); start it with 'ollama serve'"
 
 
 class LLMProvider(Protocol):
@@ -125,15 +140,13 @@ class OllamaProvider:
             {"Content-Type": "application/json"},
         )
         try:
-            answer = json.loads(_open(request, self.timeout_s))
+            answer = json.loads(open_url(request, self.timeout_s))
         except urllib.error.HTTPError as error:
             raise ModelUnavailableError(
                 f"{self.host} refused the request ({error.code}); is {self.model} pulled?"
             ) from error
         except (urllib.error.URLError, TimeoutError) as error:
-            raise ModelUnavailableError(
-                f"can't reach Ollama at {self.host} ({error}); start it with 'ollama serve'"
-            ) from error
+            raise ModelUnavailableError(unreachable_message(self.host, error)) from error
         except json.JSONDecodeError as error:
             raise ModelUnavailableError(f"{self.host} didn't answer with JSON: {error}") from error
         content = answer.get("message", {}).get("content")
@@ -148,7 +161,7 @@ class OllamaProvider:
             True if it answers.
         """
         try:
-            _open(f"{self.host}/api/version", timeout_s=2.0)
+            open_url(f"{self.host}/api/version", timeout_s=2.0)
         except (urllib.error.URLError, TimeoutError, ModelUnavailableError):
             return False
         return True
