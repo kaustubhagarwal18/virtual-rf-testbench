@@ -48,6 +48,104 @@ Faults are injected on purpose (extra cable loss, a level offset, slow responses
 behaviour change in a new version), so every failure has a known cause. That lets the
 assistant's accuracy be measured rather than guessed.
 
+## How the triage assistant works
+
+When the bench suite fails, the triage assistant reads the saved run and answers one
+question: **is this the firmware, the bench or the test — and what fixed it last time?**
+It is a small retrieval-augmented pipeline that runs entirely on your machine.
+
+### The models
+
+| Role | Model | Where it runs |
+|---|---|---|
+| Answering | `qwen2.5:3b` | Local [Ollama](https://ollama.com), temperature 0, fixed seed |
+| Retrieval (embeddings) | `nomic-embed-text` | Local Ollama |
+
+Both are local, so no run data leaves the machine. `qwen2.5:3b` is the largest model that
+answers comfortably on an 8 GB laptop. The model is given **no tools**, and everything under
+`EVIDENCE` and `SOURCES` is treated as untrusted data — the system prompt tells it never to
+follow instructions found inside a run's logs.
+
+### The pipeline
+
+```mermaid
+flowchart TB
+    run["Failed run<br/>results.json, logs.txt, sequence.log"] --> ev["evidence.py<br/>find the first failure"]
+    ev --> q["embed the failure<br/>(nomic-embed-text)"]
+    hist[("History runs<br/>past failures + how each was fixed")] --> idx["embed + index<br/>(cosine similarity)"]
+    q --> sim["top 3 most similar past runs"]
+    idx --> sim
+    ev --> pr["prompt.py<br/>evidence + sources + fixed action list"]
+    sim --> pr
+    pr --> llm["qwen2.5:3b<br/>(local Ollama)"]
+    llm --> an["answer.py<br/>parse strictly, reject unusable replies"]
+    an --> verdict["Verdict<br/>action · where · why · cited sources"]
+    label["label.json"] -. answer key, scoring only, never shown to the model .-> score["evaluate.py"]
+    verdict --> score
+```
+
+The model must choose **one** action from a fixed list, by its key, rather than writing its
+own — so scoring is an exact match and no second model is needed to judge the wording:
+`CABLE`, `LINK`, `ALIGNMENT`, `CONFIGURATION`, `TIMEOUT`, `TEST_CLEANUP`, `FIRMWARE`,
+`UNKNOWN`. It is told to choose `UNKNOWN` rather than guess, because a confident wrong action
+costs an engineer hours. A reply that cites a source it was never given, or names an action
+off the list, is rejected as unusable and counted as a miss — never interpreted generously.
+
+### Measuring it: three scenarios
+
+Nine question runs (one per fault) are scored on whether the model names the fix that
+actually resolves the failure. The three scenarios are an **ablation** — each adds exactly
+one thing to the one before, so any change in the score is attributable to that one thing:
+
+| Scenario | What the model sees | Score |
+|---|---|---|
+| **error only** | Just the first failure's message — what someone pastes into a chat window | **4 of 9** |
+| **full evidence** | The whole run's structured evidence: first failure and its numbers, whether firmware changed, which tests ran, notable log lines | **3 of 9** |
+| **full + retrieval** | Full evidence **plus the 3 most similar past runs**, each with its recorded cause and fix | **6 of 9** |
+
+Counts, not percentages: with nine questions, "6 of 9" is honest where "67%" is not. The
+numbers are deterministic (temperature 0, fixed seed) on one machine; another machine's model
+may differ in wording and the odd verdict.
+
+### What the numbers say
+
+- **Retrieval is what moves the needle.** Going from full evidence to full + retrieval raised
+  the score by 3 (3 → 6 of 9). More *evidence* alone did not help — it slightly lowered the
+  score (4 → 3), because fuller context without a precedent gave this small model more to
+  misread.
+- **The model has a fallback.** Its most common wrong choice is `FIRMWARE` (9 times across the
+  three scenarios): when unsure, it blames the firmware.
+- **The ceiling here is the model, not retrieval.** On two faults (`link_flaky`,
+  `slow_responses`) retrieval surfaced the matching past failure and the model *cited* it, yet
+  still chose the wrong action. One `link_down` reply was malformed and counted as a miss, not
+  salvaged.
+- **Solved in every scenario:** `config_parameter_missing` and `reset_leaks_offset` — the
+  failures whose error text names the fix almost literally.
+
+The full breakdown, every question's answer included, is in
+[`triage/results/rag.md`](triage/results/rag.md); the two no-retrieval scenarios on their own
+are in [`triage/results/baseline.md`](triage/results/baseline.md).
+
+### Why retrieval is in-memory, for now
+
+The retriever embeds the history runs and ranks them by cosine similarity in-process. It sits
+behind a small `Retriever` interface, so a pgvector-backed store can drop in later without the
+rest of the pipeline noticing. At the current history size (about 27 runs) an in-memory index
+gives the same top-3 as a database would, so pgvector is deliberately deferred.
+
+### See it on one run
+
+With local Ollama running and both models pulled (see [Quick start](#quick-start) below), show
+the same failure triaged with and without past runs, side by side — on `cable_loss`, retrieval
+flips the verdict from `FIRMWARE` to `CABLE`, citing the precedents it drew on:
+
+```
+make triage-demo RUN=triage/data/runs/questions/cable_loss
+```
+
+`make triage RUN=…` explains one run without retrieval, and `make eval` scores all three
+scenarios and rewrites `triage/results/rag.md`.
+
 ## Status
 
 Built and running: the simulated instruments, their drivers, measurement records, and a
@@ -304,6 +402,7 @@ make test
 | `BENCH_LEVEL_OFFSET_DB`, `BENCH_CHANNEL_BANDWIDTH_HZ` | The bench configuration the setup sequence applies; unset means a healthy bench |
 | `make fault-dataset` | Rebuilds the triage data set in `triage/data/runs/`: every fault, three history runs and one question run each |
 | `make triage RUN=…` | Explains one saved run: names the likely cause and fix from its evidence alone, without retrieving past runs (needs a local Ollama model) |
+| `make triage-demo RUN=…` | Triages one run with and without retrieval, side by side, to show what the past runs add (needs local Ollama answering and embedding models) |
 | `make eval [MODEL=…]` | Scores the triage against the labelled question runs and writes `triage/results/rag.md` (needs local Ollama answering and embedding models) |
 | `make clean` | Removes the virtual environment, the tool caches and the pre-commit hook; `make setup` restores them |
 

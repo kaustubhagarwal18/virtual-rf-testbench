@@ -7,7 +7,7 @@ REVISION ?= $(shell git rev-parse --short HEAD 2>/dev/null)
 export FIRMWARE_VERSION REVISION
 PYTHON_PATHS := $(PACKAGES) tests
 
-.PHONY: setup lint fmt test summary bench-up bench-down bench-logs bench-test bench-summary fault fault-dataset triage eval clean
+.PHONY: setup lint fmt test summary bench-up bench-down bench-logs bench-test bench-summary fault fault-dataset triage triage-demo eval clean
 
 setup:
 	uv sync
@@ -59,6 +59,9 @@ fault-dataset:
 
 triage:
 	uv run python -m triage.service $(RUN)
+
+triage-demo:
+	uv run python -m tools.triage_demo $(RUN)
 
 eval:
 	uv run python -m triage.evaluate $(if $(MODEL),--model $(MODEL)) --report $(EVAL_REPORT)
