@@ -207,7 +207,8 @@ def main(
             runs with the Ollama embedder.
 
     Returns:
-        0 when the demo ran, 1 if the model or embedder could not be reached.
+        0 when the demo ran; 1 when the model or embedder could not be reached, or the run,
+        its label, or the history folder is missing or names a fault with no known fix.
     """
     parser = argparse.ArgumentParser(
         prog="python -m tools.triage_demo",
@@ -221,12 +222,13 @@ def main(
     parsed = parser.parse_args(arguments)
     provider = provider or OllamaProvider(model=parsed.model)
     try:
+        run = SavedRun.load(parsed.run)
         if retriever is None:
             retriever = InMemoryRetriever.from_history(  # pragma: no cover - needs Ollama
                 parsed.history, OllamaEmbedder()
             )
-        result = run_demo(SavedRun.load(parsed.run), provider, retriever)
-    except ModelUnavailableError as error:
+        result = run_demo(run, provider, retriever)
+    except (ModelUnavailableError, FileNotFoundError, KeyError) as error:
         sys.stdout.write(f"{error}\n")
         return 1
     sys.stdout.write(render(result))

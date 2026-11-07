@@ -3,6 +3,7 @@
 import json
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -160,6 +161,46 @@ def test_a_long_reason_is_clipped_in_the_report(tmp_path: Path) -> None:
     reply = json.dumps({"fix": "FIRMWARE", "where": "x", "because": long_reason, "cited": []})
     report = render(run_demo(cable_run(tmp_path), FakeProvider([reply]), demo_retriever()))
     assert "..." in report
+
+
+def _no_results(tmp_path: Path) -> Path:
+    """A folder that is not a saved run: it has no results.json."""
+    folder = tmp_path / "empty"
+    folder.mkdir()
+    return folder
+
+
+def _no_label(tmp_path: Path) -> Path:
+    """A saved run whose label.json is missing."""
+    run = write_run(tmp_path / "run", [FAILING_TEST])
+    (run / "label.json").unlink()
+    return run
+
+
+def _unknown_fault(tmp_path: Path) -> Path:
+    """A saved run whose label names a fault with no known fix."""
+    run = write_run(tmp_path / "run", [FAILING_TEST])
+    (run / "label.json").write_text(json.dumps({"fault": "no_such_fault"}), encoding="utf-8")
+    return run
+
+
+def _no_fault_key(tmp_path: Path) -> Path:
+    """A saved run whose label has no fault key at all."""
+    run = write_run(tmp_path / "run", [FAILING_TEST])
+    (run / "label.json").write_text(json.dumps({"category": "bench"}), encoding="utf-8")
+    return run
+
+
+@pytest.mark.parametrize("make_run", [_no_results, _no_label, _unknown_fault, _no_fault_key])
+def test_main_reports_bad_input_without_a_traceback(
+    make_run: Callable[[Path], Path], tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A missing run, label or fault key, or an unknown fault, exits 1 with one line."""
+    exit_code = main([str(make_run(tmp_path))], FakeProvider([FIRMWARE_REPLY]), demo_retriever())
+    out = capsys.readouterr().out
+    assert exit_code == 1
+    assert out.strip()
+    assert "\n" not in out.strip()
 
 
 def test_demo_runs_as_a_module() -> None:
