@@ -33,12 +33,16 @@ class Source:
     """One past run or document offered to the model.
 
     Attributes:
-        source_id: What the model must cite to use it.
+        source_id: What the model must cite to use it. A neutral id that says nothing about
+            the run, so the model can't read the answer off the name.
         text: What it says, including how it was resolved.
+        fault: The labelled fault of a past run, for scoring and for holding a fault out of
+            retrieval; empty when unknown. Never put in a prompt.
     """
 
     source_id: str
     text: str
+    fault: str = ""
 
 
 SYSTEM_PROMPT = f"""You triage failed runs of an automated RF test bench: a signal generator

@@ -12,26 +12,28 @@ Each run is a folder:
 
 - `runs/history/` holds three runs per fault. Triage may retrieve these, with their labels, as
   past failures and how they were fixed.
-- `runs/questions/` holds one run per fault. Triage is asked about these, and its answers are
-  scored against their labels, which it never sees.
+- `runs/questions/` holds three runs per fault. Triage is asked about these, and its answers
+  are scored against their labels, which it never sees.
+- A folder's name says which fault it holds (`cable_loss-2`). The model never sees it: a
+  history run is cited by a hash of its text, and a question run only by its evidence.
 
 ## The faults
 
 Nine, with at least two per category, so no answer can be right by always guessing one.
 
-| Fault | Cause | Sizes in history | Question |
+| Fault | Cause | Sizes in history | Sizes in questions |
 |---|---|---|---|
-| `cable_loss` | bench | 0.8, 1.2, 2.0 dB | 1.5 dB |
+| `cable_loss` | bench | 0.8, 1.2, 2.0 dB | 1.5, 1.0, 2.5 dB |
 | `link_down` | bench | nothing to scale | the same |
-| `link_flaky` | bench | every 2, 3, 5 sweeps | every 4 |
-| `slow_responses` | test | 2.5, 3.0, 4.0 s | 3.5 s |
+| `link_flaky` | bench | every 2, 3, 5 sweeps | every 4, 6, 7 |
+| `slow_responses` | test | 2.5, 3.0, 4.0 s | 3.5, 2.2, 5.0 s |
 | `config_parameter_missing` | test | nothing to scale | the same |
 | `config_parameter_out_of_range` | test | nothing to scale | the same |
 | `config_decimal_error` | test | nothing to scale | the same |
 | `reset_leaks_offset` | firmware | nothing to scale | the same |
 | `output_command_change` | firmware | nothing to scale | the same |
 
-Where a fault has a size, its question uses one no history run has, so retrieval can't simply
+Where a fault has a size, its questions use sizes no history run has, so retrieval can't simply
 find an identical run. The other faults have no size dimension: their question repeats the
 history scenario and differs only in timing and reading noise, which makes them the easier
 questions in the set. A write-up has to say so rather than count them as evidence that
@@ -40,7 +42,7 @@ retrieval generalises.
 ## What to know when reading a run
 
 - **The `link_flaky` runs differ from each other**, with 4 to 11 failures depending on how
-  often the connector drops a sweep. That is the point of it: the same fault doesn't produce
+  often the connector drops a sweep (the questions: 10, 8 and 4). That is the point of it: the same fault doesn't produce
   the same failures twice.
 - **Two faults have results files that cannot be told apart.**
   `config_parameter_missing` and `config_parameter_out_of_range` both fail at "read bench

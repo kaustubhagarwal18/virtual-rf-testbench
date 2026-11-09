@@ -9,6 +9,7 @@ import pytest
 
 from tests.unit.triage.test_evidence import FAILING_TEST, write_run
 from triage.answer import MalformedAnswerError
+from triage.checks import DEFAULT_CHECKS
 from triage.evidence import ERROR_ONLY, FULL, SavedRun
 from triage.llm import FakeProvider, ModelUnavailableError
 from triage.prompt import Fix, Source
@@ -113,3 +114,33 @@ def test_service_runs_as_a_module() -> None:
         check=True,
     )
     assert "Explain one failed bench run" in completed.stdout
+
+
+def unchanged_firmware_run(tmp_path: Path) -> Path:
+    """Write a failed run whose firmware is the same release as the last passing run's."""
+    folder = write_run(tmp_path / "run", [FAILING_TEST])
+    results = json.loads((folder / "results.json").read_text(encoding="utf-8"))
+    results["firmware_versions"] = {"analyzer": "0.1.0", "generator": "0.1.0"}
+    (folder / "results.json").write_text(json.dumps(results), encoding="utf-8")
+    return folder
+
+
+FIRMWARE_REPLY = json.dumps({"fix": "FIRMWARE", "where": "fw", "because": "x", "cited": []})
+
+
+def test_the_cli_says_when_a_check_overruled_the_model(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A FIRMWARE answer on unchanged firmware prints UNKNOWN and the reason it was overruled."""
+    assert main([str(unchanged_firmware_run(tmp_path))], FakeProvider([FIRMWARE_REPLY])) == 0
+    out = capsys.readouterr().out
+    assert "fix:   UNKNOWN" in out
+    assert "note:  the model chose FIRMWARE" in out
+
+
+def test_checks_are_off_unless_asked_for(tmp_path: Path) -> None:
+    """The pipeline applies no checks by default, so the evaluation can measure the model alone."""
+    run = SavedRun.load(unchanged_firmware_run(tmp_path))
+    assert triage_run(run, FakeProvider([FIRMWARE_REPLY])).fix is Fix.FIRMWARE
+    checked = triage_run(run, FakeProvider([FIRMWARE_REPLY]), checks=DEFAULT_CHECKS)
+    assert checked.fix is Fix.UNKNOWN

@@ -8,7 +8,15 @@ from typing import Any
 import pytest
 
 from tests.utilities.tcp import closed_port, serving_in_background
-from triage.llm import FakeProvider, ModelUnavailableError, OllamaProvider
+from triage.answer import VERDICT_SCHEMA
+from triage.llm import (
+    DEFAULT_MODEL,
+    CachingProvider,
+    FakeProvider,
+    ModelUnavailableError,
+    OllamaProvider,
+)
+from triage.prompt import Fix
 
 ANSWER = {"message": {"content": '{"fix": "CABLE"}'}}
 
@@ -140,3 +148,29 @@ def test_a_non_http_host_is_refused(host: str) -> None:
 def test_a_non_http_host_is_reported_unavailable(host: str) -> None:
     """The availability check treats a misconfigured host as not available, not an error."""
     assert not OllamaProvider(host=host).available()
+
+
+def test_a_schema_is_sent_as_the_reply_format() -> None:
+    """With a schema, Ollama is asked to constrain the reply to it, not just to any JSON."""
+    server = FakeOllama()
+    with serving_in_background(server) as port:
+        provider = OllamaProvider(host=f"http://127.0.0.1:{port}", response_format=VERDICT_SCHEMA)
+        provider.complete("instructions", "question")
+    assert server.requests[0]["format"] == VERDICT_SCHEMA
+    assert server.requests[0]["format"]["properties"]["fix"]["enum"] == [fix.name for fix in Fix]
+
+
+def test_the_cache_asks_each_distinct_prompt_once() -> None:
+    """The same prompt is answered from the cache; a different one reaches the model."""
+    inner = FakeProvider(["first", "second"])
+    cached = CachingProvider(inner)
+    assert cached.complete("s", "u") == "first"
+    assert cached.complete("s", "u") == "first"
+    assert cached.complete("s", "other") == "second"
+    assert inner.prompts == [("s", "u"), ("s", "other")]
+
+
+def test_the_cache_names_the_inner_model() -> None:
+    """A report headed by the cache's model names the model that actually answered."""
+    assert CachingProvider(OllamaProvider(model="qwen2.5:3b")).model == "qwen2.5:3b"
+    assert CachingProvider(FakeProvider()).model == DEFAULT_MODEL

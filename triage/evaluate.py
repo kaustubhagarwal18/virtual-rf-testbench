@@ -1,32 +1,40 @@
 """Score triage against the question runs: did it name the fix that resolves each failure?
 
-One number per scenario — right fixes out of the questions asked — and a tally of what it
-chose when it was wrong, because a confident wrong action is the failure mode that matters.
-Three scenarios, each adding one thing: the error message alone, the whole run's evidence,
-and that evidence plus the past runs most like it (retrieval). Any gain is attributable,
-because only one thing changes between neighbours.
+Each scenario adds one thing to a neighbour, so any change in the score is attributable to
+that one thing: the error message alone, the whole run's evidence, that evidence plus the
+past runs most like it (retrieval), the same with a check on firmware verdicts, and the same
+retrieval with the question's own fault held out of the history.
 
-Nine questions give counts, not percentages: '6 of 9' is honest where '67%' is not.
+An answer is one of four things: right, UNKNOWN (the model abstained), a confident wrong
+action, or malformed (unusable). They are counted apart, because a confident wrong action is
+the failure that matters and UNKNOWN is the honest answer when there is no precedent.
+
+Scores are counts with a 95% interval, not percentages: with a few dozen questions, '18 of
+27, roughly 13 to 22' is honest where '67%' is not.
 """
 
 import argparse
+import math
 import sys
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
-from triage.answer import MalformedAnswerError, parse_verdict
+from triage.answer import VERDICT_SCHEMA, MalformedAnswerError
+from triage.checks import DEFAULT_CHECKS
 from triage.embed import OllamaEmbedder
-from triage.evidence import ERROR_ONLY, FULL, SavedRun, build_evidence, error_only_evidence
+from triage.evidence import ERROR_ONLY, FULL, SavedRun, error_only_evidence
 from triage.label import load_label
-from triage.llm import DEFAULT_MODEL, LLMProvider, OllamaProvider
-from triage.prompt import Fix, Source, build_prompt
-from triage.retrieval import (
-    DEFAULT_HISTORY,
-    DEFAULT_TOP_K,
-    InMemoryRetriever,
-    Retriever,
+from triage.llm import (
+    DEFAULT_MODEL,
+    CachingProvider,
+    LLMProvider,
+    ModelUnavailableError,
+    OllamaProvider,
 )
+from triage.prompt import Fix, Source
+from triage.retrieval import DEFAULT_HISTORY, DEFAULT_TOP_K, InMemoryRetriever, Retriever
+from triage.service import triage_run
 from triage.textfmt import clip
 
 DEFAULT_QUESTIONS = Path("triage/data/runs/questions")
@@ -38,6 +46,9 @@ BASELINE_TITLE = "Triage baseline (no retrieval)"
 
 RETRIEVAL_TITLE = "Triage: retrieval against the no-retrieval baseline"
 """The report heading when a retrieval scenario is scored alongside the baseline ones."""
+
+Z_95 = 1.96
+"""The normal quantile for a two-sided 95% interval."""
 
 EXPECTED_FIX: dict[str, Fix] = {
     "cable_loss": Fix.CABLE,
@@ -62,19 +73,56 @@ class Scenario:
         name: What the scenario is called in the report.
         level: The evidence level the model is given.
         retrieve: Whether the past runs most like this one are offered as sources.
+        hold_out: Whether past runs of the question's own fault are kept out of retrieval,
+            so the scenario measures what the model does with no precedent.
+        checked: Whether the verdict goes through the service's checks.
+        adds_to: The scenario this one adds exactly one thing to; empty for the first.
     """
 
     name: str
     level: str
     retrieve: bool = False
+    hold_out: bool = False
+    checked: bool = False
+    adds_to: str = ""
 
 
 SCENARIOS = (
     Scenario("error only", ERROR_ONLY),
-    Scenario("full evidence", FULL),
-    Scenario("full + retrieval", FULL, retrieve=True),
+    Scenario("full evidence", FULL, adds_to="error only"),
+    Scenario("full + retrieval", FULL, retrieve=True, adds_to="full evidence"),
+    Scenario(
+        "full + retrieval + firmware check",
+        FULL,
+        retrieve=True,
+        checked=True,
+        adds_to="full + retrieval",
+    ),
+    Scenario(
+        "full + retrieval, own fault held out",
+        FULL,
+        retrieve=True,
+        hold_out=True,
+        adds_to="full + retrieval",
+    ),
 )
-"""The three scenarios, each adding exactly one thing to the one before."""
+"""The scenarios, each adding exactly one thing to the one it names."""
+
+
+@dataclass(frozen=True)
+class SourcesUsed:
+    """The past runs a question was offered, and which of them the model cited.
+
+    Attributes:
+        offered_faults: The labelled fault of each source offered, most similar first;
+            empty when the scenario doesn't retrieve.
+        cited: The source ids the model cited; empty when it cited none or was unusable.
+        cited_faults: The labelled fault of each cited source, in the same order.
+    """
+
+    offered_faults: tuple[str, ...] = ()
+    cited: tuple[str, ...] = ()
+    cited_faults: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -82,24 +130,58 @@ class Outcome:
     """One question asked once, in one scenario.
 
     Attributes:
-        fault: The fault the run holds, which names the expected fix.
+        question: The question run's folder name.
+        fault: The fault the run holds, from its label, which names the expected fix.
         expected: The fix that resolves it.
         chosen: The fix the model chose, or MALFORMED when the reply couldn't be used.
-        right: Whether the chosen fix is the one that resolves the fault.
         error: The failure the model was shown, as one line.
         answer: What the model said: its chosen fix, where and why, or the unusable reply.
-        cited: The history runs the model cited, if any; empty when it cited none or the
-            reply was unusable. Kept so a finding can tell whether retrieval surfaced the
-            matching past failure when the model still chose wrong.
+        sources: The past runs offered, and which the model cited.
     """
 
+    question: str
     fault: str
     expected: Fix
     chosen: str
-    right: bool
     error: str = ""
     answer: str = ""
-    cited: tuple[str, ...] = ()
+    sources: SourcesUsed = SourcesUsed()
+
+    @property
+    def right(self) -> bool:
+        """Whether the chosen fix is the one that resolves the fault.
+
+        Returns:
+            True for the resolving fix.
+        """
+        return self.chosen == self.expected.name
+
+    @property
+    def abstained(self) -> bool:
+        """Whether the model said UNKNOWN rather than act.
+
+        Returns:
+            True for UNKNOWN, unless UNKNOWN were itself the expected fix.
+        """
+        return not self.right and self.chosen == Fix.UNKNOWN.name
+
+    @property
+    def confidently_wrong(self) -> bool:
+        """Whether the model named an action, and it was the wrong one.
+
+        Returns:
+            True for a wrong action that isn't UNKNOWN or an unusable reply.
+        """
+        return not self.right and not self.abstained and self.chosen != MALFORMED
+
+    @property
+    def precedent_offered(self) -> bool:
+        """Whether retrieval offered at least one past run of the question's own fault.
+
+        Returns:
+            True if one of the offered sources has the question's fault.
+        """
+        return self.fault in self.sources.offered_faults
 
 
 @dataclass
@@ -107,12 +189,30 @@ class ScenarioResult:
     """Every outcome for one scenario.
 
     Attributes:
-        name: The scenario's name, for the report.
+        scenario: The scenario that was scored.
         outcomes: One outcome per question asked.
     """
 
-    name: str
+    scenario: Scenario
     outcomes: list[Outcome] = field(default_factory=list)
+
+    @property
+    def name(self) -> str:
+        """The scenario's name, for the report.
+
+        Returns:
+            The name.
+        """
+        return self.scenario.name
+
+    @property
+    def total(self) -> int:
+        """How many questions were asked.
+
+        Returns:
+            The count.
+        """
+        return len(self.outcomes)
 
     @property
     def right(self) -> int:
@@ -124,17 +224,99 @@ class ScenarioResult:
         return sum(1 for outcome in self.outcomes if outcome.right)
 
     @property
-    def wrong_choices(self) -> dict[str, int]:
-        """What the model chose when it was wrong, counted.
+    def abstained(self) -> int:
+        """How many questions the model answered UNKNOWN.
 
         Returns:
-            Each wrong or malformed choice and how often it was made.
+            The count.
+        """
+        return sum(1 for outcome in self.outcomes if outcome.abstained)
+
+    @property
+    def malformed(self) -> int:
+        """How many replies couldn't be used.
+
+        Returns:
+            The count.
+        """
+        return sum(1 for outcome in self.outcomes if outcome.chosen == MALFORMED)
+
+    @property
+    def confidently_wrong(self) -> int:
+        """How many questions got a wrong action that wasn't UNKNOWN.
+
+        Returns:
+            The count.
+        """
+        return sum(1 for outcome in self.outcomes if outcome.confidently_wrong)
+
+    @property
+    def precedent_offered(self) -> int:
+        """How many questions retrieval offered a past run of their own fault for.
+
+        Returns:
+            The count; zero for a scenario that doesn't retrieve.
+        """
+        return sum(1 for outcome in self.outcomes if outcome.precedent_offered)
+
+    @property
+    def wrong_choices(self) -> dict[str, int]:
+        """What the model chose when it named a wrong action, counted.
+
+        Returns:
+            Each confident wrong choice and how often it was made, most frequent first.
         """
         counts: dict[str, int] = {}
         for outcome in self.outcomes:
-            if not outcome.right:
+            if outcome.confidently_wrong:
                 counts[outcome.chosen] = counts.get(outcome.chosen, 0) + 1
         return dict(sorted(counts.items(), key=lambda item: -item[1]))
+
+
+def wilson_interval(successes: int, total: int) -> tuple[float, float]:
+    """Return the 95% Wilson score interval for a count, as counts rather than a fraction.
+
+    The Wilson interval stays inside 0..total and behaves at small counts and at the
+    extremes, where the textbook normal interval does not.
+
+    Args:
+        successes: How many were right.
+        total: How many were asked.
+
+    Returns:
+        The interval's low and high ends, in questions; (0, 0) when nothing was asked.
+    """
+    if total == 0:
+        return 0.0, 0.0
+    proportion = successes / total
+    spread = Z_95**2 / total
+    centre = (proportion + spread / 2) / (1 + spread)
+    half_width = (
+        Z_95
+        * math.sqrt(proportion * (1 - proportion) / total + Z_95**2 / (4 * total**2))
+        / (1 + spread)
+    )
+    # At none or all right, that end is exactly 0 or total; floating point misses by 1e-16.
+    low = 0.0 if successes == 0 else (centre - half_width) * total
+    high = float(total) if successes == total else (centre + half_width) * total
+    return low, high
+
+
+def score_line(result: ScenarioResult) -> str:
+    """Summarise one scenario: right with its interval, then the other three outcomes.
+
+    Args:
+        result: The scenario's result.
+
+    Returns:
+        A line such as '18 of 27 right (95% interval 13 to 22); 2 UNKNOWN, 6 wrong, 1 malformed'.
+    """
+    low, high = wilson_interval(result.right, result.total)
+    return (
+        f"{result.right} of {result.total} right (95% interval {low:.0f} to {high:.0f}); "
+        f"{result.abstained} UNKNOWN, {result.confidently_wrong} wrong, "
+        f"{result.malformed} malformed"
+    )
 
 
 def expected_fix(run: SavedRun) -> Fix:
@@ -153,11 +335,35 @@ def expected_fix(run: SavedRun) -> Fix:
         KeyError: If the run's fault has no expected fix, which means a fault was added
             without saying how it is fixed.
     """
-    label = load_label(run)
-    fault = label["fault"]
+    fault = load_label(run)["fault"]
     if fault not in EXPECTED_FIX:
         raise KeyError(f"{fault} has no expected fix in EXPECTED_FIX")
     return EXPECTED_FIX[fault]
+
+
+def _sources_for(
+    run: SavedRun, fault: str, scenario: Scenario, retriever: Retriever | None
+) -> tuple[Source, ...]:
+    """Find the past runs a scenario offers for one question.
+
+    Args:
+        run: The question run.
+        fault: Its labelled fault, held out of retrieval when the scenario says so.
+        scenario: The scenario.
+        retriever: Where retrieved sources come from; required when the scenario retrieves.
+
+    Returns:
+        The sources to offer; none when the scenario doesn't retrieve.
+
+    Raises:
+        ValueError: If the scenario retrieves but no retriever was given.
+    """
+    if not scenario.retrieve:
+        return ()
+    if retriever is None:
+        raise ValueError(f"scenario {scenario.name!r} retrieves but no retriever was given")
+    excluded = fault if scenario.hold_out else None
+    return tuple(retriever.similar_to(run, DEFAULT_TOP_K, exclude_fault=excluded))
 
 
 def evaluate_question(
@@ -168,39 +374,41 @@ def evaluate_question(
     Args:
         run: The question run.
         provider: The answering model.
-        scenario: How to ask: the evidence level, and whether to retrieve past runs.
+        scenario: How to ask: the evidence level, retrieval, hold-out and checks.
         retriever: Where retrieved sources come from; required when the scenario retrieves.
 
     Returns:
         The outcome, which keeps the failure the model was shown and what it answered, so a
         report can show both; a reply that couldn't be parsed counts as MALFORMED, not right.
-
-    Raises:
-        ValueError: If the scenario retrieves but no retriever was given.
     """
     expected = expected_fix(run)
-    error = error_only_evidence(run)
-    sources: tuple[Source, ...] = ()
-    if scenario.retrieve:
-        if retriever is None:
-            raise ValueError(f"scenario {scenario.name!r} retrieves but no retriever was given")
-        sources = tuple(retriever.similar_to(run, DEFAULT_TOP_K))
-    system, user = build_prompt(build_evidence(run, scenario.level), sources)
-    reply = provider.complete(system, user)
+    fault = str(load_label(run)["fault"])
+    sources = _sources_for(run, fault, scenario, retriever)
+    base = Outcome(
+        question=run.folder.name,
+        fault=fault,
+        expected=expected,
+        chosen=MALFORMED,
+        error=error_only_evidence(run),
+        sources=SourcesUsed(offered_faults=tuple(source.fault for source in sources)),
+    )
+    checks = DEFAULT_CHECKS if scenario.checked else ()
     try:
-        verdict = parse_verdict(reply, [source.source_id for source in sources])
+        verdict = triage_run(run, provider, scenario.level, sources, checks)
     except MalformedAnswerError as unusable:
-        return Outcome(run.folder.name, expected, MALFORMED, False, error, f"unusable: {unusable}")
+        return replace(base, answer=f"unusable: {unusable}")
+    fault_by_id = {source.source_id: source.fault for source in sources}
     cited = f" citing {', '.join(verdict.cited)}" if verdict.cited else ""
-    answer = f"{verdict.fix.name} ({verdict.where}){cited} because {verdict.because}"
-    return Outcome(
-        run.folder.name,
-        expected,
-        verdict.fix.name,
-        verdict.fix is expected,
-        error,
-        answer,
-        cited=tuple(verdict.cited),
+    overruled = f" [overruled: {verdict.overruled}]" if verdict.overruled else ""
+    return replace(
+        base,
+        chosen=verdict.fix.name,
+        answer=f"{verdict.fix.name} ({verdict.where}){cited} because {verdict.because}{overruled}",
+        sources=replace(
+            base.sources,
+            cited=tuple(verdict.cited),
+            cited_faults=tuple(fault_by_id[source_id] for source_id in verdict.cited),
+        ),
     )
 
 
@@ -224,11 +432,39 @@ def evaluate(
     runs = [SavedRun.load(folder) for folder in sorted(questions.iterdir()) if folder.is_dir()]
     results = []
     for scenario in scenarios:
-        result = ScenarioResult(scenario.name)
+        result = ScenarioResult(scenario)
         for run in runs:
             result.outcomes.append(evaluate_question(run, provider, scenario, retriever))
         results.append(result)
     return results
+
+
+def _tally(choices: dict[str, int]) -> str:
+    """Format a count of choices as 'FIRMWARE x4, CABLE x2'.
+
+    Args:
+        choices: Each choice and its count.
+
+    Returns:
+        The formatted tally.
+    """
+    return ", ".join(f"{choice} x{count}" for choice, count in choices.items())
+
+
+def _mark(outcome: Outcome) -> str:
+    """Mark one outcome for the report.
+
+    Args:
+        outcome: The outcome.
+
+    Returns:
+        ✓ for right, ? for UNKNOWN, ! for malformed, ✗ for a confident wrong action.
+    """
+    if outcome.right:
+        return "✓"
+    if outcome.abstained:
+        return "?"
+    return "!" if outcome.chosen == MALFORMED else "✗"
 
 
 def render(results: Sequence[ScenarioResult], model: str) -> str:
@@ -241,21 +477,17 @@ def render(results: Sequence[ScenarioResult], model: str) -> str:
     Returns:
         The report.
     """
-    total = len(results[0].outcomes) if results else 0
     lines = [f"Triage evaluation ({model}): did it name the fix that resolves the failure?", ""]
     for result in results:
-        lines.append(f"## {result.name}: {result.right} of {total}")
+        lines.append(f"## {result.name}: {score_line(result)}")
         for outcome in result.outcomes:
             mark = "ok  " if outcome.right else "MISS"
             lines.append(
-                f"  {mark} {outcome.fault:32} expected {outcome.expected.name:13} "
+                f"  {mark} {outcome.question:34} expected {outcome.expected.name:13} "
                 f"chose {outcome.chosen}"
             )
         if result.wrong_choices:
-            tally = ", ".join(
-                f"{choice} x{count}" for choice, count in result.wrong_choices.items()
-            )
-            lines.append(f"  wrong choices: {tally}")
+            lines.append(f"  wrong choices: {_tally(result.wrong_choices)}")
         lines.append("")
     return "\n".join(lines)
 
@@ -263,13 +495,43 @@ def render(results: Sequence[ScenarioResult], model: str) -> str:
 PIPELINE_DIAGRAM = """```mermaid
 flowchart LR
     run["Saved run<br/>results, logs, sequence"] --> ev["evidence.py<br/>first failure"]
+    hist[("History runs<br/>neutral ids")] --> ret["retrieval.py<br/>top 3"]
     ev --> pr["prompt.py<br/>instructions + fix list"]
-    pr --> llm["qwen2.5:3b<br/>(Ollama, local)"]
+    ret --> pr
+    pr --> llm["qwen2.5:3b<br/>(Ollama, local, schema)"]
     llm --> an["answer.py<br/>parse + refuse unusable"]
-    an --> score["evaluate.py<br/>right fix?"]
+    an --> chk["checks.py<br/>firmware unchanged?"]
+    chk --> score["evaluate.py<br/>right fix?"]
     label["label.json"] -. answer key, never shown .-> score
 ```"""
 """The pipeline, drawn once for the report. The label reaches only the scoring, never qwen."""
+
+
+def _report_rows(result: ScenarioResult) -> list[str]:
+    """Write one scenario's table: each question, what it saw and what it answered.
+
+    Args:
+        result: The scenario's result.
+
+    Returns:
+        The table's lines, ending with the wrong-choice tally when there is one.
+    """
+    retrieves = result.scenario.retrieve
+    precedent_header = " Precedent offered |" if retrieves else ""
+    lines = [
+        f"| Question | Expected | Chosen | |{precedent_header} Error shown → the model's answer |",
+        f"|---|---|---|---|{'---|' if retrieves else ''}---|",
+    ]
+    for outcome in result.outcomes:
+        precedent = f" {'yes' if outcome.precedent_offered else 'no'} |" if retrieves else ""
+        detail = f"`{clip(outcome.error, 90)}` -> {clip(outcome.answer, 130)}"
+        lines.append(
+            f"| {outcome.question} | {outcome.expected.name} | {outcome.chosen} | "
+            f"{_mark(outcome)} |{precedent} {detail} |"
+        )
+    if result.wrong_choices:
+        lines += ["", f"Confident wrong choices: {_tally(result.wrong_choices)}."]
+    return lines
 
 
 def render_report(
@@ -286,73 +548,108 @@ def render_report(
     Returns:
         The report, showing for each question the failure the model saw and what it answered.
     """
-    total = len(results[0].outcomes) if results else 0
+    total = results[0].total if results else 0
     lines = [
         f"# {title}",
         "",
-        f"Model: `{model}`, temperature 0, fixed seed. Scored on whether the model named the "
-        "fix that resolves each failure. Counts, not percentages: nine questions.",
+        f"Model: `{model}`, temperature 0, fixed seed, replies constrained to the answer's "
+        f"JSON schema. Scored on whether the model named the fix that resolves each failure, "
+        f"over {total} questions. ✓ right, ? UNKNOWN, ✗ a confident wrong action, "
+        "! unusable reply.",
         "",
         PIPELINE_DIAGRAM,
         "",
+        "| Scenario | Adds | Right | 95% interval | UNKNOWN | Wrong | Malformed |",
+        "|---|---|---|---|---|---|---|",
     ]
     for result in results:
-        lines += [f"## {result.name}: {result.right} of {total}", ""]
-        lines += [
-            "| Fault | Expected | Chosen | | Error shown → the model's answer |",
-            "|---|---|---|---|---|",
-        ]
-        for outcome in result.outcomes:
-            mark = "✓" if outcome.right else "✗"
-            detail = f"`{clip(outcome.error, 90)}` -> {clip(outcome.answer, 130)}"
-            lines.append(
-                f"| {outcome.fault} | {outcome.expected.name} | {outcome.chosen} | {mark} | "
-                f"{detail} |"
-            )
-        if result.wrong_choices:
-            tally = ", ".join(
-                f"{choice} x{count}" for choice, count in result.wrong_choices.items()
-            )
-            lines += ["", f"Wrong choices: {tally}.", ""]
+        low, high = wilson_interval(result.right, result.total)
+        lines.append(
+            f"| {result.name} | {result.scenario.adds_to and 'to ' + result.scenario.adds_to} "
+            f"| {result.right} of {result.total} | {low:.0f} to {high:.0f} | "
+            f"{result.abstained} | {result.confidently_wrong} | {result.malformed} |"
+        )
+    lines.append("")
+    for result in results:
+        lines += [f"## {result.name}: {score_line(result)}", "", *_report_rows(result), ""]
     lines += ["## Findings", ""]
     lines += [f"- {finding}" for finding in findings(results)]
     lines += [
         "",
         "These are one machine's deterministic numbers (temperature 0, fixed seed); another "
-        "machine's model may differ in wording and the odd verdict. A verdict whose reasoning "
-        "is sound but whose category is wrong still counts as a miss, so the counts, if "
-        "anything, understate the model.",
+        "machine's model may differ in wording and the odd verdict. The interval treats the "
+        "questions as independent, which they are only in part: the three questions of a "
+        "fault with nothing to scale repeat one scenario. A verdict whose reasoning is sound "
+        "but whose action is wrong still counts as a miss.",
     ]
     return "\n".join(lines) + "\n"
 
 
-def _cited_precedent_finding(results: Sequence[ScenarioResult]) -> str:
-    """Report faults whose matching past failure was cited yet not acted on.
-
-    A history source is named for its fault (``cable_loss-1``), so a wrong answer that cited a
-    source of its own fault had the resolving precedent in front of it and still missed.
+def _step_findings(results: Sequence[ScenarioResult]) -> list[str]:
+    """Say what each scenario's one added thing did to the score.
 
     Args:
         results: The scenario results.
 
     Returns:
-        The finding sentence, or an empty string when every cited precedent was acted on.
+        One sentence per scenario that names the one it adds to, when both were scored.
     """
-    cited_but_wrong = [
-        outcome
-        for result in results
-        for outcome in result.outcomes
-        if not outcome.right
-        and any(source.rsplit("-", 1)[0] == outcome.fault for source in outcome.cited)
-    ]
-    if not cited_but_wrong:
-        return ""
-    faults = ", ".join(sorted({outcome.fault for outcome in cited_but_wrong}))
-    return (
-        f"Cited the matching past failure yet still chose wrong: {faults} "
-        f"({len(cited_but_wrong)} of the wrong answers). Retrieval surfaced the precedent; "
-        "the model did not act on it, so the ceiling here is the model, not retrieval."
-    )
+    by_name = {result.name: result for result in results}
+    sentences = []
+    for result in results:
+        prior = by_name.get(result.scenario.adds_to)
+        if prior is None:
+            continue
+        delta = result.right - prior.right
+        change = (
+            f"{'raised' if delta > 0 else 'lowered'} the score by {abs(delta)}"
+            if delta
+            else "did not change the score"
+        )
+        sentences.append(
+            f"{prior.name} to {result.name} {change} ({prior.right} to {result.right} of "
+            f"{result.total}); confident wrong answers went from {prior.confidently_wrong} "
+            f"to {result.confidently_wrong}."
+        )
+    return sentences
+
+
+def _retrieval_findings(results: Sequence[ScenarioResult]) -> list[str]:
+    """Say how often retrieval found a precedent, and what the model did with one or without.
+
+    Args:
+        results: The scenario results.
+
+    Returns:
+        Sentences on retrieval recall, cited-but-unused precedents and the hold-out scenario.
+    """
+    sentences = []
+    for result in results:
+        if not result.scenario.retrieve:
+            continue
+        if result.scenario.hold_out:
+            sentences.append(
+                f"{result.name}: with no past run of its own fault to go on, the model said "
+                f"UNKNOWN {result.abstained} times and named a wrong action "
+                f"{result.confidently_wrong} times, of {result.total}."
+            )
+            continue
+        sentences.append(
+            f"{result.name}: retrieval offered a past run of the question's own fault for "
+            f"{result.precedent_offered} of {result.total} questions."
+        )
+        unused = [
+            outcome
+            for outcome in result.outcomes
+            if not outcome.right and outcome.fault in outcome.sources.cited_faults
+        ]
+        if unused:
+            faults = ", ".join(sorted({outcome.fault for outcome in unused}))
+            sentences.append(
+                f"{result.name}: cited the matching past failure yet still chose wrong on "
+                f"{len(unused)} question{'s' if len(unused) != 1 else ''} ({faults})."
+            )
+    return sentences
 
 
 def findings(results: Sequence[ScenarioResult]) -> list[str]:
@@ -362,28 +659,16 @@ def findings(results: Sequence[ScenarioResult]) -> list[str]:
         results: The scenario results.
 
     Returns:
-        One sentence per finding: the best scenario, whether more evidence helped, the most
-        common wrong choice, any fault whose matching precedent was cited yet not acted on,
-        and which faults were solved in every scenario.
+        One sentence per finding: the best scenario, what each added step did, retrieval
+        recall and the hold-out result, the most common confident wrong choice, and which
+        faults were answered right in every question of every scenario.
     """
-    total = len(results[0].outcomes) if results else 0
-    conclusions: list[str] = []
+    if not results:
+        return []
     best = max(results, key=lambda result: result.right)
-    conclusions.append(f"Best scenario: {best.name}, {best.right} of {total}.")
-    progression = "; ".join(f"{result.name} {result.right}" for result in results)
-    conclusions.append(f"Scores in order: {progression} (of {total}).")
-    if len(results) > 1:
-        prior, final = results[-2], results[-1]
-        delta = final.right - prior.right
-        change = (
-            f"{'raised' if delta > 0 else 'lowered'} the score by {abs(delta)}"
-            if delta
-            else "did not change the score"
-        )
-        conclusions.append(
-            f"The last step ({prior.name} to {final.name}) {change} "
-            f"({prior.right} to {final.right} of {total})."
-        )
+    conclusions = [f"Best scenario: {best.name}, {score_line(best)}."]
+    conclusions += _step_findings(results)
+    conclusions += _retrieval_findings(results)
     wrong: dict[str, int] = {}
     for result in results:
         for choice, count in result.wrong_choices.items():
@@ -391,21 +676,14 @@ def findings(results: Sequence[ScenarioResult]) -> list[str]:
     if wrong:
         choice, count = max(wrong.items(), key=lambda item: item[1])
         conclusions.append(
-            f"Most common wrong choice: {choice} ({count} times across the scenarios); the "
-            "model falls back to one answer when unsure."
+            f"Most common confident wrong choice: {choice} ({count} times across the scenarios)."
         )
-    unused_precedent = _cited_precedent_finding(results)
-    if unused_precedent:
-        conclusions.append(unused_precedent)
-    solved = sorted(
-        {outcome.fault for outcome in results[0].outcomes}.intersection(
-            *({outcome.fault for outcome in result.outcomes if outcome.right} for result in results)
-        )
-    )
-    conclusions.append(
-        f"Solved in every scenario: {', '.join(solved) or 'none'} — the failures whose error "
-        "text names the fix almost literally."
-    )
+    faults = {outcome.fault for outcome in results[0].outcomes}
+    missed = {
+        outcome.fault for result in results for outcome in result.outcomes if not outcome.right
+    }
+    always_right = ", ".join(sorted(faults - missed)) or "none"
+    conclusions.append(f"Right in every question of every scenario: {always_right}.")
     return conclusions
 
 
@@ -418,12 +696,13 @@ def main(
 
     Args:
         arguments: The command-line arguments; None reads them from sys.argv.
-        provider: The answering model; None uses Ollama with the model named by --model.
+        provider: The answering model; None uses Ollama with the model named by --model,
+            constrained to the answer's schema, and asks each distinct prompt once.
         retriever: The source of retrieved runs; None builds an in-memory index from the
             history runs with the Ollama embedder when a retrieval scenario is selected.
 
     Returns:
-        0 when it ran, 1 if the model wasn't reachable.
+        0 when it ran, 1 if a model wasn't reachable.
     """
     parser = argparse.ArgumentParser(
         prog="python -m triage.evaluate", description="Score triage against the question runs."
@@ -432,7 +711,7 @@ def main(
     parser.add_argument("--questions", type=Path, default=DEFAULT_QUESTIONS, help="question runs")
     parser.add_argument("--history", type=Path, default=DEFAULT_HISTORY, help="history runs")
     parser.add_argument(
-        "--scenario", choices=names, action="append", help="scenario(s); default: all three"
+        "--scenario", choices=names, action="append", help="scenario(s); default: all of them"
     )
     parser.add_argument(
         "--report", type=Path, help="also write a detailed Markdown report to this file"
@@ -441,15 +720,21 @@ def main(
         "--model", default=DEFAULT_MODEL, help=f"Ollama model to ask (default: {DEFAULT_MODEL})"
     )
     parsed = parser.parse_args(arguments)
-    provider = provider or OllamaProvider(model=parsed.model)
+    provider = provider or CachingProvider(
+        OllamaProvider(model=parsed.model, response_format=VERDICT_SCHEMA)
+    )
     chosen = parsed.scenario or names
     scenarios = [scenario for scenario in SCENARIOS if scenario.name in chosen]
-    if retriever is None and any(scenario.retrieve for scenario in scenarios):
-        retriever = InMemoryRetriever.from_history(  # pragma: no cover - needs Ollama
-            parsed.history, OllamaEmbedder()
-        )
-    results = evaluate(parsed.questions, provider, scenarios, retriever)
-    model = getattr(provider, "model", DEFAULT_MODEL)
+    try:
+        if retriever is None and any(scenario.retrieve for scenario in scenarios):
+            retriever = InMemoryRetriever.from_history(  # pragma: no cover - needs Ollama
+                parsed.history, OllamaEmbedder()
+            )
+        results = evaluate(parsed.questions, provider, scenarios, retriever)
+    except ModelUnavailableError as error:
+        sys.stdout.write(f"{error}\n")
+        return 1
+    model = str(getattr(provider, "model", DEFAULT_MODEL))
     sys.stdout.write(render(results, model))
     if parsed.report is not None:
         parsed.report.parent.mkdir(parents=True, exist_ok=True)

@@ -107,6 +107,8 @@ class OllamaProvider:
         temperature: 0 so the same question gives the same answer on one machine.
         seed: Fixed, for the same reason.
         timeout_s: How long one answer may take.
+        response_format: "json" for any JSON object, or a JSON schema the reply must match
+            (Ollama's structured outputs), such as triage.answer.VERDICT_SCHEMA.
     """
 
     model: str = DEFAULT_MODEL
@@ -114,9 +116,10 @@ class OllamaProvider:
     temperature: float = 0.0
     seed: int = 42
     timeout_s: float = DEFAULT_TIMEOUT_S
+    response_format: str | dict[str, object] = "json"
 
     def complete(self, system: str, user: str) -> str:
-        """Ask the model, requiring JSON back.
+        """Ask the model, requiring JSON back, in the schema given if there is one.
 
         Args:
             system: The instructions.
@@ -135,7 +138,7 @@ class OllamaProvider:
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            "format": "json",
+            "format": self.response_format,
             "stream": False,
             "options": {
                 "temperature": self.temperature,
@@ -196,3 +199,49 @@ class FakeProvider:
         self.prompts.append((system, user))
         index = min(len(self.prompts) - 1, len(self.replies) - 1)
         return self.replies[index]
+
+
+class CachingProvider:
+    """Answers each distinct prompt once, and repeats that answer for the same prompt.
+
+    The model runs at temperature 0 with a fixed seed, so the same prompt gets the same
+    answer; asking again would only cost time. Two evaluation scenarios that differ after the
+    model has answered, such as one that applies a check to the verdict, then cost one call.
+
+    Attributes:
+        inner: The provider that actually answers.
+        answers: The answers so far, by (system, user) prompt.
+    """
+
+    def __init__(self, inner: LLMProvider) -> None:
+        """Wrap a provider, with nothing cached yet.
+
+        Args:
+            inner: The provider that actually answers.
+        """
+        self.inner = inner
+        self.answers: dict[tuple[str, str], str] = {}
+
+    @property
+    def model(self) -> str:
+        """The inner provider's model name, for a report's heading.
+
+        Returns:
+            Its model, or DEFAULT_MODEL when the inner provider doesn't name one.
+        """
+        return str(getattr(self.inner, "model", DEFAULT_MODEL))
+
+    def complete(self, system: str, user: str) -> str:
+        """Answer from the cache, or ask the inner provider once and keep its answer.
+
+        Args:
+            system: The instructions.
+            user: The question.
+
+        Returns:
+            The reply.
+        """
+        key = (system, user)
+        if key not in self.answers:
+            self.answers[key] = self.inner.complete(system, user)
+        return self.answers[key]

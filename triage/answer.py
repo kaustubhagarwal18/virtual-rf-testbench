@@ -11,6 +11,23 @@ from dataclasses import dataclass, field
 
 from triage.prompt import Fix
 
+VERDICT_SCHEMA: dict[str, object] = {
+    "type": "object",
+    "properties": {
+        "fix": {"type": "string", "enum": [fix.name for fix in Fix]},
+        "where": {"type": "string"},
+        "because": {"type": "string"},
+        "cited": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["fix", "where", "because", "cited"],
+}
+"""The answer's shape as a JSON schema, for a model that can be constrained to it.
+
+The action is an enum of the keys offered, so a constrained reply can't name an action off
+the list or leave it empty. parse_verdict still checks everything: the schema narrows what
+the model can say, it doesn't replace reading it strictly.
+"""
+
 
 class MalformedAnswerError(Exception):
     """The model's reply can't be used; the message says what was wrong with it."""
@@ -25,12 +42,14 @@ class Verdict:
         where: What to act on, in its own words.
         because: Its one-sentence reason.
         cited: The source ids it leaned on, each one it was actually given.
+        overruled: Why a check replaced the model's choice, or empty when none did.
     """
 
     fix: Fix
     where: str
     because: str
     cited: list[str] = field(default_factory=list)
+    overruled: str = ""
 
 
 def _json_object(reply: str) -> dict[str, object]:

@@ -1,6 +1,7 @@
 """Tests for scoring triage against the question runs, with a fake model."""
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -13,16 +14,21 @@ from triage.embed import FakeEmbedder
 from triage.evaluate import (
     EXPECTED_FIX,
     MALFORMED,
+    SCENARIOS,
+    Outcome,
     Scenario,
+    ScenarioResult,
+    _report_rows,
     evaluate,
     expected_fix,
     findings,
     main,
     render,
     render_report,
+    wilson_interval,
 )
 from triage.evidence import ERROR_ONLY, FULL, SavedRun
-from triage.llm import FakeProvider
+from triage.llm import CachingProvider, FakeProvider, ModelUnavailableError
 from triage.prompt import Fix
 from triage.retrieval import InMemoryRetriever
 
@@ -70,7 +76,9 @@ def test_a_malformed_reply_is_not_counted_right(tmp_path: Path) -> None:
         tmp_path / "q", FakeProvider(["not json at all"]), [Scenario("full evidence", FULL)]
     )[0]
     assert result.right == 0
-    assert result.wrong_choices == {MALFORMED: 1}
+    assert result.malformed == 1
+    assert result.outcomes[0].chosen == MALFORMED
+    assert not result.wrong_choices
 
 
 def test_both_scenarios_ask_the_same_questions(tmp_path: Path) -> None:
@@ -86,15 +94,15 @@ def test_both_scenarios_ask_the_same_questions(tmp_path: Path) -> None:
 
 
 def test_the_report_shows_counts_not_percentages(tmp_path: Path) -> None:
-    """Nine-question results are reported as 'n of m', and misses are marked."""
+    """Scores are reported as 'n of m'; the only percentage is the interval's 95% level."""
     question(tmp_path / "q" / "cable_loss", "cable_loss")
     result = evaluate(
         tmp_path / "q", FakeProvider([verdict(Fix.LINK)]), [Scenario("full evidence", FULL)]
     )[0]
     report = render([result], "qwen2.5:3b")
-    assert "full evidence: 0 of 1" in report
+    assert "full evidence: 0 of 1 right" in report
     assert "MISS" in report
-    assert "%" not in report
+    assert set(re.findall(r"\d+%", report)) == {"95%"}
 
 
 def test_the_cli_runs_the_scored_scenarios(
@@ -110,7 +118,7 @@ def test_the_cli_runs_the_scored_scenarios(
         == 0
     )
     out = capsys.readouterr().out
-    assert "full evidence: 1 of 1" in out
+    assert "full evidence: 1 of 1 right" in out
 
 
 def test_an_injected_provider_overrides_the_model_flag(
@@ -157,7 +165,7 @@ def test_the_report_shows_the_error_and_the_answer(tmp_path: Path) -> None:
     assert "mermaid" in report
     assert "never shown" in report
     assert "LINK" in report
-    assert "Wrong choices" in report
+    assert "Confident wrong choices: LINK x1" in report
 
 
 def test_the_cli_writes_a_report_file(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -192,64 +200,147 @@ def test_findings_are_computed_from_the_outcomes(tmp_path: Path) -> None:
     )
     text = " ".join(findings(results))
     assert "Best scenario" in text
-    assert "Most common wrong choice: CABLE" in text
-    assert "cable_loss" in text  # solved under full evidence
+    assert "Most common confident wrong choice: CABLE" in text
+    assert "Right in every question of every scenario: cable_loss." in text
+
+
+def history_with(folder: Path, fault: str) -> Path:
+    """Write a resolved history run of a fault, with its cause and fix."""
+    run = question(folder, fault)
+    (run / "label.json").write_text(
+        json.dumps({"fault": fault, "cause": f"{fault} cause", "fix": f"{fault} fix"}),
+        encoding="utf-8",
+    )
+    return run
+
+
+def cited(fix: Fix, source_ids: list[str]) -> str:
+    """A well-formed reply choosing a fix and citing the given sources."""
+    return json.dumps({"fix": fix.name, "where": "x", "because": "y", "cited": source_ids})
+
+
+RETRIEVAL = Scenario("full + retrieval", FULL, retrieve=True, adds_to="full evidence")
 
 
 def test_findings_flag_a_cited_precedent_the_model_did_not_act_on(tmp_path: Path) -> None:
-    """A cited-but-unused precedent makes the findings blame the model, not retrieval."""
-    history = tmp_path / "history"
-    hist = question(history / "cable_loss-1", "cable_loss")
-    (hist / "label.json").write_text(
-        json.dumps({"fault": "cable_loss", "cause": "worn cable", "fix": "replaced it"}),
-        encoding="utf-8",
-    )
-    questions = tmp_path / "q"
-    question(questions / "cable_loss", "cable_loss")
-    retriever = InMemoryRetriever.from_history(history, FakeEmbedder())
-    # Cites the matching cable_loss precedent but answers LINK, which is wrong.
-    wrong_but_cited = json.dumps(
-        {"fix": "LINK", "where": "x", "because": "y", "cited": ["cable_loss-1"]}
-    )
+    """A cited-but-unused precedent is reported, keyed by the cited source's labelled fault."""
+    history_with(tmp_path / "history" / "cable_loss-1", "cable_loss")
+    question(tmp_path / "q" / "cable_loss-1", "cable_loss")
+    retriever = InMemoryRetriever.from_history(tmp_path / "history", FakeEmbedder())
+    source_id = retriever.sources[0].source_id
     result = evaluate(
-        questions,
-        FakeProvider([wrong_but_cited]),
-        [Scenario("full + retrieval", FULL, retrieve=True)],
-        retriever,
+        tmp_path / "q", FakeProvider([cited(Fix.LINK, [source_id])]), [RETRIEVAL], retriever
     )[0]
-    assert result.outcomes[0].cited == ("cable_loss-1",)
+    assert result.outcomes[0].sources.cited == (source_id,)
+    assert result.outcomes[0].sources.cited_faults == ("cable_loss",)
     text = " ".join(findings([result]))
-    assert "Cited the matching past failure yet still chose wrong: cable_loss" in text
-    assert "the ceiling here is the model, not retrieval" in text
+    assert "cited the matching past failure yet still chose wrong on 1 question" in text
 
 
 def test_a_retrieval_scenario_offers_sources_the_model_may_cite(tmp_path: Path) -> None:
-    """In the retrieval scenario the model is given past runs and may cite them."""
-    history = tmp_path / "history"
-    hist = question(history / "cable_loss-1", "cable_loss")
-    (hist / "label.json").write_text(
-        json.dumps({"fault": "cable_loss", "cause": "worn cable", "fix": "replaced it"}),
-        encoding="utf-8",
-    )
-    questions = tmp_path / "q"
-    question(questions / "cable_loss", "cable_loss")
-    retriever = InMemoryRetriever.from_history(history, FakeEmbedder())
-    reply = json.dumps(
-        {
-            "fix": "CABLE",
-            "where": "cable",
-            "because": "like cable_loss-1",
-            "cited": ["cable_loss-1"],
-        }
-    )
-    result = evaluate(
-        questions,
-        FakeProvider([reply]),
-        [Scenario("full + retrieval", FULL, retrieve=True)],
-        retriever,
-    )[0]
+    """In the retrieval scenario the model is given past runs under neutral ids, and cites them."""
+    history_with(tmp_path / "history" / "cable_loss-1", "cable_loss")
+    question(tmp_path / "q" / "cable_loss-1", "cable_loss")
+    retriever = InMemoryRetriever.from_history(tmp_path / "history", FakeEmbedder())
+    source_id = retriever.sources[0].source_id
+    provider = FakeProvider([cited(Fix.CABLE, [source_id])])
+    result = evaluate(tmp_path / "q", provider, [RETRIEVAL], retriever)[0]
     assert result.right == 1
-    assert "citing cable_loss-1" in result.outcomes[0].answer
+    assert result.precedent_offered == 1
+    assert f"citing {source_id}" in result.outcomes[0].answer
+    assert "cable_loss" not in provider.prompts[0][1].split("SOURCES")[1].split("Cause:")[0]
+
+
+def test_the_held_out_scenario_never_offers_the_questions_own_fault(tmp_path: Path) -> None:
+    """With its own fault held out, the model sees only other faults' runs, and UNKNOWN counts."""
+    history = tmp_path / "history"
+    history_with(history / "cable_loss-1", "cable_loss")
+    history_with(history / "slow_responses-1", "slow_responses")
+    question(tmp_path / "q" / "cable_loss-1", "cable_loss")
+    retriever = InMemoryRetriever.from_history(history, FakeEmbedder())
+    held_out = Scenario("held out", FULL, retrieve=True, hold_out=True)
+    provider = FakeProvider([verdict(Fix.UNKNOWN)])
+    result = evaluate(tmp_path / "q", provider, [held_out], retriever)[0]
+    assert result.outcomes[0].sources.offered_faults == ("slow_responses",)
+    assert "cable_loss cause" not in provider.prompts[0][1]
+    assert (result.right, result.abstained, result.confidently_wrong) == (0, 1, 0)
+    assert "said UNKNOWN 1 times and named a wrong action 0 times" in " ".join(findings([result]))
+
+
+def test_the_checked_scenario_overrules_firmware_on_unchanged_firmware(tmp_path: Path) -> None:
+    """The same FIRMWARE reply is a confident miss unchecked, and UNKNOWN once checked."""
+    folder = question(tmp_path / "q" / "cable_loss-1", "cable_loss")
+    results = json.loads((folder / "results.json").read_text(encoding="utf-8"))
+    results["firmware_versions"] = {"analyzer": "0.1.0", "generator": "0.1.0"}
+    (folder / "results.json").write_text(json.dumps(results), encoding="utf-8")
+    results = evaluate(
+        tmp_path / "q",
+        CachingProvider(FakeProvider([verdict(Fix.FIRMWARE)])),
+        [Scenario("plain", FULL), Scenario("checked", FULL, checked=True, adds_to="plain")],
+    )
+    plain, checked = results[0], results[1]
+    assert (plain.confidently_wrong, plain.abstained) == (1, 0)
+    assert (checked.confidently_wrong, checked.abstained) == (0, 1)
+    assert "overruled" in checked.outcomes[0].answer
+    assert "confident wrong answers went from 1 to 0" in " ".join(findings([plain, checked]))
+
+
+def test_an_outcome_is_keyed_by_the_labels_fault_not_the_folder(tmp_path: Path) -> None:
+    """Several questions per fault live in numbered folders; the label says which fault."""
+    question(tmp_path / "q" / "run-a", "cable_loss")
+    question(tmp_path / "q" / "run-b", "cable_loss")
+    result = evaluate(
+        tmp_path / "q", FakeProvider([verdict(Fix.CABLE)]), [Scenario("full evidence", FULL)]
+    )[0]
+    assert [(o.question, o.fault) for o in result.outcomes] == [
+        ("run-a", "cable_loss"),
+        ("run-b", "cable_loss"),
+    ]
+
+
+@pytest.mark.parametrize("total", range(1, 31))
+def test_the_interval_brackets_every_possible_count(total: int) -> None:
+    """For every count of every size up to 30, the interval contains it and stays in range."""
+    for successes in range(total + 1):
+        low, high = wilson_interval(successes, total)
+        assert 0 <= low <= successes <= high <= total
+        mirror_low, mirror_high = wilson_interval(total - successes, total)
+        assert low == pytest.approx(total - mirror_high)
+        assert high == pytest.approx(total - mirror_low)
+
+
+def test_the_interval_matches_a_worked_value() -> None:
+    """6 of 9 gives the published Wilson interval, 0.354 to 0.879, in questions."""
+    low, high = wilson_interval(6, 9)
+    assert low / 9 == pytest.approx(0.354, abs=1e-3)
+    assert high / 9 == pytest.approx(0.879, abs=1e-3)
+    assert wilson_interval(0, 0) == (0.0, 0.0)
+
+
+def test_every_scenario_after_the_first_adds_to_one_that_exists() -> None:
+    """Each scenario names the one it adds to, so every step's effect can be reported."""
+    names = [scenario.name for scenario in SCENARIOS]
+    assert not SCENARIOS[0].adds_to
+    for scenario in SCENARIOS[1:]:
+        assert scenario.adds_to in names[: names.index(scenario.name)]
+
+
+def test_the_cli_reports_an_unreachable_model_in_one_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A model that can't be reached exits 1 with its hint, not a traceback."""
+
+    class Down:
+        """A provider that is never reachable."""
+
+        def complete(self, system: str, user: str) -> str:
+            """Fail as an unreachable model does."""
+            raise ModelUnavailableError("start it with 'ollama serve'")
+
+    question(tmp_path / "q" / "cable_loss-1", "cable_loss")
+    code = main(["--questions", str(tmp_path / "q"), "--scenario", "full evidence"], Down())
+    assert code == 1
+    assert "ollama serve" in capsys.readouterr().out
 
 
 def test_the_report_heading_uses_the_given_title(tmp_path: Path) -> None:
@@ -265,27 +356,20 @@ def test_the_report_heading_uses_the_given_title(tmp_path: Path) -> None:
 
 def test_a_retrieval_report_is_not_titled_as_the_baseline(tmp_path: Path) -> None:
     """When retrieval is scored, the written report's heading names retrieval, not 'baseline'."""
-    history = tmp_path / "history"
-    hist = question(history / "cable_loss-1", "cable_loss")
-    (hist / "label.json").write_text(
-        json.dumps({"fault": "cable_loss", "cause": "worn cable", "fix": "replaced it"}),
-        encoding="utf-8",
-    )
-    questions = tmp_path / "q"
-    question(questions / "cable_loss", "cable_loss")
+    history_with(tmp_path / "history" / "cable_loss-1", "cable_loss")
+    question(tmp_path / "q" / "cable_loss-1", "cable_loss")
     report = tmp_path / "out" / "rag.md"
-    reply = json.dumps(
-        {
-            "fix": "CABLE",
-            "where": "cable",
-            "because": "like cable_loss-1",
-            "cited": ["cable_loss-1"],
-        }
-    )
     main(
-        ["--questions", str(questions), "--scenario", "full + retrieval", "--report", str(report)],
-        FakeProvider([reply]),
-        InMemoryRetriever.from_history(history, FakeEmbedder()),
+        [
+            "--questions",
+            str(tmp_path / "q"),
+            "--scenario",
+            "full + retrieval",
+            "--report",
+            str(report),
+        ],
+        FakeProvider([verdict(Fix.CABLE)]),
+        InMemoryRetriever.from_history(tmp_path / "history", FakeEmbedder()),
     )
     heading = report.read_text(encoding="utf-8").splitlines()[0]
     assert "retrieval" in heading.lower()
@@ -301,3 +385,19 @@ def test_a_retrieval_scenario_without_a_retriever_is_an_error(tmp_path: Path) ->
             FakeProvider([verdict(Fix.CABLE)]),
             [Scenario("full + retrieval", FULL, retrieve=True)],
         )
+
+
+@pytest.mark.parametrize(
+    ("chosen", "mark"),
+    [("CABLE", "✓"), ("UNKNOWN", "?"), (MALFORMED, "!"), ("FIRMWARE", "✗")],
+)
+def test_each_kind_of_answer_has_its_own_mark(chosen: str, mark: str) -> None:
+    """Right, UNKNOWN, unusable and confidently wrong are told apart in the report."""
+    outcome = Outcome("cable_loss-1", "cable_loss", Fix.CABLE, chosen)
+    row = _report_rows(ScenarioResult(Scenario("s", FULL), [outcome]))[2]
+    assert f"| {mark} |" in row
+
+
+def test_no_results_have_no_findings() -> None:
+    """With nothing scored there is nothing to conclude, rather than an error."""
+    assert not findings([])

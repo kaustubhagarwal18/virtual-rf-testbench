@@ -10,7 +10,8 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from triage.answer import MalformedAnswerError, Verdict, parse_verdict
+from triage.answer import VERDICT_SCHEMA, MalformedAnswerError, Verdict, parse_verdict
+from triage.checks import DEFAULT_CHECKS, VerdictCheck, apply_checks
 from triage.evidence import ERROR_ONLY, FULL, SavedRun, build_evidence
 from triage.llm import LLMProvider, ModelUnavailableError, OllamaProvider
 from triage.prompt import Source, build_prompt
@@ -21,18 +22,21 @@ def triage_run(
     provider: LLMProvider,
     level: str = FULL,
     sources: Sequence[Source] = (),
+    checks: tuple[VerdictCheck, ...] = (),
 ) -> Verdict:
     """Decide what to do about one failed run.
+
+    The model's reply is parsed strictly and not retried: a reply that can't be used raises
+    MalformedAnswerError, and how often that happens is a result worth recording, not a thing
+    to paper over.
 
     Args:
         run: The saved run, whose label is never read.
         provider: The answering model.
         level: How much evidence to give it: triage.evidence.ERROR_ONLY or FULL.
         sources: Past runs and documents to offer; none for the scenarios without retrieval.
-
-    The model's reply is parsed strictly and not retried: a reply that can't be used raises
-    MalformedAnswerError, and how often that happens is a result worth recording, not a thing
-    to paper over.
+        checks: Rules the verdict must agree with; one that contradicts the evidence becomes
+            UNKNOWN. None by default, so a measurement of the model alone stays one.
 
     Returns:
         The verdict: the action to take, what to act on, why, and what it cited.
@@ -40,7 +44,28 @@ def triage_run(
     evidence = build_evidence(run, level)
     system, user = build_prompt(evidence, sources)
     reply = provider.complete(system, user)
-    return parse_verdict(reply, [source.source_id for source in sources])
+    verdict = parse_verdict(reply, [source.source_id for source in sources])
+    return apply_checks(run, verdict, checks)
+
+
+def describe(verdict: Verdict) -> str:
+    """Format a verdict as the lines the command line prints.
+
+    Args:
+        verdict: The verdict.
+
+    Returns:
+        The fix, where, why and what was cited, plus why a check overruled the model if one did.
+    """
+    lines = [
+        f"fix:   {verdict.fix.name} ({verdict.fix.value})",
+        f"where: {verdict.where}",
+        f"why:   {verdict.because}",
+        f"cited: {', '.join(verdict.cited) or 'nothing'}",
+    ]
+    if verdict.overruled:
+        lines.append(f"note:  {verdict.overruled}")
+    return "\n".join(lines) + "\n"
 
 
 def main(arguments: Sequence[str] | None = None, provider: LLMProvider | None = None) -> int:
@@ -60,21 +85,18 @@ def main(arguments: Sequence[str] | None = None, provider: LLMProvider | None = 
     parser.add_argument("run", type=Path, help="a saved run folder")
     parser.add_argument("--level", choices=(ERROR_ONLY, FULL), default=FULL, help="evidence level")
     parsed = parser.parse_args(arguments)
-    provider = provider or OllamaProvider()
+    provider = provider or OllamaProvider(response_format=VERDICT_SCHEMA)
     try:
-        verdict = triage_run(SavedRun.load(parsed.run), provider, parsed.level)
+        verdict = triage_run(
+            SavedRun.load(parsed.run), provider, parsed.level, checks=DEFAULT_CHECKS
+        )
     except ModelUnavailableError as error:
         sys.stdout.write(f"{error}\n")
         return 1
     except MalformedAnswerError as error:
         sys.stdout.write(f"the model's answer couldn't be used: {error}\n")
         return 1
-    sys.stdout.write(
-        f"fix:   {verdict.fix.name} ({verdict.fix.value})\n"
-        f"where: {verdict.where}\n"
-        f"why:   {verdict.because}\n"
-        f"cited: {', '.join(verdict.cited) or 'nothing'}\n"
-    )
+    sys.stdout.write(describe(verdict))
     return 0
 
 
