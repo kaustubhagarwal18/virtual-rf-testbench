@@ -49,6 +49,13 @@ it, so the package version moves only with a release.
 
 ### Fixed
 
+- Retrieval indexed identical history runs once each, so a question could be offered the
+  same precedent two or three times; five pairs in the data set are identical. They are
+  indexed once now, and the measured retrieval score fell from 8 to 5 of 9 faults
+  (ADR 0012).
+- The evaluation report now names the faults whose questions repeat their history runs'
+  scenario, and how many of the best retrieval scenario's solved faults are among them.
+
 - A run with no recorded firmware versions was described as "unchanged since the last
   passing run". It is now described as unknown.
 - `python -m triage.evaluate` exits 1 with a one-line hint when Ollama can't be reached,

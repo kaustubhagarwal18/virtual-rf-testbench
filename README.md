@@ -104,9 +104,9 @@ score is attributable to that one thing.
 |---|---|---|---|---|---|---|
 | **error only** | Just the first failure's message: what someone pastes into a chat window | **3 of 9** (1 to 6) | 9 of 27 | 0 | 18 | 0 |
 | **full evidence** | The whole run's structured evidence: first failure and its numbers, whether firmware changed, which tests ran, notable log lines | **4 of 9** (2 to 7) | 13 of 27 | 0 | 14 | 0 |
-| **full + retrieval** | Full evidence **plus the 3 most similar past runs**, each with its recorded cause, fix and action key, cited by neutral ids | **8 of 9** (5 to 9) | 24 of 27 | 0 | 0 | 3 |
-| **+ checks** | The same answers, with verdicts the evidence contradicts turned into `UNKNOWN` | **8 of 9** (5 to 9) | 24 of 27 | 0 | 0 | 3 |
-| **+ checks, own fault held out** | The same, with no past run of the question's own fault | **3 of 9** (1 to 6) | 11 of 27 | 9 | 7 | 0 |
+| **full + retrieval** | Full evidence **plus the 3 most similar past runs**, each with its recorded cause, fix and action key, cited by neutral ids | **5 of 9** (2 to 7) | 15 of 27 | 0 | 9 | 3 |
+| **+ checks** | The same answers, with verdicts the evidence contradicts turned into `UNKNOWN` | **5 of 9** (2 to 7) | 15 of 27 | 6 | 3 | 3 |
+| **+ checks, own fault held out** | The same, with no past run of the question's own fault | **3 of 9** (1 to 6) | 12 of 27 | 5 | 10 | 0 |
 
 These are counts, with an interval, rather than percentages. The numbers are deterministic
 (temperature 0, fixed seed) on one machine; another machine's model may differ in wording and
@@ -114,22 +114,26 @@ the odd verdict.
 
 ### What the numbers say
 
-- **Retrieval works by finding the same fault.** It offered a past run of the question's own
-  fault for all 27 questions and took the score from 4 to 8 of 9 faults, with no confident
-  wrong answer. Hold that fault out and it drops to 3 of 9.
+- **Retrieval adds one fault, and three of its five are recall.** It offered a past run of
+  the question's own fault for all 27 questions, yet took the score only from 4 to 5 of 9.
+  Three of the five solved faults have no size to vary, so their questions repeat a history
+  run almost word for word.
+- **One look-alike precedent outvotes two right ones.** For `config_decimal_error`,
+  `reset_leaks_offset` and `slow_responses`, retrieval offers two runs of the question's own
+  fault and one of a look-alike (the other level-offset fault; a timeout from the firmware
+  regression), and the model follows the look-alike every time.
+- **An earlier version of these numbers was inflated.** Five pairs of history runs are
+  identical, and retrieval indexed both copies, so a question could be offered the same
+  precedent two or three times. Indexed once, retrieval fell from 8 to 5 faults solved.
 - **Naming each action by its symptom ended the CABLE/LINK mix-up.** `CABLE` reads "signal
   present but attenuated", `LINK` "no signal or intermittent signal; the path is open", and
-  each precedent ends `Action: LINK`. Before, all six link questions chose `CABLE` with
-  retrieval; now `link_flaky` is solved, and with its own fault held out `link_down` is solved
-  from the `link_flaky` precedents.
-- **`link_down` is the one fault retrieval misses, and on format, not judgement.** In both
-  retrieval scenarios the model pasted a source's text into `cited` instead of its id, so the
-  three replies are refused as malformed rather than read generously.
-- **The checks turn the model's fallbacks into `UNKNOWN`.** With its own fault held out, the
-  model copies the closest precedent's diagnosis. Three checks overruled 9 such answers: a
-  `FIRMWARE` verdict naming a precedent's release (0.2.0-rc1, 0.2.0-rc2) on a run still on
-  0.1.0, and a `TIMEOUT` verdict on a run whose instruments reported -113. They cost no right
-  answer.
+  each precedent ends `Action: LINK`. `link_flaky` is solved with retrieval, and with its own
+  fault held out `link_down` is solved from the `link_flaky` precedents.
+- **`link_down` with retrieval fails on format, not judgement.** The model pastes a source's
+  text into `cited` instead of its id, so the replies are refused as malformed.
+- **The checks turn some fallbacks into `UNKNOWN`.** With retrieval they overruled 6 wrong
+  answers: a `FIRMWARE` verdict naming a precedent's release on a run still on 0.1.0. They
+  cost no right answer.
 - **The small model is sensitive to wording.** Rewording two action descriptions moved the
   error-only scenario, whose evidence didn't change, from 12 to 9 questions right.
 

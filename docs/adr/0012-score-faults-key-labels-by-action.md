@@ -44,36 +44,43 @@ A review of ADR 0009's measurements found four things to change:
 
 ## Measurements
 
-`qwen2.5:3b`, temperature 0, seed 42, on the 8 GB M1. `make eval` asked 75 new prompts and
-took 26 minutes; a rerun from the cache asks none and takes 22 seconds. All five scenarios
-are in `triage/results/rag.md`.
+`qwen2.5:3b`, temperature 0, seed 42, on the 8 GB M1. All five scenarios are in
+`triage/results/rag.md`.
 
 | Scenario | Faults solved (95% interval) | Questions right | `UNKNOWN` | Wrong | Malformed |
 |---|---|---|---|---|---|
 | error only | 3 of 9 (1 to 6) | 9 of 27 | 0 | 18 | 0 |
 | full evidence | 4 of 9 (2 to 7) | 13 of 27 | 0 | 14 | 0 |
-| full + retrieval | 8 of 9 (5 to 9) | 24 of 27 | 0 | 0 | 3 |
-| full + retrieval + checks | 8 of 9 (5 to 9) | 24 of 27 | 0 | 0 | 3 |
-| full + retrieval + checks, own fault held out | 3 of 9 (1 to 6) | 11 of 27 | 9 | 7 | 0 |
+| full + retrieval | 5 of 9 (2 to 7) | 15 of 27 | 0 | 9 | 3 |
+| full + retrieval + checks | 5 of 9 (2 to 7) | 15 of 27 | 6 | 3 | 3 |
+| full + retrieval + checks, own fault held out | 3 of 9 (1 to 6) | 12 of 27 | 5 | 10 | 0 |
 
-- **A fault's questions split in 2 of 45 fault-and-scenario cells**, both `link_flaky`
-  (1 of 3 with full evidence, 2 of 3 held out). Scoring faults loses little.
-- **Retrieval no longer gives a confident wrong answer:** 0 of 27, against 9 in ADR 0009,
-  which were the six link questions and the three `slow_responses` ones. `link_flaky` and
-  `slow_responses` are now solved, and with its own fault held out `link_down` is solved
-  from three `link_flaky` precedents.
-- **`link_down` with retrieval is malformed, not wrong.** In both retrieval scenarios the
-  model put a source's text in `cited` instead of its id, so the parser refuses all three
-  replies. The answer's schema allows any string there; constraining `cited` to the offered
-  ids is a candidate follow-up.
-- **The checks overruled 9 held-out answers, all wrong:** the three `config_decimal_error`
-  and three `slow_responses` answers named a precedent's release (0.2.0-rc2, 0.2.0-rc1) on
-  runs still on 0.1.0, and the three `output_command_change` answers chose `TIMEOUT` beside
-  -113. In the scenarios with a precedent there was nothing for them to overrule.
+**A correction.** The first run of this evaluation reported 8 of 9 faults with retrieval and
+no confident wrong answer. Five pairs of history runs are identical (the faults with no size
+and no timing in their evidence), and retrieval indexed both copies, so a question was often
+offered the same precedent two or three times. A review caught it; retrieval now indexes
+identical runs once, as adding a run through the API already did. 18 retrieval prompts
+changed, and the score fell to 5 of 9.
+
+- **A fault's questions split in 3 of 45 fault-and-scenario cells.** Scoring faults loses
+  little.
+- **One look-alike precedent outvotes two of the question's own fault.** Retrieval offers
+  `config_decimal_error` two of its own runs and one `reset_leaks_offset`, and the reverse;
+  `slow_responses` gets one `output_command_change`. In all nine questions the model
+  followed the odd one out.
+- **Three of the five faults retrieval solves repeat their history runs** (no size to vary),
+  so they show recall rather than generalisation. The report now says so.
+- **`link_flaky` is solved with retrieval, and `link_down` held out** (from three
+  `link_flaky` precedents): the symptom wording and action keys ended the CABLE answers on
+  link faults.
+- **`link_down` with retrieval is malformed, not wrong.** The model put a source's text in
+  `cited` instead of its id, so the parser refuses all three replies. Constraining `cited`
+  to the offered ids is a candidate follow-up.
+- **The checks overruled 6 wrong answers with retrieval and 5 held out**, all wrong to begin
+  with: mostly a `FIRMWARE` verdict naming a precedent's release (0.2.0-rc1, 0.2.0-rc2) on a
+  run still on 0.1.0.
 - **Wording moves this model.** The error-only evidence didn't change, yet the scenario went
-  from 12 to 9 questions right: `config_decimal_error` went from `CONFIGURATION` to a wrong
-  action when only the descriptions of `CABLE` and `LINK` changed. Small differences
-  between scenarios are within that noise.
+  from 12 to 9 questions right when only the descriptions of `CABLE` and `LINK` changed.
 
 ## Consequences
 
