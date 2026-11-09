@@ -48,7 +48,8 @@ def neighbours(history: Path, embedder: Embedder) -> list[Neighbours]:
 
     The run is embedded as retrieval embeds a question, from its evidence alone; the other
     runs as retrieval stores them, with their cause, fix and action. Comparing two stored
-    sources would measure a similarity the gate never sees.
+    sources would measure a similarity the gate never sees. A run identical to this one is
+    the same source, which retrieval indexes once, so it is no neighbour.
 
     Args:
         history: The folder of history runs.
@@ -65,7 +66,8 @@ def neighbours(history: Path, embedder: Embedder) -> list[Neighbours]:
     faults = [source.fault for source in sources]
     found = []
     for index, fault in enumerate(faults):
-        others = [other for other in range(len(faults)) if other != index]
+        own = sources[index].source_id
+        others = [other for other in range(len(faults)) if sources[other].source_id != own]
         same = [similarity[index, other] for other in others if faults[other] == fault]
         different = [similarity[index, other] for other in others if faults[other] != fault]
         found.append(Neighbours(fault, float(max(same)) if same else None, float(max(different))))

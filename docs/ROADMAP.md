@@ -29,7 +29,7 @@
   and a local `qwen2.5:3b` (ADR 0008).
 - Retrieval of the most similar resolved runs, in memory, cited by neutral ids (ADR 0009).
 - Three checks that turn a verdict the evidence contradicts into `UNKNOWN` (ADR 0012).
-- The evaluation: five scenarios, each adding one thing, scored per fault as right,
+- The evaluation: eight scenarios, each changing one thing, scored per fault as right,
   `UNKNOWN`, confidently wrong and malformed, with a 95% interval over faults and retrieval
   recall (ADR 0009, ADR 0012). Labels record the action key the score is checked against.
 - Gates that answer `UNKNOWN` from the precedents alone, a firmware-line ablation, and

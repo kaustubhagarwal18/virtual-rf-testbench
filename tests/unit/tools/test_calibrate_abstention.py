@@ -116,3 +116,15 @@ def test_calibration_runs_as_a_module() -> None:
         check=True,
     )
     assert "abstention threshold" in completed.stdout
+
+
+def test_an_identical_copy_is_not_a_same_fault_neighbour(tmp_path: Path) -> None:
+    """Retrieval indexes identical runs once, so a copy can't stand in for a real precedent."""
+    history = tmp_path / "history"
+    history_run(history / "cable_loss-1", "cable_loss", "path loss cable datasheet high")
+    history_run(history / "cable_loss-2", "cable_loss", "path loss cable datasheet high")
+    history_run(history / "slow-1", "slow_responses", "timeout no reply from port")
+    history_run(history / "slow-2", "slow_responses", "timeout no reply from the port")
+    found = neighbours(history, FakeEmbedder())
+    assert [entry.same_fault for entry in found[:2]] == [None, None]
+    assert all(entry.same_fault is not None for entry in found[2:])
