@@ -223,6 +223,22 @@ BASELINE_VERSION = "0.1.0"
 """The release the bench normally runs, and the one the last passing run used."""
 
 
+def firmware_changed(run: SavedRun) -> bool | None:
+    """Say whether the run's firmware differs from the last passing run's.
+
+    Args:
+        run: The run.
+
+    Returns:
+        True if any instrument runs another release, False if none does, and None when the
+        run recorded no versions: unknown is not the same as unchanged.
+    """
+    versions = run.results.get("firmware_versions", {})
+    if not versions:
+        return None
+    return any(version != BASELINE_VERSION for version in versions.values())
+
+
 def firmware_note(run: SavedRun) -> str:
     """Say what firmware the run used, and whether that changed.
 
@@ -235,12 +251,13 @@ def firmware_note(run: SavedRun) -> str:
     Returns:
         One line naming the versions and whether they differ from the last passing run.
     """
-    versions = run.results.get("firmware_versions", {})
-    if not versions:
-        text = "not recorded"
-    else:
-        text = ", ".join(f"{role} {version}" for role, version in sorted(versions.items()))
-    changed = any(version != BASELINE_VERSION for version in versions.values())
+    changed = firmware_changed(run)
+    if changed is None:
+        return (
+            "Firmware: not recorded, so whether it changed since the last passing run is unknown."
+        )
+    versions = run.results["firmware_versions"]
+    text = ", ".join(f"{role} {version}" for role, version in sorted(versions.items()))
     moved = (
         "changed since the last passing run" if changed else "unchanged since the last passing run"
     )

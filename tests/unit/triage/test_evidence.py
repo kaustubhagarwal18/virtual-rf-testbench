@@ -10,6 +10,8 @@ from triage.evidence import (
     FULL,
     SavedRun,
     build_evidence,
+    firmware_changed,
+    firmware_note,
     first_failure,
     sequence_fields,
 )
@@ -169,3 +171,28 @@ def test_consequences_are_counted_in_the_evidence(tmp_path: Path) -> None:
     """When failures follow the first, the evidence says how many may be consequences."""
     run = SavedRun.load(write_run(tmp_path / "many", [FAILING_TEST, FAILING_TEST, FAILING_TEST]))
     assert "2 further tests failed after it" in build_evidence(run, FULL)
+
+
+@pytest.mark.parametrize(
+    ("versions", "changed"),
+    [
+        ({"analyzer": "0.1.0", "generator": "0.1.0"}, False),
+        ({"analyzer": "0.1.0", "generator": "0.2.0-rc1"}, True),
+        ({"analyzer": "0.2.0-rc2", "generator": "0.2.0-rc2"}, True),
+        ({}, None),
+    ],
+)
+def test_firmware_changed_is_unknown_when_no_version_was_recorded(
+    tmp_path: Path, versions: dict[str, str], changed: bool | None
+) -> None:
+    """A run with no recorded versions is unknown, never reported as unchanged."""
+    folder = write_run(tmp_path / "run", [FAILING_TEST])
+    results = json.loads((folder / "results.json").read_text(encoding="utf-8"))
+    (folder / "results.json").write_text(
+        json.dumps({**results, "firmware_versions": versions}), encoding="utf-8"
+    )
+    run = SavedRun.load(folder)
+    assert firmware_changed(run) is changed
+    note = firmware_note(run)
+    assert ("unknown" in note) is (changed is None)
+    assert ("unchanged" in note) is (changed is False)
