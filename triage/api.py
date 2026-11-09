@@ -97,25 +97,21 @@ class Results(BaseModel):
     tests: list[TestResult] = Field(max_length=MAX_TESTS)
 
 
-class RunRequest(BaseModel):
-    """A failed run to triage.
+class Evidence(BaseModel):
+    """A run's evidence, as a request carries it.
 
     Attributes:
         results: The results file.
         logs: The instruments' log lines during the run.
         sequence: The setup sequence's log lines.
-        level: How much of the evidence the model is given.
-        retrieve: Whether to offer the most similar past runs as sources.
     """
 
     results: Results
     logs: list[str] = Field(default_factory=list, max_length=MAX_LINES)
     sequence: list[str] = Field(default_factory=list, max_length=MAX_LINES)
-    level: EvidenceLevel = "full"
-    retrieve: bool = True
 
     def saved_run(self) -> SavedRun:
-        """Turn the request into the run the pipeline reads.
+        """Turn the request's evidence into the run the pipeline reads.
 
         Returns:
             The run, with the request's evidence and no folder of its own.
@@ -126,6 +122,18 @@ class RunRequest(BaseModel):
             logs=list(self.logs),
             sequence=list(self.sequence),
         )
+
+
+class RunRequest(Evidence):
+    """A failed run to triage.
+
+    Attributes:
+        level: How much of the evidence the model is given.
+        retrieve: Whether to offer the most similar past runs as sources.
+    """
+
+    level: EvidenceLevel = "full"
+    retrieve: bool = True
 
 
 class Label(BaseModel):
@@ -142,33 +150,14 @@ class Label(BaseModel):
     fix: str = Field(min_length=1, max_length=MAX_TEXT)
 
 
-class ResolvedRunRequest(BaseModel):
+class ResolvedRunRequest(Evidence):
     """A resolved run to add to the history.
 
     Attributes:
-        results: The results file.
-        logs: The instruments' log lines during the run.
-        sequence: The setup sequence's log lines.
         label: How it was resolved.
     """
 
-    results: Results
-    logs: list[str] = Field(default_factory=list, max_length=MAX_LINES)
-    sequence: list[str] = Field(default_factory=list, max_length=MAX_LINES)
     label: Label
-
-    def saved_run(self) -> SavedRun:
-        """Turn the request's evidence into the run the history stores.
-
-        Returns:
-            The run, with no folder of its own.
-        """
-        return SavedRun(
-            folder=REQUEST_FOLDER,
-            results=self.results.model_dump(),
-            logs=list(self.logs),
-            sequence=list(self.sequence),
-        )
 
 
 class VerdictResponse(BaseModel):
