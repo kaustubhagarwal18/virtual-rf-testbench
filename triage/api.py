@@ -1,0 +1,376 @@
+"""The triage service over HTTP: post a failed run, get back what to do about it.
+
+Three endpoints, around the same pipeline `make triage` and the evaluation use:
+
+- `POST /triage` takes a run's evidence (the results file the bench suite writes, and
+  optionally the instrument logs and the sequence log) and returns the verdict.
+- `POST /history` takes a resolved run, with its label, into the history retrieval searches,
+  so the next similar failure is triaged with it as a precedent.
+- `GET /health` says whether the service is up and how much history it holds.
+
+Everything a request carries is untrusted data: it goes into the prompt as evidence, never
+as instructions, and the model has no tools. The service listens on localhost by default and
+talks only to the local Ollama; nothing leaves the machine.
+
+`make triage-api` starts it.
+"""
+
+import argparse
+import sys
+import threading
+from collections.abc import Sequence
+from pathlib import Path
+from typing import Any, Literal, Protocol
+
+import uvicorn
+from fastapi import FastAPI, HTTPException, status
+from pydantic import BaseModel, ConfigDict, Field
+
+from triage.answer import VERDICT_SCHEMA, MalformedAnswerError
+from triage.checks import DEFAULT_CHECKS, VerdictCheck
+from triage.embed import OllamaEmbedder
+from triage.evidence import SavedRun
+from triage.llm import DEFAULT_MODEL, LLMProvider, ModelUnavailableError, OllamaProvider
+from triage.retrieval import (
+    DEFAULT_HISTORY,
+    DEFAULT_TOP_K,
+    HistoryStore,
+    InMemoryRetriever,
+    Retriever,
+)
+from triage.service import triage_run
+
+MAX_LINES = 2000
+"""The most log or sequence lines one request may carry: a run's logs are kept to far fewer."""
+
+MAX_TESTS = 500
+"""The most tests one results file may list: the bench suite has 20."""
+
+MAX_TEXT = 2000
+"""The longest label field: a cause or a fix is a sentence or two."""
+
+REQUEST_FOLDER = Path("request")
+"""The folder a posted run is given: it was never saved, so it has none of its own."""
+
+DEFAULT_PORT = 8000
+
+EvidenceLevel = Literal["full", "error-only"]
+"""The evidence levels a request may ask for: triage.evidence.LEVELS, spelled as a type."""
+
+
+class SearchableHistory(Retriever, HistoryStore, Protocol):
+    """A history that can be searched, added to, and counted."""
+
+    def __len__(self) -> int:
+        """Count the past runs it holds.
+
+        Returns:
+            The count.
+        """
+
+
+class TestResult(BaseModel):
+    """One test in a results file: what the evidence builder reads; anything else is kept.
+
+    Attributes:
+        id: The test's pytest id.
+        outcome: passed, failed, error or skipped.
+        message: The failure message, if any.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    id: str = Field(max_length=500)
+    outcome: str = Field(max_length=20)
+    message: str = Field(default="", max_length=20000)
+
+
+class Results(BaseModel):
+    """A bench run's results file, as the bench suite writes it.
+
+    Attributes:
+        tests: Every test, with its outcome and message.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    tests: list[TestResult] = Field(max_length=MAX_TESTS)
+
+
+class RunRequest(BaseModel):
+    """A failed run to triage.
+
+    Attributes:
+        results: The results file.
+        logs: The instruments' log lines during the run.
+        sequence: The setup sequence's log lines.
+        level: How much of the evidence the model is given.
+        retrieve: Whether to offer the most similar past runs as sources.
+    """
+
+    results: Results
+    logs: list[str] = Field(default_factory=list, max_length=MAX_LINES)
+    sequence: list[str] = Field(default_factory=list, max_length=MAX_LINES)
+    level: EvidenceLevel = "full"
+    retrieve: bool = True
+
+    def saved_run(self) -> SavedRun:
+        """Turn the request into the run the pipeline reads.
+
+        Returns:
+            The run, with the request's evidence and no folder of its own.
+        """
+        return SavedRun(
+            folder=REQUEST_FOLDER,
+            results=self.results.model_dump(),
+            logs=list(self.logs),
+            sequence=list(self.sequence),
+        )
+
+
+class Label(BaseModel):
+    """How a past run was resolved.
+
+    Attributes:
+        fault: What was wrong, as a short name.
+        cause: Why it failed.
+        fix: What was done about it.
+    """
+
+    fault: str = Field(min_length=1, max_length=100)
+    cause: str = Field(min_length=1, max_length=MAX_TEXT)
+    fix: str = Field(min_length=1, max_length=MAX_TEXT)
+
+
+class ResolvedRunRequest(BaseModel):
+    """A resolved run to add to the history.
+
+    Attributes:
+        results: The results file.
+        logs: The instruments' log lines during the run.
+        sequence: The setup sequence's log lines.
+        label: How it was resolved.
+    """
+
+    results: Results
+    logs: list[str] = Field(default_factory=list, max_length=MAX_LINES)
+    sequence: list[str] = Field(default_factory=list, max_length=MAX_LINES)
+    label: Label
+
+    def saved_run(self) -> SavedRun:
+        """Turn the request's evidence into the run the history stores.
+
+        Returns:
+            The run, with no folder of its own.
+        """
+        return SavedRun(
+            folder=REQUEST_FOLDER,
+            results=self.results.model_dump(),
+            logs=list(self.logs),
+            sequence=list(self.sequence),
+        )
+
+
+class VerdictResponse(BaseModel):
+    """What to do about a failed run.
+
+    Attributes:
+        fix: The chosen action's key, such as CABLE.
+        action: What the action means, in words.
+        where: What to act on.
+        because: The one-sentence reason.
+        cited: The past runs it leaned on, by their neutral ids.
+        overruled: Why a check replaced the model's choice, or empty.
+    """
+
+    fix: str
+    action: str
+    where: str
+    because: str
+    cited: list[str]
+    overruled: str
+
+
+class AddedResponse(BaseModel):
+    """A run added to the history.
+
+    Attributes:
+        source_id: The neutral id it will be cited by.
+        history_size: How many past runs the history holds now.
+    """
+
+    source_id: str
+    history_size: int
+
+
+class HealthResponse(BaseModel):
+    """Whether the service is up.
+
+    Attributes:
+        status: Always "ok" when it answers.
+        retrieval: Whether a history is loaded to retrieve from.
+        history_size: How many past runs it holds.
+    """
+
+    status: Literal["ok"]
+    retrieval: bool
+    history_size: int
+
+
+def create_app(
+    provider: LLMProvider,
+    history: SearchableHistory | None = None,
+    checks: tuple[VerdictCheck, ...] = DEFAULT_CHECKS,
+    top_k: int = DEFAULT_TOP_K,
+) -> FastAPI:
+    """Build the service around an injected model and history, so tests can pass fakes.
+
+    Args:
+        provider: The answering model.
+        history: The searchable history; None runs without retrieval.
+        checks: The checks every verdict goes through.
+        top_k: How many past runs to offer with each question.
+
+    Returns:
+        The application, ready for uvicorn or a test client.
+    """
+    app = FastAPI(
+        title="virtual-rf-testbench triage",
+        description="Is a failed bench run the firmware, the bench or the test?",
+        version="0.2.0",
+    )
+    # The in-memory history is shared between request threads, so it is used under a lock.
+    lock = threading.Lock()
+
+    @app.get("/health")
+    def health() -> HealthResponse:
+        """Say whether the service is up and how much history it holds.
+
+        Returns:
+            The service's status.
+        """
+        return HealthResponse(
+            status="ok",
+            retrieval=history is not None,
+            history_size=len(history) if history is not None else 0,
+        )
+
+    @app.post("/triage")
+    def triage(request: RunRequest) -> VerdictResponse:
+        """Triage one failed run.
+
+        Args:
+            request: The run's evidence, and how to ask about it.
+
+        Returns:
+            The verdict.
+
+        Raises:
+            HTTPException: 503 when the model can't be reached, 502 when its answer can't be
+                used; the detail is one line saying what is wrong.
+        """
+        run = request.saved_run()
+        sources = []
+        try:
+            if request.retrieve and history is not None:
+                with lock:
+                    sources = history.similar_to(run, top_k)
+            verdict = triage_run(run, provider, request.level, sources, checks)
+        except ModelUnavailableError as error:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(error)) from error
+        except MalformedAnswerError as error:
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY, f"the model's answer couldn't be used: {error}"
+            ) from error
+        return VerdictResponse(
+            fix=verdict.fix.name,
+            action=verdict.fix.value,
+            where=verdict.where,
+            because=verdict.because,
+            cited=verdict.cited,
+            overruled=verdict.overruled,
+        )
+
+    @app.post("/history", status_code=status.HTTP_201_CREATED)
+    def add_history(request: ResolvedRunRequest) -> AddedResponse:
+        """Add a resolved run to the history, so later failures can cite it.
+
+        Args:
+            request: The run's evidence and how it was resolved.
+
+        Returns:
+            The id it will be cited by, and the history's new size.
+
+        Raises:
+            HTTPException: 409 when the service runs without a history, 503 when the
+                embedding model can't be reached.
+        """
+        if history is None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "this service runs without a history; restart it without --no-history",
+            )
+        try:
+            with lock:
+                source = history.add(request.saved_run(), request.label.model_dump())
+                size = len(history)
+        except ModelUnavailableError as error:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(error)) from error
+        return AddedResponse(source_id=source.source_id, history_size=size)
+
+    return app
+
+
+def _parser() -> argparse.ArgumentParser:
+    """Build the command line's parser.
+
+    Returns:
+        The parser.
+    """
+    parser = argparse.ArgumentParser(
+        prog="python -m triage.api", description="Serve triage over HTTP on this machine."
+    )
+    parser.add_argument("--host", default="127.0.0.1", help="where to listen (default: localhost)")
+    parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="the port to listen on")
+    parser.add_argument("--history", type=Path, default=DEFAULT_HISTORY, help="history runs")
+    parser.add_argument(
+        "--no-history", action="store_true", help="run without retrieval or a history"
+    )
+    parser.add_argument(
+        "--model", default=DEFAULT_MODEL, help=f"Ollama model to ask (default: {DEFAULT_MODEL})"
+    )
+    return parser
+
+
+def main(arguments: Sequence[str] | None = None, serve: Any = None) -> int:
+    """Load the history and serve the API until stopped.
+
+    Args:
+        arguments: The command-line arguments; None reads them from sys.argv.
+        serve: What runs the app, given the app, host and port; None uses uvicorn.run.
+
+    Returns:
+        0 when the server stopped, 1 if the history couldn't be loaded.
+    """
+    parsed = _parser().parse_args(arguments)
+    history: InMemoryRetriever | None = None
+    if not parsed.no_history:
+        if not parsed.history.is_dir():
+            sys.stdout.write(
+                f"no history at {parsed.history}; build it with 'make fault-dataset', or "
+                "start without one with --no-history\n"
+            )
+            return 1
+        try:
+            history = InMemoryRetriever.from_history(parsed.history, OllamaEmbedder())
+        except ModelUnavailableError as error:
+            sys.stdout.write(f"{error}\n")
+            return 1
+    provider = OllamaProvider(model=parsed.model, response_format=VERDICT_SCHEMA)
+    serve = serve or uvicorn.run
+    serve(create_app(provider, history), host=parsed.host, port=parsed.port)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
