@@ -344,7 +344,8 @@ is kept and reported, never counted as a pass.
 
 `make fault-dataset` builds the triage data set in `triage/data/runs/`: three history runs
 and three question runs per fault, 54 in all, in about 8 minutes. Where a fault has a size,
-each question uses one no history run has. ADR 0005 explains the faults, ADR 0007 the sequence log.
+each question uses a size that no history run has. ADR 0005 explains the faults, ADR 0007
+the sequence log.
 
 ### The bench suite
 
