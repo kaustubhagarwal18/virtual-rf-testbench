@@ -26,6 +26,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
+from triage.abstain import SERVICE_GATES, SourceGate
 from triage.answer import VERDICT_SCHEMA, MalformedAnswerError
 from triage.checks import DEFAULT_CHECKS, VerdictCheck
 from triage.embed import OllamaEmbedder
@@ -250,6 +251,8 @@ class VerdictResponse(BaseModel):
         because: The one-sentence reason.
         cited: The past runs it leaned on, by their neutral ids.
         overruled: Why a check replaced the model's choice, or empty.
+        gate_reason: Why UNKNOWN was answered from the past runs alone, without asking the
+            model, or empty when the model was asked.
     """
 
     fix: str
@@ -258,6 +261,7 @@ class VerdictResponse(BaseModel):
     because: str
     cited: list[str]
     overruled: str
+    gate_reason: str
 
 
 class AddedResponse(BaseModel):
@@ -291,6 +295,7 @@ def create_app(
     history: SearchableHistory | None = None,
     checks: tuple[VerdictCheck, ...] = DEFAULT_CHECKS,
     top_k: int = DEFAULT_TOP_K,
+    gates: tuple[SourceGate, ...] = SERVICE_GATES,
 ) -> FastAPI:
     """Build the service around an injected model and history, so tests can pass fakes.
 
@@ -299,6 +304,7 @@ def create_app(
         history: The searchable history; None runs without retrieval.
         checks: The checks every verdict goes through.
         top_k: How many past runs to offer with each question.
+        gates: The gates the retrieved past runs go through before the model is asked.
 
     Returns:
         The application, ready for uvicorn or a test client.
@@ -344,7 +350,7 @@ def create_app(
             if request.retrieve and history is not None:
                 with lock:
                     sources = history.similar_to(run, top_k)
-            verdict = triage_run(run, provider, request.level, sources, checks=checks)
+            verdict = triage_run(run, provider, request.level, sources, checks=checks, gates=gates)
         except ModelUnavailableError as error:
             raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(error)) from error
         except MalformedAnswerError as error:
@@ -358,6 +364,7 @@ def create_app(
             because=verdict.because,
             cited=verdict.cited,
             overruled=verdict.overruled,
+            gate_reason=verdict.gate_reason,
         )
 
     @app.post("/history", status_code=status.HTTP_201_CREATED)

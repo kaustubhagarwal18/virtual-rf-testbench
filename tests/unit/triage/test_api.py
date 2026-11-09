@@ -12,6 +12,7 @@ from fastapi import status
 from fastapi.testclient import TestClient
 
 from tests.unit.triage.test_evidence import FAILING_TEST, write_run
+from triage.abstain import SERVICE_GATES, PrecedentsDisagree
 from triage.api import (
     MAX_LINE_LENGTH,
     MAX_LINES,
@@ -40,7 +41,7 @@ def empty_history() -> InMemoryRetriever:
 class Unreachable:
     """A model that is never reachable."""
 
-    def complete(self, system: str, user: str) -> str:
+    def complete(self, system: str, user: str, schema: object = None) -> str:
         """Fail as an unreachable model does."""
         raise ModelUnavailableError("can't reach Ollama; start it with 'ollama serve'")
 
@@ -310,3 +311,35 @@ def test_an_action_off_the_list_is_refused(action: object) -> None:
         "/history", json={"results": RESULTS, "label": {**LABEL, "action": action}}
     )
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+def test_the_service_abstains_when_its_precedents_disagree() -> None:
+    """Two past runs resolved two ways: UNKNOWN with the reason, and the model isn't asked."""
+    provider = FakeProvider([CABLE_REPLY])
+    client = TestClient(create_app(provider, empty_history()))
+    for action, cause in [("CABLE", "worn cable"), ("LINK", "unplugged cable")]:
+        label = {**LABEL, "cause": cause, "action": action}
+        assert (
+            client.post("/history", json={"results": RESULTS, "label": label}).status_code
+            == status.HTTP_201_CREATED
+        )
+    body = client.post("/triage", json={"results": RESULTS}).json()
+    assert body["fix"] == "UNKNOWN"
+    assert "CABLE" in body["gate_reason"] and "LINK" in body["gate_reason"]
+    assert body["cited"] == []
+    assert not provider.prompts
+
+
+def test_the_service_asks_the_model_when_its_precedents_agree() -> None:
+    """Agreeing past runs pass the gate, and the reply says no gate answered."""
+    provider = FakeProvider([CABLE_REPLY])
+    client = TestClient(create_app(provider, empty_history()))
+    client.post("/history", json={"results": RESULTS, "label": {**LABEL, "action": "CABLE"}})
+    body = client.post("/triage", json={"results": RESULTS}).json()
+    assert (body["fix"], body["gate_reason"]) == ("CABLE", "")
+    assert len(provider.prompts) == 1
+
+
+def test_the_service_applies_the_disagreement_gate_only() -> None:
+    """The similarity gate cost more than it saved (ADR 0013), so the API leaves it out."""
+    assert [type(gate) for gate in SERVICE_GATES] == [PrecedentsDisagree]

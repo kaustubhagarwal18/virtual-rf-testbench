@@ -20,7 +20,7 @@ MIN_SIMILARITY = 0.95
 
 Measured with tools/calibrate_abstention.py, never on the questions: each of the 27 history
 runs, asked from its evidence alone, scored 0.951 to 0.987 against its closest run of the
-same fault and 0.796 to 0.982 against its closest run of another fault. The rule, fixed
+same fault and 0.795 to 0.982 against its closest run of another fault. The rule, fixed
 before the numbers were seen, is the lowest same-fault score rounded down: 0.95. It refuses
 no history run a precedent it has, and 18 of 27 the closest other-fault run. The ranges
 overlap where cable_loss, link_down and link_flaky sit (0.97 to 0.98), so similarity alone
@@ -113,6 +113,10 @@ class WeakPrecedent:
 
 DEFAULT_GATES: tuple[SourceGate, ...] = (PrecedentsDisagree(), WeakPrecedent())
 """The gates the evaluation's abstention scenarios apply, in order."""
+
+SERVICE_GATES: tuple[SourceGate, ...] = (PrecedentsDisagree(),)
+"""The gates the API applies: disagreement only. Measured in ADR 0013, it prevented 7 wrong
+answers for 1 right one; WeakPrecedent gave up 6 right answers for 3 wrong ones."""
 
 
 def reason_to_abstain(sources: Sequence[Source], gates: Sequence[SourceGate]) -> str:
