@@ -32,6 +32,8 @@
 - The evaluation: five scenarios, each adding one thing, scored per fault as right,
   `UNKNOWN`, confidently wrong and malformed, with a 95% interval over faults and retrieval
   recall (ADR 0009, ADR 0012). Labels record the action key the score is checked against.
+- Gates that answer `UNKNOWN` from the precedents alone, a firmware-line ablation, and
+  the instrument error first in the evidence, each measured (ADR 0013).
 - A FastAPI service (`make triage-api`): `POST /triage`, `POST /history`, `GET /health`
   (ADR 0010).
 
@@ -67,6 +69,8 @@
   than the sized ones. The fault, not the question, is the unit scored (ADR 0012).
 - With retrieval, the model's answers on `link_down` are unusable: it puts a source's text
   in `cited` instead of its id, so all three are refused as malformed.
+- The similarity gate refuses more right answers than it prevents wrong ones when the
+  question's own fault is held out (6 against 3); ADR 0013 shows why no threshold fixes it.
 - `qwen2.5:3b` is sensitive to wording: rewording two action descriptions moved the
   error-only scenario, whose evidence didn't change, from 12 to 9 questions right.
 - The API's history lives in memory: runs added with `POST /history` are gone when the

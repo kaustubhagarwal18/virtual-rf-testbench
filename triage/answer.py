@@ -43,6 +43,8 @@ class Verdict:
         because: Its one-sentence reason.
         cited: The source ids it leaned on, each one it was actually given.
         overruled: Why a check replaced the model's choice, or empty when none did.
+        gate_reason: Why UNKNOWN was answered from the precedents alone, without asking the
+            model; empty when the model was asked.
     """
 
     fix: Fix
@@ -50,6 +52,7 @@ class Verdict:
     because: str
     cited: list[str] = field(default_factory=list)
     overruled: str = ""
+    gate_reason: str = ""
 
 
 def _json_object(reply: str) -> dict[str, object]:

@@ -10,6 +10,7 @@ is the question.
 
 import json
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Self
@@ -166,6 +167,31 @@ def instrument_errors(run: SavedRun) -> list[str]:
     return [str(error) for test in failed_tests(run) for error in test.get("instrument_errors", [])]
 
 
+def instrument_error_note(run: SavedRun) -> str:
+    """Say which SCPI errors the instruments reported in the failed tests, if any.
+
+    A rejected command can surface in the test as a timeout on the query after it, so the
+    first failure reads as a timeout while the instrument's error says what happened. This
+    line states the error on its own, and full_evidence puts it first.
+
+    Args:
+        run: The run.
+
+    Returns:
+        One line naming each distinct error and how many failed tests reported one, or an
+        empty string when none did.
+    """
+    errors = list(dict.fromkeys(instrument_errors(run)))
+    if not errors:
+        return ""
+    tests = failed_tests(run)
+    reporting = sum(1 for test in tests if test.get("instrument_errors"))
+    return (
+        f"Instrument error: {'; '.join(errors)}, reported by {reporting} of {len(tests)} "
+        "failed tests."
+    )
+
+
 def first_failure(run: SavedRun) -> FirstFailure | None:
     """Find the one thing that went wrong first, which the rest of the run follows from.
 
@@ -222,8 +248,14 @@ ERROR_ONLY = "error-only"
 FULL = "full"
 """Everything the run recorded: the first failure, what changed, and the notable log lines."""
 
+FULL_WITHOUT_FIRMWARE = "full-without-firmware"
+"""FULL minus its firmware line: an ablation, to measure what that one line does."""
+
 LEVELS = (ERROR_ONLY, FULL)
-"""The evidence levels the evaluation compares."""
+"""The evidence levels a caller may ask for."""
+
+EVALUATED_LEVELS = (*LEVELS, FULL_WITHOUT_FIRMWARE)
+"""Every level the evaluation can score, the ablation included."""
 
 NOTABLE_LOG_LEVELS = ("WARNING", "ERROR")
 """Instrument log lines worth showing: a healthy run's INFO lines are noise."""
@@ -326,11 +358,15 @@ def error_only_evidence(run: SavedRun) -> str:
     return failure.detail or failure.where
 
 
-def full_evidence(run: SavedRun) -> str:
+def full_evidence(run: SavedRun, firmware_line: bool = True) -> str:
     """Build everything the run recorded, led by the failure the rest follows from.
+
+    An SCPI error the instruments reported comes before the first failure, because the
+    first failure is often the timeout that error caused.
 
     Args:
         run: The run.
+        firmware_line: Whether to state the firmware versions; False only for the ablation.
 
     Returns:
         The evidence as text, ready to put in a prompt.
@@ -341,7 +377,9 @@ def full_evidence(run: SavedRun) -> str:
     # Only the reason's first line: where there are parameters they carry the same numbers
     # more precisely, and a prompt shouldn't say everything twice.
     reason = failure.detail.splitlines()[0] if failure.detail else ""
-    lines = [
+    errors = instrument_error_note(run)
+    lines = [errors] if errors else []
+    lines += [
         f"First failure: {failure.where} (found in {failure.source}).",
         f"Reason: {reason}",
     ]
@@ -351,7 +389,8 @@ def full_evidence(run: SavedRun) -> str:
         lines.append(
             f"{failure.consequences} further tests failed after it, which may be consequences."
         )
-    lines.append(firmware_note(run))
+    if firmware_line:
+        lines.append(firmware_note(run))
     selection = selection_note(run)
     if selection:
         lines.append(selection)
@@ -361,21 +400,40 @@ def full_evidence(run: SavedRun) -> str:
     return "\n".join(lines)
 
 
+def _full_without_firmware(run: SavedRun) -> str:
+    """Build the full evidence without its firmware line, for the ablation.
+
+    Args:
+        run: The run.
+
+    Returns:
+        The evidence as text.
+    """
+    return full_evidence(run, firmware_line=False)
+
+
+_BUILDERS: dict[str, Callable[[SavedRun], str]] = {
+    ERROR_ONLY: error_only_evidence,
+    FULL: full_evidence,
+    FULL_WITHOUT_FIRMWARE: _full_without_firmware,
+}
+"""How each evidence level is built; a new level is a new entry, not a new branch."""
+
+
 def build_evidence(run: SavedRun, level: str = FULL) -> str:
     """Build a run's evidence at the level asked for.
 
     Args:
         run: The run.
-        level: ERROR_ONLY or FULL.
+        level: One of EVALUATED_LEVELS.
 
     Returns:
         The evidence as text.
 
     Raises:
-        ValueError: If the level isn't one the evaluation compares.
+        ValueError: If the level isn't one this module builds.
     """
-    if level == ERROR_ONLY:
-        return error_only_evidence(run)
-    if level == FULL:
-        return full_evidence(run)
-    raise ValueError(f"unknown evidence level {level!r}; expected one of {LEVELS}")
+    builder = _BUILDERS.get(level)
+    if builder is None:
+        raise ValueError(f"unknown evidence level {level!r}; expected one of {EVALUATED_LEVELS}")
+    return builder(run)

@@ -215,7 +215,9 @@ flowchart LR
     hist[("History<br/>resolved runs, neutral ids")] --> ret["retrieval.py<br/>top 3 by cosine"]
     run --> ret
     ev --> pr["prompt.py<br/>fixed list of actions"]
-    ret --> pr
+    ret --> gate{"abstain.py<br/>precedents agree<br/>and close? (eval only)"}
+    gate -- yes --> pr
+    gate -- no --> unk["UNKNOWN<br/>model not asked"]
     pr --> llm["qwen2.5:3b<br/>local Ollama, JSON schema"]
     llm --> an["answer.py<br/>strict parse"]
     an --> chk["checks.py<br/>verdict contradicts<br/>the evidence → UNKNOWN"]
@@ -224,7 +226,8 @@ flowchart LR
 ```
 
 - **Evidence** leads with the first failure, because a run with nineteen errors has one
-  cause. It never reads `label.json`.
+  cause, and puts any SCPI error the instruments reported ahead of it, because a rejected
+  command shows up as a timeout. It never reads `label.json`.
 - **Retrieval** embeds each resolved run with `nomic-embed-text` and ranks by cosine
   similarity in memory. A source is cited by a hash of its text (`past-3fa2c1d0`), never by
   its folder, because folder names name the fault (ADR 0009).
@@ -236,9 +239,13 @@ flowchart LR
   `FIRMWARE` when the firmware is the same release as the last passing run, and `TIMEOUT`
   when a failed test reports an SCPI error. A check never picks another action in the
   model's place.
-- **The evaluation** scores five scenarios, each adding one thing to another: error text
-  only, full evidence, plus retrieval, plus the checks, and the same with the question's own
-  fault held out of the history. The fault is the unit scored: one is solved when all three
+- **Gates** (`abstain.py`, evaluation only) answer `UNKNOWN` before the model is asked when
+  the retrieved precedents record different actions, or the closest is below a similarity
+  threshold that `tools/calibrate_abstention.py` sets from the history alone (ADR 0013).
+- **The evaluation** scores eight scenarios, each changing one thing in another: error text
+  only, full evidence, full evidence without its firmware line, plus retrieval, plus the
+  checks, the same with the question's own fault held out of the history, and both of those
+  with the gates. The fault is the unit scored: one is solved when all three
   of its questions are right, with a 95% interval over the 9 faults (ADR 0012). It counts
   right, `UNKNOWN`, confidently wrong and malformed answers apart, scores against the action
   key each label records, and reports how often retrieval offered a past run of the
@@ -313,6 +320,7 @@ flowchart LR
 | How a reply is parsed, and its schema | `triage/answer.py` |
 | Retrieval and source ids | `triage/retrieval.py`, `triage/embed.py` |
 | Checks on a verdict | `triage/checks.py` |
+| Abstaining from retrieval, and its threshold | `triage/abstain.py`, `tools/calibrate_abstention.py` |
 | The HTTP API | `triage/api.py` |
 | Evaluation scenarios, scoring and the report | `triage/evaluate.py`, `triage/results/rag.md` |
 | CI jobs, the image scan and publishing | `.github/workflows/ci.yml` |
@@ -333,5 +341,6 @@ flowchart LR
 | [0010](adr/0010-triage-http-api.md) | A FastAPI service with an in-memory history; pgvector deferred |
 | [0011](adr/0011-ci-image-build-scan-publish.md) | Build the image once in CI, scan it with Trivy, bench it, and publish it from `main` |
 | [0012](adr/0012-score-faults-key-labels-by-action.md) | Score faults, not questions; name each action by its symptom; record the action key in every label; three checks |
+| [0013](adr/0013-abstain-from-retrieval.md) | Gates that abstain from retrieval alone, the instrument error first, and a firmware-line ablation |
 
 What comes next is in the [roadmap](ROADMAP.md).
