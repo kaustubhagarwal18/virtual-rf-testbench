@@ -488,3 +488,39 @@ def test_the_cli_says_how_many_prompts_reached_the_model(
     second = capsys.readouterr().out
     assert "asked the model 1 new prompts" in first
     assert "asked the model 0 new prompts" in second
+
+
+def history_resolved_by(folder: Path, fault: str, action: str) -> Path:
+    """Write a resolved history run of a fault whose label records the action taken."""
+    run = history_with(folder, fault)
+    label = json.loads((run / "label.json").read_text(encoding="utf-8"))
+    (run / "label.json").write_text(json.dumps({**label, "action": action}), encoding="utf-8")
+    return run
+
+
+def test_the_gated_scenario_answers_disagreement_without_the_model(tmp_path: Path) -> None:
+    """Precedents resolved two ways: UNKNOWN unasked, and the finding counts what it prevented."""
+    history = tmp_path / "history"
+    history_resolved_by(history / "link_down-1", "link_down", "LINK")
+    history_resolved_by(history / "slow_responses-1", "slow_responses", "TIMEOUT")
+    question(tmp_path / "q" / "cable_loss-1", "cable_loss")
+    retriever = InMemoryRetriever.from_history(history, FakeEmbedder())
+    plain = Scenario("checked", FULL, retrieve=True, checked=True)
+    gated = Scenario("gated", FULL, retrieve=True, checked=True, gated=True, adds_to="checked")
+    provider = CachingProvider(FakeProvider([verdict(Fix.LINK)]))
+    results = evaluate(tmp_path / "q", provider, [plain, gated], retriever)
+    assert results[0].confidently_wrong == 1
+    outcome = results[1].outcomes[0]
+    assert (outcome.chosen, outcome.sources.gated) == ("UNKNOWN", True)
+    assert outcome.answer.startswith("UNKNOWN, model not asked:")
+    assert provider.asked == 1
+    text = " ".join(findings(results))
+    assert "the gates answered UNKNOWN without asking the model on 1 of 1 questions" in text
+    assert "1 of those were confident wrong answers and 0 were right" in text
+
+
+def test_every_gated_scenario_retrieves() -> None:
+    """A gate judges precedents, so a gated scenario without retrieval would measure nothing."""
+    gated = [scenario for scenario in SCENARIOS if scenario.gated]
+    assert gated
+    assert all(scenario.retrieve for scenario in gated)

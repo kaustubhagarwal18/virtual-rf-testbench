@@ -43,11 +43,18 @@ class Source:
         text: What it says, including how it was resolved.
         fault: The labelled fault of a past run, for scoring and for holding a fault out of
             retrieval; empty when unknown. Never put in a prompt.
+        action: The key of the action that resolved a past run, as its label records it;
+            empty when not recorded. Read by the abstention gates, not by the prompt builder
+            (the source's text states it already).
+        similarity: How alike this source and the run being triaged are, as the retriever
+            scored them (cosine, 1 is identical); None when the retriever doesn't say.
     """
 
     source_id: str
     text: str
     fault: str = ""
+    action: str = ""
+    similarity: float | None = None
 
 
 SYSTEM_PROMPT = f"""You triage failed runs of an automated RF test bench: a signal generator

@@ -10,7 +10,7 @@ model the answer in the id.
 """
 
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -94,7 +94,12 @@ def history_source(run: SavedRun, label: dict[str, Any]) -> Source:
     text = f"{build_evidence(run, FULL)}\nCause: {label['cause']}\nFix applied: {label['fix']}"
     if label.get("action"):
         text += f"\nAction: {label['action']}"
-    return Source(source_id=neutral_id(text), text=text, fault=str(label.get("fault", "")))
+    return Source(
+        source_id=neutral_id(text),
+        text=text,
+        fault=str(label.get("fault", "")),
+        action=str(label.get("action") or ""),
+    )
 
 
 @dataclass
@@ -124,7 +129,7 @@ class InMemoryRetriever:
         """
         runs = [SavedRun.load(folder) for folder in sorted(history.iterdir()) if folder.is_dir()]
         sources = [history_source(run, load_label(run)) for run in runs]
-        vectors = _normalise(np.array(embedder.embed([source.text for source in sources])))
+        vectors = normalise(np.array(embedder.embed([source.text for source in sources])))
         return cls(sources, vectors, embedder)
 
     def __len__(self) -> int:
@@ -148,7 +153,7 @@ class InMemoryRetriever:
         source = history_source(run, label)
         if any(known.source_id == source.source_id for known in self.sources):
             return source
-        vector = _normalise(np.array(self.embedder.embed([source.text])))
+        vector = normalise(np.array(self.embedder.embed([source.text])))
         self.vectors = vector if not self.sources else np.vstack([self.vectors, vector])
         self.sources.append(source)
         return source
@@ -164,22 +169,22 @@ class InMemoryRetriever:
             exclude_fault: A fault whose runs are left out; None leaves nothing out.
 
         Returns:
-            The closest sources, most similar first.
+            The closest sources, most similar first, each carrying its cosine similarity.
         """
         if not self.sources:
             return []
-        query = _normalise(np.array(self.embedder.embed([build_evidence(run, FULL)])))
+        query = normalise(np.array(self.embedder.embed([build_evidence(run, FULL)])))
         scores = self.vectors @ query[0]
         order = np.argsort(scores)[::-1]
         kept = [
-            self.sources[index]
+            replace(self.sources[index], similarity=float(scores[index]))
             for index in order
             if exclude_fault is None or self.sources[index].fault != exclude_fault
         ]
         return kept[:count]
 
 
-def _normalise(vectors: np.ndarray) -> np.ndarray:
+def normalise(vectors: np.ndarray) -> np.ndarray:
     """Scale each row to unit length, so a dot product is the cosine similarity.
 
     Args:
