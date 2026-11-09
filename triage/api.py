@@ -20,7 +20,7 @@ import sys
 import threading
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Literal, Protocol
+from typing import Annotated, Any, Literal, Protocol
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, status
@@ -46,6 +46,15 @@ MAX_LINES = 2000
 MAX_TESTS = 500
 """The most tests one results file may list: the bench suite has 20."""
 
+MAX_LINE_LENGTH = 20000
+"""The longest log or sequence line: an instrument's JSON log line is a few hundred characters."""
+
+MAX_MEASUREMENTS = 200
+"""The most measurements one test may carry: a calibration test records a handful."""
+
+MAX_INSTRUMENTS = 20
+"""The most entries in a per-instrument or per-outcome map: the bench has two instruments."""
+
 MAX_TEXT = 2000
 """The longest label field: a cause or a fix is a sentence or two."""
 
@@ -69,13 +78,46 @@ class SearchableHistory(Retriever, HistoryStore, Protocol):
         """
 
 
+Reading = float | str | None
+"""A recorded number: a float, or 'NaN', 'Infinity' or '-Infinity' for a non-finite reading,
+as the measurement records write them; None where a one-sided limit has no bound."""
+
+Line = Annotated[str, Field(max_length=MAX_LINE_LENGTH)]
+"""One log or sequence line, capped so a single line can't carry an unbounded payload."""
+
+
+class Measurement(BaseModel):
+    """One measurement of a test: every field the evidence builder reads is typed.
+
+    Attributes:
+        name: What was measured.
+        value: The reading.
+        unit: Its unit.
+        limit_low: The lower limit, if any.
+        limit_high: The upper limit, if any.
+        margin: How far inside (positive) or outside (negative) the limits it was.
+        passed: Whether it was within the limits.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    name: str = Field(max_length=200)
+    value: Reading
+    unit: str = Field(default="", max_length=20)
+    limit_low: Reading = None
+    limit_high: Reading = None
+    margin: Reading = None
+    passed: bool
+
+
 class TestResult(BaseModel):
-    """One test in a results file: what the evidence builder reads; anything else is kept.
+    """One test in a results file: what the evidence builder reads is typed; the rest is kept.
 
     Attributes:
         id: The test's pytest id.
         outcome: passed, failed, error or skipped.
         message: The failure message, if any.
+        measurements: Its measurements, with limits and margins.
     """
 
     model_config = ConfigDict(extra="allow")
@@ -83,18 +125,48 @@ class TestResult(BaseModel):
     id: str = Field(max_length=500)
     outcome: str = Field(max_length=20)
     message: str = Field(default="", max_length=20000)
+    measurements: list[Measurement] = Field(default_factory=list, max_length=MAX_MEASUREMENTS)
+
+
+class Selection(BaseModel):
+    """Which tests the run collected and selected, so a subset never passes for a full run.
+
+    Attributes:
+        collected: How many tests pytest collected.
+        selected: How many it ran.
+        deselected: How many it left out.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    collected: int = Field(ge=0)
+    selected: int = Field(ge=0)
+    deselected: int = Field(ge=0)
 
 
 class Results(BaseModel):
     """A bench run's results file, as the bench suite writes it.
 
+    Every field the evidence builder reads has a type, so a malformed one is refused with a
+    422 before the model is asked, rather than failing inside the pipeline with a 500.
+    Fields it doesn't read are kept as sent.
+
     Attributes:
         tests: Every test, with its outcome and message.
+        firmware_versions: Each instrument's release; empty when not recorded, which the
+            evidence reports as unknown.
+        selection: Which tests ran; None when not recorded.
+        totals: How many tests passed, failed, errored and were skipped.
     """
 
     model_config = ConfigDict(extra="allow")
 
     tests: list[TestResult] = Field(max_length=MAX_TESTS)
+    firmware_versions: dict[str, Annotated[str, Field(max_length=100)]] = Field(
+        default_factory=dict, max_length=MAX_INSTRUMENTS
+    )
+    selection: Selection | None = None
+    totals: dict[str, int] = Field(default_factory=dict, max_length=MAX_INSTRUMENTS)
 
 
 class Evidence(BaseModel):
@@ -107,8 +179,8 @@ class Evidence(BaseModel):
     """
 
     results: Results
-    logs: list[str] = Field(default_factory=list, max_length=MAX_LINES)
-    sequence: list[str] = Field(default_factory=list, max_length=MAX_LINES)
+    logs: list[Line] = Field(default_factory=list, max_length=MAX_LINES)
+    sequence: list[Line] = Field(default_factory=list, max_length=MAX_LINES)
 
     def saved_run(self) -> SavedRun:
         """Turn the request's evidence into the run the pipeline reads.

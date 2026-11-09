@@ -12,10 +12,11 @@ from fastapi import status
 from fastapi.testclient import TestClient
 
 from tests.unit.triage.test_evidence import FAILING_TEST, write_run
-from triage.api import MAX_LINES, EvidenceLevel, create_app, main
+from triage.api import MAX_LINE_LENGTH, MAX_LINES, EvidenceLevel, create_app, main
 from triage.embed import FakeEmbedder
-from triage.evidence import LEVELS
+from triage.evidence import LEVELS, SavedRun, build_evidence
 from triage.llm import FakeProvider, ModelUnavailableError
+from triage.prompt import build_prompt
 from triage.retrieval import InMemoryRetriever
 
 CABLE_REPLY = json.dumps({"fix": "CABLE", "where": "the cable", "because": "loss", "cited": []})
@@ -111,19 +112,56 @@ def test_adding_history_without_one_is_a_conflict() -> None:
     assert "--no-history" in response.json()["detail"]
 
 
+MEASURED_TEST: dict[str, Any] = {
+    **FAILING_TEST,
+    "measurements": [{"name": "level", "value": -13.0, "unit": "dBm", "passed": False}],
+}
+"""A test with one well-formed measurement, for corrupting one field at a time."""
+
+
+def with_measurement(**changes: object) -> dict[str, Any]:
+    """Return a results file whose one measurement has the given fields changed."""
+    measurement = {**MEASURED_TEST["measurements"][0], **changes}
+    return {"tests": [{**MEASURED_TEST, "measurements": [measurement]}]}
+
+
+SELECTION = {"collected": 20, "selected": 20, "deselected": 0}
+
+
 @pytest.mark.parametrize(
     "body",
     [
         {},
         {"results": {}},
         {"results": {"tests": [{"id": "t"}]}},
+        {"results": {"tests": "all of them"}},
         {"results": RESULTS, "level": "everything"},
         {"results": RESULTS, "logs": ["x"] * (MAX_LINES + 1)},
         {"results": RESULTS, "sequence": ["x"] * (MAX_LINES + 1)},
+        {"results": RESULTS, "logs": ["x" * (MAX_LINE_LENGTH + 1)]},
+        {"results": RESULTS, "sequence": [{"step": 1}]},
+        {"results": {**RESULTS, "firmware_versions": "0.1.0"}},
+        {"results": {**RESULTS, "firmware_versions": ["0.1.0"]}},
+        {"results": {**RESULTS, "firmware_versions": {"generator": {"v": 1}}}},
+        {"results": {**RESULTS, "selection": "all"}},
+        {"results": {**RESULTS, "selection": {"collected": 20}}},
+        {"results": {**RESULTS, "selection": {**SELECTION, "selected": -1}}},
+        {"results": {**RESULTS, "selection": SELECTION, "totals": [1]}},
+        {"results": {**RESULTS, "selection": SELECTION, "totals": {"passed": "many"}}},
+        {"results": {"tests": [{**FAILING_TEST, "measurements": "x"}]}},
+        {"results": {"tests": [{**FAILING_TEST, "measurements": ["x"]}]}},
+        {"results": {"tests": [{**FAILING_TEST, "measurements": [{"name": "level"}]}]}},
+        {"results": with_measurement(passed="sometimes")},
+        {"results": with_measurement(value=[1.0])},
+        {"results": with_measurement(limit_low={"dB": 1})},
     ],
 )
 def test_a_malformed_run_is_refused_before_the_model_is_asked(body: dict[str, Any]) -> None:
-    """Missing or oversized evidence is a 422, and the model is never asked."""
+    """Missing, malformed or oversized evidence is a 422, and the model is never asked.
+
+    Every field the evidence builder reads is covered, with a wrong type and a wrong shape,
+    so none of them can reach the pipeline and fail there as a 500.
+    """
     provider = FakeProvider([CABLE_REPLY])
     response = TestClient(create_app(provider)).post("/triage", json=body)
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
@@ -207,3 +245,34 @@ def test_adding_history_with_an_unreachable_embedder_is_unavailable() -> None:
     assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
     assert "ollama serve" in response.json()["detail"]
     assert len(history) == 0
+
+
+@pytest.mark.parametrize("value", [-13.0, 0, "NaN", "Infinity", "-Infinity", None], ids=repr)
+def test_every_reading_a_record_can_hold_is_accepted(value: object) -> None:
+    """Finite and non-finite readings, and a missing bound, are all valid evidence."""
+    client = TestClient(create_app(FakeProvider([CABLE_REPLY])))
+    results = with_measurement(value=value, limit_low=value, margin=value)
+    assert client.post("/triage", json={"results": results}).status_code == status.HTTP_200_OK
+
+
+SAVED_RUNS = sorted(path for path in Path("triage/data/runs").glob("*/*") if path.is_dir())
+"""Every saved run in the data set: real results files, logs and sequence logs."""
+
+
+@pytest.mark.parametrize(
+    "folder", SAVED_RUNS, ids=lambda folder: f"{folder.parent.name}/{folder.name}"
+)
+def test_a_real_run_posted_gives_the_model_what_the_saved_run_does(folder: Path) -> None:
+    """Posting a saved run's files builds exactly the prompt reading them from disk builds."""
+    run = SavedRun.load(folder)
+    provider = FakeProvider([CABLE_REPLY])
+    body = {"results": run.results, "logs": run.logs, "sequence": run.sequence, "retrieve": False}
+    response = TestClient(create_app(provider)).post("/triage", json=body)
+    assert response.status_code == status.HTTP_200_OK
+    assert provider.prompts == [build_prompt(build_evidence(run))]
+
+
+def test_the_data_set_has_every_saved_run() -> None:
+    """The real-run test above covers all 54 runs, not an empty list."""
+    expected_runs = 54
+    assert len(SAVED_RUNS) == expected_runs

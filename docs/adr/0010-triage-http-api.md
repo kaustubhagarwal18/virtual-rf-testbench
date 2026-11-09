@@ -22,9 +22,14 @@ names Redis, an ingestion worker and Postgres with pgvector.
   neutral id it will be cited by. `GET /health` reports whether a history is loaded and its
   size.
 - **The same pipeline and checks as everywhere else.** The service calls `triage_run`, with
-  the firmware check on. A request is untrusted data: it is validated (the results file must
-  list tests with an id and an outcome; logs and sequence are capped at 2,000 lines) and goes
-  into the prompt only as evidence. The model has no tools.
+  the firmware check on. A request is untrusted data. Every results field the evidence
+  builder reads has a type (tests and their measurements, firmware versions, selection,
+  totals), so a malformed one is a 422 before the model is asked rather than a 500 inside
+  the pipeline. Counts and lengths are capped: 2,000 log or sequence lines of at most 20,000
+  characters each, 500 tests, 200 measurements per test. Fields the evidence doesn't read are
+  kept as sent. The evidence then goes into the prompt only as data. The model has no tools.
+  The whole request body has no size cap of its own; that, and any authentication for
+  `POST /history`, wait until the service is reachable by more than this machine.
 - **Errors are one line with a status.** An unreachable model is 503 and an unusable answer
   502, each with the hint that fixes it. `POST /history` on a service started with
   `--no-history` is 409.
