@@ -218,7 +218,7 @@ flowchart LR
     ret --> pr
     pr --> llm["qwen2.5:3b<br/>local Ollama, JSON schema"]
     llm --> an["answer.py<br/>strict parse"]
-    an --> chk["checks.py<br/>FIRMWARE on unchanged<br/>firmware → UNKNOWN"]
+    an --> chk["checks.py<br/>verdict contradicts<br/>the evidence → UNKNOWN"]
     chk --> verdict["Verdict<br/>action, where, why, cited"]
     api["POST /history<br/>resolved run + label"] --> hist
 ```
@@ -231,14 +231,19 @@ flowchart LR
 - **The model** picks one action from a fixed list, or `UNKNOWN`. Its reply is constrained
   to the answer's JSON schema and still parsed strictly: an invented citation or an
   off-list action is refused, not interpreted.
-- **Checks** compare the verdict with facts the evidence states outright. The only one so
-  far turns `FIRMWARE` into `UNKNOWN` when the firmware is the same release as the last
-  passing run. A check never picks another action in the model's place.
+- **Checks** compare the verdict with facts the evidence states outright, and turn a
+  contradicted one into `UNKNOWN`: `FIRMWARE` naming a release the run didn't run,
+  `FIRMWARE` when the firmware is the same release as the last passing run, and `TIMEOUT`
+  when a failed test reports an SCPI error. A check never picks another action in the
+  model's place.
 - **The evaluation** scores five scenarios, each adding one thing to another: error text
-  only, full evidence, plus retrieval, plus the firmware check, and retrieval with the
-  question's own fault held out of the history. It counts right, `UNKNOWN`, confidently
-  wrong and malformed answers apart, with a 95% interval, and reports how often retrieval
-  offered a past run of the question's own fault.
+  only, full evidence, plus retrieval, plus the checks, and the same with the question's own
+  fault held out of the history. The fault is the unit scored: one is solved when all three
+  of its questions are right, with a 95% interval over the 9 faults (ADR 0012). It counts
+  right, `UNKNOWN`, confidently wrong and malformed answers apart, scores against the action
+  key each label records, and reports how often retrieval offered a past run of the
+  question's own fault. Model answers are cached under `.cache/triage-answers/`, so a rerun
+  asks only the prompts that changed.
 
 The API (ADR 0010) keeps the history in memory, loaded from `triage/data/runs/history/` at
 start, and adds to it through `POST /history`. It listens on localhost and talks only to the
@@ -327,5 +332,6 @@ flowchart LR
 | [0009](adr/0009-honest-triage-evaluation.md) | Neutral source ids, a held-out-fault scenario, three questions per fault, and a firmware check |
 | [0010](adr/0010-triage-http-api.md) | A FastAPI service with an in-memory history; pgvector deferred |
 | [0011](adr/0011-ci-image-build-scan-publish.md) | Build the image once in CI, scan it with Trivy, bench it, and publish it from `main` |
+| [0012](adr/0012-score-faults-key-labels-by-action.md) | Score faults, not questions; name each action by its symptom; record the action key in every label; three checks |
 
 What comes next is in the [roadmap](ROADMAP.md).

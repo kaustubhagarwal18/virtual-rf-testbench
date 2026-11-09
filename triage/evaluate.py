@@ -540,7 +540,7 @@ flowchart LR
     ret --> pr
     pr --> llm["qwen2.5:3b<br/>(Ollama, local, schema)"]
     llm --> an["answer.py<br/>parse + refuse unusable"]
-    an --> chk["checks.py<br/>firmware unchanged?<br/>SCPI error behind a timeout?"]
+    an --> chk["checks.py<br/>release the run ran?<br/>firmware unchanged?<br/>SCPI error?"]
     chk --> score["evaluate.py<br/>right fix?"]
     label["label.json"] -. answer key, never shown .-> score
 ```"""
