@@ -198,7 +198,10 @@ def test_firmware_changed_is_unknown_when_no_version_was_recorded(
     assert firmware_changed(run) is changed
     note = firmware_note(run)
     assert ("unknown" in note) is (changed is None)
-    assert ("unchanged" in note) is (changed is False)
+    assert ("the same as the last passing run" in note) is (changed is False)
+    assert ("firmware" in note.casefold()) is (changed is not False)
+    for version in versions.values():
+        assert version in note
 
 
 TIMED_OUT_TEST: dict[str, object] = {
@@ -253,7 +256,7 @@ def test_the_ablation_drops_only_the_firmware_line(tmp_path: Path) -> None:
     run = SavedRun.load(folder)
     full = build_evidence(run, FULL).splitlines()
     ablated = build_evidence(run, FULL_WITHOUT_FIRMWARE).splitlines()
-    assert [line for line in full if not line.startswith("Firmware:")] == ablated
+    assert [line for line in full if not line.startswith("Instruments:")] == ablated
     assert len(full) == len(ablated) + 1
 
 

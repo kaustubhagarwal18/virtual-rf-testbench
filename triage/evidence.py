@@ -289,6 +289,10 @@ def firmware_note(run: SavedRun) -> str:
     A firmware regression and a bench fault can look identical in the measurements; whether
     the version moved is what separates them, so it is stated rather than left to be noticed.
 
+    When nothing changed, the line doesn't use the word firmware: ADR 0013's ablation found
+    that "Firmware: … (unchanged …)" pulled the model to FIRMWARE on a run that ruled it out.
+    It states the versions and that they match, which is all the evidence there is.
+
     Args:
         run: The run.
 
@@ -302,10 +306,9 @@ def firmware_note(run: SavedRun) -> str:
         )
     versions = run.results["firmware_versions"]
     text = ", ".join(f"{role} {version}" for role, version in sorted(versions.items()))
-    moved = (
-        "changed since the last passing run" if changed else "unchanged since the last passing run"
-    )
-    return f"Firmware: {text} ({moved})."
+    if not changed:
+        return f"Instruments: {text}, the same as the last passing run."
+    return f"Firmware: {text} (changed since the last passing run)."
 
 
 def notable_logs(run: SavedRun) -> list[str]:
@@ -366,7 +369,7 @@ def full_evidence(run: SavedRun, firmware_line: bool = True) -> str:
 
     Args:
         run: The run.
-        firmware_line: Whether to state the firmware versions; False only for the ablation.
+        firmware_line: Whether to state the instruments' versions; False only for the ablation.
 
     Returns:
         The evidence as text, ready to put in a prompt.
