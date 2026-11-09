@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from triage.answer import MalformedAnswerError
+from triage.answer import VERDICT_SCHEMA, MalformedAnswerError
 from triage.embed import OllamaEmbedder
 from triage.evaluate import expected_fix
 from triage.evidence import FULL, SavedRun, error_only_evidence
@@ -202,7 +202,7 @@ def main(
         "--model", default=DEFAULT_MODEL, help=f"Ollama model to ask (default: {DEFAULT_MODEL})"
     )
     parsed = parser.parse_args(arguments)
-    provider = provider or OllamaProvider(model=parsed.model)
+    provider = provider or OllamaProvider(model=parsed.model, response_format=VERDICT_SCHEMA)
     try:
         run = SavedRun.load(parsed.run)
         if retriever is None:

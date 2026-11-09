@@ -74,7 +74,8 @@ class Scenario:
         level: The evidence level the model is given.
         retrieve: Whether the past runs most like this one are offered as sources.
         hold_out: Whether past runs of the question's own fault are kept out of retrieval,
-            so the scenario measures what the model does with no precedent.
+            so the scenario measures what the model does with no precedent of that fault.
+            Another fault with the same fix (link_down for link_flaky) may still be offered.
         checked: Whether the verdict goes through the service's checks.
         adds_to: The scenario this one adds exactly one thing to; empty for the first.
     """
