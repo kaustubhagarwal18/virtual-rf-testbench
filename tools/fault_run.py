@@ -135,7 +135,7 @@ def run_fault(
 
     Args:
         fault: The fault from the catalogue.
-        size: Its size; None uses the fault's question size.
+        size: Its size; None uses the fault's first question size.
         run_folder: The new folder to save the run in; it must not exist yet.
         bench: The bench.
         suite: The bench suite.
@@ -194,7 +194,7 @@ def save_label(run_folder: Path, fault: Fault, size: float | None) -> None:
     """
     label = {
         "fault": fault.name,
-        "size": fault.question_size if size is None else size,
+        "size": fault.question_sizes[0] if size is None else size,
         "unit": fault.unit,
         **asdict(fault.label),
     }
@@ -202,7 +202,7 @@ def save_label(run_folder: Path, fault: Fault, size: float | None) -> None:
 
 
 def dataset_plan() -> Iterator[tuple[Path, Fault, float | None]]:
-    """List every run the data set holds: three history runs and one question run per fault.
+    """List every run the data set holds: three history and three question runs per fault.
 
     Yields:
         tuple[Path, Fault, float | None]: Each run's folder relative to the data set's root,
@@ -211,13 +211,14 @@ def dataset_plan() -> Iterator[tuple[Path, Fault, float | None]]:
     for fault in CATALOGUE.values():
         for number, size in enumerate(fault.history_sizes, start=1):
             yield Path(HISTORY) / f"{fault.name}-{number}", fault, size
-        yield Path(QUESTIONS) / fault.name, fault, fault.question_size
+        for number, size in enumerate(fault.question_sizes, start=1):
+            yield Path(QUESTIONS) / f"{fault.name}-{number}", fault, size
 
 
 def build_dataset(
     root: Path, bench: ControllableBench, suite: Suite, default_version: str
 ) -> list[Path]:
-    """Run every fault at its history sizes and its question size, replacing any older data set.
+    """Run every fault at its history and question sizes, replacing any older data set.
 
     The runs are built in a staging folder and only moved into place once every one of them
     has been saved, so a bench that fails part-way leaves the previous data set untouched.

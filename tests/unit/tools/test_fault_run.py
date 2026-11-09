@@ -123,14 +123,14 @@ def test_only_the_last_log_lines_are_kept(tmp_path: Path) -> None:
 
 
 def test_the_data_set_has_history_and_question_runs_and_replaces_older_ones(tmp_path: Path) -> None:
-    """Three history runs and one question run per fault; a stale run from before is gone."""
+    """Three history and three question runs per fault; a stale run from before is gone."""
     stale = tmp_path / "history" / "old-run"
     stale.mkdir(parents=True)
     saved = build_dataset(tmp_path, FakeBench(), FakeSuite(), DEFAULT_VERSION)
     names = sorted(str(path.relative_to(tmp_path)) for path in saved)
     assert names == sorted(
         [f"history/{name}-{number}" for name in CATALOGUE for number in (1, 2, 3)]
-        + [f"questions/{name}" for name in CATALOGUE]
+        + [f"questions/{name}-{number}" for name in CATALOGUE for number in (1, 2, 3)]
     )
     assert not stale.exists()
 
@@ -149,7 +149,7 @@ def test_main_runs_one_fault_and_says_where_it_went(
 def test_main_builds_the_data_set(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """--dataset builds every run and says how many."""
     assert main(["--dataset", str(tmp_path)], FakeBench(), FakeSuite()) == 0
-    assert f"Saved {4 * len(CATALOGUE)} runs" in capsys.readouterr().out
+    assert f"Saved {6 * len(CATALOGUE)} runs" in capsys.readouterr().out
 
 
 def test_main_reports_a_bench_problem_in_one_line(

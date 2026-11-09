@@ -16,7 +16,7 @@ from triage.llm import OllamaProvider
 from triage.prompt import Fix
 from triage.service import triage_run
 
-QUESTION_RUN = Path("triage/data/runs/questions/cable_loss")
+QUESTION_RUN = Path("triage/data/runs/questions/cable_loss-1")
 """One saved run, which the data set in the repository always has."""
 
 pytestmark = pytest.mark.ollama

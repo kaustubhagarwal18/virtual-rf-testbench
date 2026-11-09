@@ -67,7 +67,8 @@ class AdminFault:
             two never drift apart.
         label: The known cause.
         history_sizes: The sizes of the history runs in the data set.
-        question_size: The size of the question run, different from every history size.
+        question_sizes: The sizes of the question runs, none of them a history size; the
+            first is what `make fault` uses when no size is given.
         selection: Extra pytest arguments, if the run needs a subset.
     """
 
@@ -76,7 +77,7 @@ class AdminFault:
     definition: FaultDefinition
     label: Label
     history_sizes: tuple[float, ...]
-    question_size: float
+    question_sizes: tuple[float, ...]
     selection: tuple[str, ...] = ()
 
     @property
@@ -114,7 +115,7 @@ class AdminFault:
         """
         bench.start(default_version)
         clear_all(bench)
-        value = self.question_size if size is None else size
+        value = self.question_sizes[0] if size is None else size
         bench.send_admin(self.instrument, f"FAULT {self.definition.name} {value:g}")
         return default_version
 
@@ -139,7 +140,7 @@ class ReleaseFault:
         unit: Empty: a release has no size.
         label: The known cause.
         history_sizes: One None per history run; releases have no size.
-        question_size: None.
+        question_sizes: One None per question run.
     """
 
     name: str
@@ -147,7 +148,7 @@ class ReleaseFault:
     label: Label
     unit: str = ""
     history_sizes: tuple[None, ...] = (None, None, None)
-    question_size: None = None
+    question_sizes: tuple[None, ...] = (None, None, None)
     selection: tuple[str, ...] = ()
 
     def suite_environment(self, size: float | None) -> dict[str, str]:
@@ -201,7 +202,7 @@ class ConfigFault:
         label: The known cause.
         unit: Empty: a configuration has no size.
         history_sizes: One None per history run.
-        question_size: None.
+        question_sizes: One None per question run.
         selection: Extra pytest arguments, if the run needs a subset.
     """
 
@@ -210,7 +211,7 @@ class ConfigFault:
     label: Label
     unit: str = ""
     history_sizes: tuple[None, ...] = (None, None, None)
-    question_size: None = None
+    question_sizes: tuple[None, ...] = (None, None, None)
     selection: tuple[str, ...] = ()
 
     def suite_environment(self, size: float | None) -> dict[str, str]:
@@ -277,7 +278,7 @@ CATALOGUE: dict[str, Fault] = {
                 "Replaced the cable and recalibrated the path loss",
             ),
             history_sizes=(0.8, 1.2, 2.0),
-            question_size=1.5,
+            question_sizes=(1.5, 1.0, 2.5),
         ),
         AdminFault(
             name="slow_responses",
@@ -289,7 +290,7 @@ CATALOGUE: dict[str, Fault] = {
                 "Raised the session timeout to cover the instrument's specified response time",
             ),
             history_sizes=(2.5, 3.0, 4.0),
-            question_size=3.5,
+            question_sizes=(3.5, 2.2, 5.0),
             selection=("-m", "smoke"),
         ),
         AdminFault(
@@ -302,7 +303,7 @@ CATALOGUE: dict[str, Fault] = {
                 "Reconnected the cable between the instruments and recalibrated",
             ),
             history_sizes=(1.0, 1.0, 1.0),
-            question_size=1.0,
+            question_sizes=(1.0, 1.0, 1.0),
         ),
         AdminFault(
             name="link_flaky",
@@ -315,7 +316,7 @@ CATALOGUE: dict[str, Fault] = {
                 "Reseated and replaced the connector, then reran the suite",
             ),
             history_sizes=(2.0, 3.0, 5.0),
-            question_size=4.0,
+            question_sizes=(4.0, 6.0, 7.0),
         ),
         ConfigFault(
             name="config_parameter_missing",
