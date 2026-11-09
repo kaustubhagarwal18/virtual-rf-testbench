@@ -1,6 +1,6 @@
 # ADR 0008: How the triage service is built, and how it is measured
 
-- **Status:** Accepted
+- **Status:** Accepted; its measurements are superseded by ADR 0009
 - **Date:** 2026-11-05
 
 ## Context

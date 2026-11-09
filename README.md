@@ -91,47 +91,52 @@ own — so scoring is an exact match and no second model is needed to judge the 
 costs an engineer hours. A reply that cites a source it was never given, or names an action
 off the list, is rejected as unusable and counted as a miss — never interpreted generously.
 
-### Measuring it: three scenarios
+### Measuring it: five scenarios
 
-Nine question runs (one per fault) are scored on whether the model names the fix that
-actually resolves the failure. The three scenarios are an **ablation** — each adds exactly
-one thing to the one before, so any change in the score is attributable to that one thing:
+27 question runs (three per fault) are scored on whether the model names the fix that
+actually resolves the failure. The scenarios are an **ablation**: each adds exactly one thing
+to the one it names, so any change in the score is attributable to that one thing.
 
-| Scenario | What the model sees | Score |
-|---|---|---|
-| **error only** | Just the first failure's message — what someone pastes into a chat window | **4 of 9** |
-| **full evidence** | The whole run's structured evidence: first failure and its numbers, whether firmware changed, which tests ran, notable log lines | **3 of 9** |
-| **full + retrieval** | Full evidence **plus the 3 most similar past runs**, each with its recorded cause and fix | **6 of 9** |
+| Scenario | What the model sees | Right (95% interval) | `UNKNOWN` | Wrong |
+|---|---|---|---|---|
+| **error only** | Just the first failure's message: what someone pastes into a chat window | **12 of 27** (7 to 17) | 0 | 15 |
+| **full evidence** | The whole run's structured evidence: first failure and its numbers, whether firmware changed, which tests ran, notable log lines | **9 of 27** (5 to 14) | 0 | 18 |
+| **full + retrieval** | Full evidence **plus the 3 most similar past runs**, each with its recorded cause and fix, cited by neutral ids | **18 of 27** (13 to 22) | 0 | 9 |
+| **+ firmware check** | The same answers, with `FIRMWARE` on unchanged firmware turned into `UNKNOWN` | **18 of 27** (13 to 22) | 3 | 6 |
+| **retrieval, own fault held out** | Full + retrieval, with no past run of the question's own fault | **9 of 27** (5 to 14) | 0 | 18 |
 
-Counts, not percentages: with nine questions, "6 of 9" is honest where "67%" is not. The
-numbers are deterministic (temperature 0, fixed seed) on one machine; another machine's model
-may differ in wording and the odd verdict.
+No reply was malformed. These are counts, with an interval, rather than percentages. The
+numbers are deterministic (temperature 0, fixed seed) on one machine; another machine's
+model may differ in wording and the odd verdict.
 
 ### What the numbers say
 
-- **Retrieval is what moves the needle.** Going from full evidence to full + retrieval raised
-  the score by 3 (3 → 6 of 9). More *evidence* alone did not help — it slightly lowered the
-  score (4 → 3), because fuller context without a precedent gave this small model more to
-  misread.
-- **The model has a fallback.** Its most common wrong choice is `FIRMWARE` (9 times across the
-  three scenarios): when unsure, it blames the firmware.
-- **The ceiling here is the model, not retrieval.** On two faults (`link_flaky`,
-  `slow_responses`) retrieval surfaced the matching past failure and the model *cited* it, yet
-  still chose the wrong action. One `link_down` reply was malformed and counted as a miss, not
-  salvaged.
-- **Solved in every scenario:** `config_parameter_missing` and `reset_leaks_offset` — the
-  failures whose error text names the fix almost literally.
+- **Retrieval works by finding the same fault.** It offered a past run of the question's own
+  fault for all 27 questions and doubled the score (9 to 18). Hold that fault out and the
+  score drops back to 9, no better than no retrieval at all. Retrieval looks up past fixes;
+  it doesn't help the model reason about a new failure.
+- **The model never says `UNKNOWN`**: 0 times in 108 answers, even with no precedent. When
+  unsure it blames the firmware (`FIRMWARE` is its most common wrong choice). The firmware
+  check catches that where the evidence settles it: it turned the three `slow_responses`
+  misses into `UNKNOWN` and cost no right answer.
+- **Citing a precedent is not acting on it.** All 6 link questions cited a LINK precedent
+  and still chose `CABLE`.
+- **More evidence alone doesn't help** this small model (12 to 9).
+- **Source ids didn't leak the answer.** With the old fault-named ids (`cable_loss-1`), the
+  retrieval scenario chose the same action on all 27 questions. The ids are neutral now
+  anyway, so the measurement doesn't rest on that.
 
 The full breakdown, every question's answer included, is in
 [`triage/results/rag.md`](triage/results/rag.md); the two no-retrieval scenarios on their own
-are in [`triage/results/baseline.md`](triage/results/baseline.md).
+are in [`triage/results/baseline.md`](triage/results/baseline.md). ADR 0009 has the
+measurements in more detail.
 
 ### Why retrieval is in-memory, for now
 
 The retriever embeds the history runs and ranks them by cosine similarity in-process. It sits
 behind a small `Retriever` interface, so a pgvector-backed store can drop in later without the
-rest of the pipeline noticing. At the current history size (about 27 runs) an in-memory index
-gives the same top-3 as a database would, so pgvector is deliberately deferred.
+rest of the pipeline noticing. At the current history size (27 runs) an exact in-memory search
+gives the same top 3 as a database would, so pgvector is deliberately deferred.
 
 ### See it on one run
 
@@ -140,19 +145,37 @@ the same failure triaged with and without past runs, side by side — on `cable_
 flips the verdict from `FIRMWARE` to `CABLE`, citing the precedents it drew on:
 
 ```
-make triage-demo RUN=triage/data/runs/questions/cable_loss
+make triage-demo RUN=triage/data/runs/questions/cable_loss-1
 ```
 
-`make triage RUN=…` explains one run without retrieval, and `make eval` scores all three
+`make triage RUN=…` explains one run without retrieval, and `make eval` scores all five
 scenarios and rewrites `triage/results/rag.md`.
+
+### Ask it over HTTP
+
+`make triage-api` serves the same pipeline on `http://127.0.0.1:8000`, with the history runs
+loaded for retrieval. It needs local Ollama with both models, like `make eval`. From another
+terminal, triage a saved run by posting its results file:
+
+```
+jq -n --slurpfile results triage/data/runs/questions/cable_loss-1/results.json '{results: $results[0]}' | curl -s -X POST http://127.0.0.1:8000/triage -H 'Content-Type: application/json' -d @-
+```
+
+The reply is the verdict as JSON: `fix`, `action`, `where`, `because`, `cited` and, when the
+firmware check overruled the model, `overruled`. `POST /history` adds a resolved run (its
+evidence plus a `label` with `fault`, `cause` and `fix`) so later failures can cite it, and
+`GET /health` reports how many past runs are loaded. Interactive docs are at
+`http://127.0.0.1:8000/docs`. The service listens on localhost only and keeps its history in
+memory (ADR 0010).
 
 ## Status
 
 Built and running: the simulated instruments, their drivers, measurement records, and a
-calibrated 20-test bench suite against the containers, all run in CI; fault injection with a
-labelled dataset of known-cause failures; and a triage assistant that names the likely cause
-and fix, citing the past runs it drew on, with its accuracy measured locally on those faults.
-Still to come is the service around it — a triage API and the deployment. The
+calibrated 20-test bench suite against the containers, all run in CI; a simulator image that
+CI scans with Trivy and publishes from `main`; fault injection with a labelled data set of
+known-cause failures; and a triage assistant, on the command line and over HTTP, that names
+the likely fix, citing the past runs it drew on, with its accuracy measured locally on those
+faults. Still to come is the deployment to a cluster. The
 [roadmap](docs/ROADMAP.md) has the plan, and [ARCHITECTURE.md](docs/ARCHITECTURE.md) explains
 how the pieces fit together.
 
@@ -272,7 +295,7 @@ make bench-down
 ```
 
 Each container runs as an unprivileged user on a read-only filesystem, and reports the
-image's version in `*IDN?`. ADR 0004 explains the choices.
+image's version in `*IDN?`. The image carries no `pip`, and CI scans it with Trivy. ADR 0004 explains the choices.
 
 ### Faults
 
@@ -320,8 +343,8 @@ closed ticket would carry. A run where nothing failed isn't saved; one pytest co
 is kept and reported, never counted as a pass.
 
 `make fault-dataset` builds the triage data set in `triage/data/runs/`: three history runs
-per fault, and one question run each. Where a fault has a size, the question uses one no
-history run has. ADR 0005 explains the faults, ADR 0007 the sequence log.
+and three question runs per fault, 54 in all, in about 8 minutes. Where a fault has a size,
+each question uses one no history run has. ADR 0005 explains the faults, ADR 0007 the sequence log.
 
 ### The bench suite
 
@@ -400,9 +423,11 @@ make test
 | `make bench-test` / `bench-summary` | Runs the bench suite against the containers, writing `reports/bench-junit.xml` and `reports/bench-results.json`, and prints its summary |
 | `make fault NAME=… [SIZE=…]` | Runs the bench suite with one fault on and saves the run with its label in `results/faults/` |
 | `BENCH_LEVEL_OFFSET_DB`, `BENCH_CHANNEL_BANDWIDTH_HZ` | The bench configuration the setup sequence applies; unset means a healthy bench |
-| `make fault-dataset` | Rebuilds the triage data set in `triage/data/runs/`: every fault, three history runs and one question run each |
+| `make fault-dataset` | Rebuilds the triage data set in `triage/data/runs/`: every fault, three history runs and three question runs each |
 | `make triage RUN=…` | Explains one saved run: names the likely cause and fix from its evidence alone, without retrieving past runs (needs a local Ollama model) |
 | `make triage-demo RUN=…` | Triages one run with and without retrieval, side by side, to show what the past runs add (needs local Ollama answering and embedding models) |
+| `make triage-api` | Serves triage over HTTP on localhost:8000: `POST /triage`, `POST /history`, `GET /health` (needs local Ollama answering and embedding models) |
+| `make image` / `image-scan` | Builds the simulator image, or scans it with Trivy as CI does (needs Trivy installed) |
 | `make eval [MODEL=…]` | Scores the triage against the labelled question runs and writes `triage/results/rag.md` (needs local Ollama answering and embedding models) |
 | `make clean` | Removes the virtual environment, the tool caches and the pre-commit hook; `make setup` restores them |
 
@@ -417,7 +442,9 @@ GitHub Actions runs on every pull request and on every push to `main`:
 |---|---|
 | Lint | Every pre-commit hook on all files: trailing whitespace, final newlines, YAML and TOML syntax, large files, merge conflict markers, then `make lint` |
 | Test (Python 3.13) | `make test`, including the 80% coverage floor, then `make summary`, whose table appears on the run's summary page |
-| Bench (containers) | Builds the simulator image, `make bench-up`, `make bench-test`, then `make bench-summary` on the run's summary page; shows the simulator logs if anything failed |
+| Image (build and scan) | Builds the simulator image once and scans it with Trivy 0.76.1 (pinned, checksum-verified); fails on a fixable high or critical vulnerability |
+| Bench (containers) | Loads that same image, `make bench-up BENCH_BUILD=--no-build`, `make bench-test`, then `make bench-summary` on the run's summary page; shows the simulator logs if anything failed |
+| Publish image | On pushes to `main` only, once every other job passed: pushes the scanned image to GitHub Container Registry as `virtual-rf-testbench-simulators:<version>-<commit>` |
 | Secret scan | gitleaks 8.30.1 over the full git history, including merge commits; the download is checksum-verified |
 | Results comment | On pull requests, once the other jobs finish: posts one comment with the test and bench results, coverage, any failures and each job's result, and updates that same comment on every push |
 

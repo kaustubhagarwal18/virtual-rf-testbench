@@ -28,15 +28,16 @@ flowchart LR
     checks --> records[Measurement records<br/>value, limit, margin, firmware]
     records --> junit[JUnit XML]
     junit --> summary[CI results summary]
-    junit -.->|planned| triage[Triage assistant]
+    records --> results[results.json]
+    results --> triage[Triage assistant]
 ```
 
 A test asks the generator for a carrier and the analyzer for a reading, through the drivers.
 The analyzer has no real cable, so it asks the generator what it is sending over the
 generator's admin port, and turns that into a reading with the physics model. The test
 compares the reading with its limit and records value, limit, margin and both firmware
-versions in the JUnit XML. CI turns that XML into the summary on each run page. The planned
-triage assistant will read the same records to explain failures.
+versions in the JUnit XML. CI turns that XML into the summary on each run page. The triage
+assistant reads the same records, from the run's results file, to explain a failure.
 
 ## The simulated instruments
 
@@ -84,7 +85,7 @@ sequenceDiagram
   (`signal_generator/releases.py`): `0.2.0-rc1` drops the short `OUTP` form, and `0.2.0-rc2`
   stops clearing the level offset on `*RST`.
 - **Logs** (`logs.py`) are one JSON object per line on stderr, so they can be searched and,
-  later, ingested by the triage service. Logging never blocks an instrument: each record
+  posted to the triage service with a failed run. Logging never blocks an instrument: each record
   goes on a bounded queue that a background thread writes to stderr. If nothing reads
   stderr and the queue fills, records are dropped and counted, and a warning says how many
   were lost once there is room again.
@@ -161,7 +162,7 @@ bound), the margin to that limit, pass or fail, and both instruments' firmware v
 The `record_measurements` fixture writes each one into the JUnit XML as properties, then
 fails the test listing every measurement that missed, with its margin. A failure therefore
 always says what was measured, against which limit, by how much it missed, and on which
-firmware. That is the evidence the triage assistant will cite. A NaN or infinite reading
+firmware. That is the evidence the triage assistant reads. A NaN or infinite reading
 always fails, and its value and margin are recorded as `"NaN"`, `"Infinity"` or
 `"-Infinity"`, so the JUnit properties stay standard JSON.
 
@@ -198,7 +199,50 @@ flowchart LR
 evidence without ever seeing the answer. For the configuration faults and the leaked offset,
 `sequence.log` is the only place the cause appears (ADR 0007). The data
 set in `triage/data/runs/` holds three history runs per fault, which triage may retrieve, and
-one question run per fault at a size no history run has, which it is asked about.
+three question runs per fault, each at a size no history run has where the fault has a size,
+which it is asked about.
+
+## Triage
+
+The triage assistant answers one question about a failed run: what should an engineer do
+about it? It is one pipeline (`triage/service.py`), used three ways: `make triage` on a saved
+run, the HTTP API (`triage/api.py`, `make triage-api`), and the evaluation
+(`triage/evaluate.py`, `make eval`), which scores it against the labelled question runs.
+
+```mermaid
+flowchart LR
+    run["Failed run<br/>results.json, logs, sequence.log"] --> ev["evidence.py<br/>first failure first"]
+    hist[("History<br/>resolved runs, neutral ids")] --> ret["retrieval.py<br/>top 3 by cosine"]
+    run --> ret
+    ev --> pr["prompt.py<br/>fixed list of actions"]
+    ret --> pr
+    pr --> llm["qwen2.5:3b<br/>local Ollama, JSON schema"]
+    llm --> an["answer.py<br/>strict parse"]
+    an --> chk["checks.py<br/>FIRMWARE on unchanged<br/>firmware → UNKNOWN"]
+    chk --> verdict["Verdict<br/>action, where, why, cited"]
+    api["POST /history<br/>resolved run + label"] --> hist
+```
+
+- **Evidence** leads with the first failure, because a run with nineteen errors has one
+  cause. It never reads `label.json`.
+- **Retrieval** embeds each resolved run with `nomic-embed-text` and ranks by cosine
+  similarity in memory. A source is cited by a hash of its text (`past-3fa2c1d0`), never by
+  its folder, because folder names name the fault (ADR 0009).
+- **The model** picks one action from a fixed list, or `UNKNOWN`. Its reply is constrained
+  to the answer's JSON schema and still parsed strictly: an invented citation or an
+  off-list action is refused, not interpreted.
+- **Checks** compare the verdict with facts the evidence states outright. The only one so
+  far turns `FIRMWARE` into `UNKNOWN` when the firmware is the same release as the last
+  passing run. A check never picks another action in the model's place.
+- **The evaluation** scores five scenarios, each adding one thing to another: error text
+  only, full evidence, plus retrieval, plus the firmware check, and retrieval with the
+  question's own fault held out of the history. It counts right, `UNKNOWN`, confidently
+  wrong and malformed answers apart, with a 95% interval, and reports how often retrieval
+  offered a past run of the question's own fault.
+
+The API (ADR 0010) keeps the history in memory, loaded from `triage/data/runs/history/` at
+start, and adds to it through `POST /history`. It listens on localhost and talks only to the
+local Ollama.
 
 ## Three test suites
 
@@ -217,11 +261,25 @@ needs no Docker, and enforces the 80% coverage floor over the first two suites.
 
 One image runs both simulators (ADR 0004); Compose picks which one each container runs. The
 image is built from `uv.lock` in two stages, contains no RsInstrument (only the drivers need
-it), runs as an unprivileged user on a read-only filesystem with every capability dropped,
-and reports its version in `*IDN?`. That version is the "firmware release" under test.
+it), applies Debian security updates and drops `pip`, runs as an unprivileged user on a
+read-only filesystem with every capability dropped, and reports its version in `*IDN?`. That version is the "firmware release" under test.
 `make bench-up` waits until both healthchecks see an `*IDN?` reply. The analyzer reaches the
 generator's admin port by its Compose service name, and every port is published on
 localhost only.
+
+In CI the image is built once (ADR 0011). Trivy scans it and fails on any fixable high or
+critical vulnerability. The bench suite then runs against that same image, loaded rather
+than rebuilt, and only after a push to `main` is it pushed to GitHub Container Registry,
+tagged `<version>-<commit>`.
+
+```mermaid
+flowchart LR
+    build["image job<br/>make image"] --> scan["Trivy<br/>fixable HIGH/CRITICAL fails"]
+    scan --> tar[("simulators.tar<br/>artifact")]
+    tar --> bench["bench job<br/>loaded, not rebuilt"]
+    tar --> publish["publish job<br/>main only → GHCR"]
+    bench --> publish
+```
 
 ## Where to look
 
@@ -245,7 +303,14 @@ localhost only.
 | Path-loss calibration and its limits | `tests/utilities/calibration.py` |
 | The setup sequence and its log | `tests/bench/conftest.py`, `tests/utilities/sequencer.py`, `tests/utilities/bench_config.py` |
 | The fault catalogue, `make fault` and the data set | `tools/faults.py`, `tools/fault_run.py`, `tools/bench_control.py` |
-| CI jobs | `.github/workflows/ci.yml` |
+| The evidence a run gives the model | `triage/evidence.py` |
+| The prompt and the list of actions | `triage/prompt.py` |
+| How a reply is parsed, and its schema | `triage/answer.py` |
+| Retrieval and source ids | `triage/retrieval.py`, `triage/embed.py` |
+| Checks on a verdict | `triage/checks.py` |
+| The HTTP API | `triage/api.py` |
+| Evaluation scenarios, scoring and the report | `triage/evaluate.py`, `triage/results/rag.md` |
+| CI jobs, the image scan and publishing | `.github/workflows/ci.yml` |
 
 ## Decisions
 
@@ -258,5 +323,9 @@ localhost only.
 | [0005](adr/0005-fault-injection.md) | Fault injection on the admin ports and as simulated releases |
 | [0006](adr/0006-calibrated-level-measurements.md) | Levels are judged against a measured path loss, not a nominal one |
 | [0007](adr/0007-sequence-log.md) | A failed setup step names the step, and the sequence log holds the reason |
+| [0008](adr/0008-triage-design.md) | How triage is built and measured: a fixed list of actions, injected interfaces, one prompt |
+| [0009](adr/0009-honest-triage-evaluation.md) | Neutral source ids, a held-out-fault scenario, three questions per fault, and a firmware check |
+| [0010](adr/0010-triage-http-api.md) | A FastAPI service with an in-memory history; pgvector deferred |
+| [0011](adr/0011-ci-image-build-scan-publish.md) | Build the image once in CI, scan it with Trivy, bench it, and publish it from `main` |
 
 What comes next is in the [roadmap](ROADMAP.md).
