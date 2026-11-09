@@ -117,7 +117,9 @@ def test_an_added_run_can_be_retrieved_and_is_kept_once(tmp_path: Path) -> None:
     second = retriever.add(resolved, label)
     assert first == second
     assert len(retriever.sources) == 1
-    assert retriever.similar_to(question, count=3) == [first]
+    found = retriever.similar_to(question, count=3)
+    assert [source.source_id for source in found] == [first.source_id]
+    assert found[0].similarity is not None
 
 
 @pytest.mark.parametrize(("action", "shown"), [("LINK", True), (None, False), ("", False)])
@@ -132,6 +134,26 @@ def test_a_source_states_the_action_taken_when_the_label_records_one(
     text = history_source(run, label).text
     assert ("Action: LINK" in text) is shown
     assert ("Action:" in text) is shown
+
+
+def test_retrieved_sources_carry_their_action_and_similarity(tmp_path: Path) -> None:
+    """A source says how its run was resolved and how close it came, most similar first."""
+    history = tmp_path / "history"
+    for name, message, action in [
+        ("a", "path loss cable datasheet exceeded", "CABLE"),
+        ("b", "timeout no reply from port", "TIMEOUT"),
+    ]:
+        run = run_with_error(history / name, name, message)
+        label = json.loads((run / "label.json").read_text(encoding="utf-8"))
+        (run / "label.json").write_text(json.dumps({**label, "action": action}), "utf-8")
+    retriever = InMemoryRetriever.from_history(history, FakeEmbedder())
+    question = SavedRun.load(run_with_error(tmp_path / "q", "a", "path loss cable datasheet"))
+    found = retriever.similar_to(question, count=2)
+    assert [source.action for source in found] == ["CABLE", "TIMEOUT"]
+    similarities = [source.similarity for source in found if source.similarity is not None]
+    assert len(similarities) == len(found)
+    assert similarities == sorted(similarities, reverse=True)
+    assert all(source.similarity is None for source in retriever.sources)
 
 
 @pytest.mark.parametrize("copies", [2, 3, 5])

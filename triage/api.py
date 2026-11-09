@@ -344,7 +344,7 @@ def create_app(
             if request.retrieve and history is not None:
                 with lock:
                     sources = history.similar_to(run, top_k)
-            verdict = triage_run(run, provider, request.level, sources, checks)
+            verdict = triage_run(run, provider, request.level, sources, checks=checks)
         except ModelUnavailableError as error:
             raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(error)) from error
         except MalformedAnswerError as error:

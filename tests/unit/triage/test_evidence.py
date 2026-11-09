@@ -7,7 +7,10 @@ import pytest
 
 from triage.evidence import (
     ERROR_ONLY,
+    EVALUATED_LEVELS,
     FULL,
+    FULL_WITHOUT_FIRMWARE,
+    LEVELS,
     SavedRun,
     build_evidence,
     firmware_changed,
@@ -196,3 +199,65 @@ def test_firmware_changed_is_unknown_when_no_version_was_recorded(
     note = firmware_note(run)
     assert ("unknown" in note) is (changed is None)
     assert ("unchanged" in note) is (changed is False)
+
+
+TIMED_OUT_TEST: dict[str, object] = {
+    "id": "tests/bench/test_bench.py::test_reset",
+    "outcome": "error",
+    "message": "InstrumentTimeoutError: no reply to 'OUTP?'",
+    "instrument_errors": ['-113,"Undefined header"'],
+    "measurements": [],
+}
+"""A test that timed out on a query after the instrument rejected the command before it."""
+
+
+@pytest.mark.parametrize(
+    ("errors_per_test", "expected"),
+    [
+        ([[], []], None),
+        ([['-113,"Undefined header"'], []], '-113,"Undefined header", reported by 1 of 2'),
+        ([["-113,a"], ["-113,a"]], "-113,a, reported by 2 of 2"),
+        ([["-113,a", "-222,b"], ["-222,b"]], "-113,a; -222,b, reported by 2 of 2"),
+    ],
+)
+def test_an_instrument_error_leads_the_full_evidence(
+    tmp_path: Path, errors_per_test: list[list[str]], expected: str | None
+) -> None:
+    """Each distinct SCPI error is named once, first, ahead of the timeout it caused."""
+    tests = [
+        {**TIMED_OUT_TEST, "id": f"t::{index}", "instrument_errors": errors}
+        for index, errors in enumerate(errors_per_test)
+    ]
+    run = SavedRun.load(write_run(tmp_path / "run", tests))
+    lines = build_evidence(run, FULL).splitlines()
+    if expected is None:
+        assert lines[0].startswith("First failure:")
+        assert "Instrument error:" not in "\n".join(lines)
+    else:
+        assert lines[0] == f"Instrument error: {expected} failed tests."
+        assert lines[1].startswith("First failure:")
+
+
+def test_the_error_only_evidence_stays_the_pasted_message(tmp_path: Path) -> None:
+    """Error-only is what a person pastes, so it gains no instrument-error line."""
+    run = SavedRun.load(write_run(tmp_path / "run", [TIMED_OUT_TEST]))
+    assert build_evidence(run, ERROR_ONLY) == TIMED_OUT_TEST["message"]
+
+
+def test_the_ablation_drops_only_the_firmware_line(tmp_path: Path) -> None:
+    """Without the firmware line, every other line of the full evidence is unchanged."""
+    folder = write_run(tmp_path / "run", [FAILING_TEST])
+    results = json.loads((folder / "results.json").read_text(encoding="utf-8"))
+    results["firmware_versions"] = {"analyzer": "0.1.0", "generator": "0.1.0"}
+    (folder / "results.json").write_text(json.dumps(results), encoding="utf-8")
+    run = SavedRun.load(folder)
+    full = build_evidence(run, FULL).splitlines()
+    ablated = build_evidence(run, FULL_WITHOUT_FIRMWARE).splitlines()
+    assert [line for line in full if not line.startswith("Firmware:")] == ablated
+    assert len(full) == len(ablated) + 1
+
+
+def test_the_ablation_is_evaluated_but_not_offered_to_callers() -> None:
+    """A request may ask for error-only or full; only the evaluation builds the ablation."""
+    assert FULL_WITHOUT_FIRMWARE not in LEVELS
+    assert set(EVALUATED_LEVELS) == {*LEVELS, FULL_WITHOUT_FIRMWARE}

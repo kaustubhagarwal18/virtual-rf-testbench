@@ -25,6 +25,12 @@ it, so the package version moves only with a release.
 - **Action keys in labels.** Every fault label records the action that resolved it
   (`"action": "LINK"`), the evaluation scores against it, and a history source ends
   `Action: LINK`. The API's resolved-run label accepts it as an optional field.
+- **Abstention gates** (`triage/abstain.py`, ADR 0013), scored in two new scenarios:
+  `UNKNOWN` without asking the model when the precedents record different actions or the
+  closest is below 0.95 similarity. `tools/calibrate_abstention.py` sets the threshold from
+  the history runs alone. The API doesn't apply them.
+- **A firmware-line ablation:** an evaluation-only evidence level without the
+  "Firmware: …" line, and a scenario that scores it.
 - **A persistent answer cache** for `make eval` under `.cache/triage-answers/`, keyed by the
   model's settings and both prompts; `--no-cache` asks every prompt again.
 - **Schema-constrained replies.** The answering model is asked through Ollama's structured
@@ -42,6 +48,9 @@ it, so the package version moves only with a release.
 - `CABLE` and `LINK` are described by their symptoms: "signal present but attenuated", and
   "no signal or intermittent signal; the path is open".
 - The held-out scenario applies the checks too.
+- Full evidence opens with the SCPI errors the failed tests reported, ahead of the timeout
+  they caused.
+- `triage_run` takes `checks` and `gates` as keyword arguments.
 
 - The simulator image is repinned to the current `python:3.13.18-slim-trixie` digest,
   applies Debian security updates at build time, and no longer contains `pip`. That took
@@ -65,6 +74,8 @@ it, so the package version moves only with a release.
 
 - With retrieval, the model's answers on `link_down` are unusable: it puts a source's text
   in `cited` instead of its id, so all three are refused as malformed.
+- The similarity gate refuses more right answers than it prevents wrong ones when the
+  question's own fault is held out (6 against 3); ADR 0013 shows why no threshold fixes it.
 - `qwen2.5:3b` is sensitive to wording: rewording two action descriptions moved the
   error-only scenario, whose evidence didn't change, from 12 to 9 questions right.
 - The API's history lives in memory; runs added with `POST /history` are lost on restart.

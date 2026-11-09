@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from tests.unit.triage.test_evidence import FAILING_TEST, write_run
+from triage.abstain import DEFAULT_GATES
 from triage.answer import MalformedAnswerError
 from triage.checks import DEFAULT_CHECKS
 from triage.evidence import ERROR_ONLY, FULL, SavedRun
@@ -144,3 +145,26 @@ def test_checks_are_off_unless_asked_for(tmp_path: Path) -> None:
     assert triage_run(run, FakeProvider([FIRMWARE_REPLY])).fix is Fix.FIRMWARE
     checked = triage_run(run, FakeProvider([FIRMWARE_REPLY]), checks=DEFAULT_CHECKS)
     assert checked.fix is Fix.UNKNOWN
+
+
+def test_a_gate_that_objects_answers_unknown_without_asking_the_model(tmp_path: Path) -> None:
+    """Disagreeing precedents give UNKNOWN, and the model is never sent a prompt."""
+    sources = [Source("past-a", "a", "cable_loss", "CABLE"), Source("past-b", "b", "x", "LINK")]
+    provider = FakeProvider([VERDICT])
+    verdict = triage_run(saved_run(tmp_path), provider, FULL, sources, gates=DEFAULT_GATES)
+    assert verdict.fix is Fix.UNKNOWN
+    assert verdict.cited == []
+    assert "different actions" in verdict.gate_reason
+    assert not provider.prompts
+
+
+@pytest.mark.parametrize("sources", [[], [Source("past-a", "a", "cable_loss", "CABLE", 0.99)]])
+def test_gates_that_find_no_objection_leave_the_answer_to_the_model(
+    tmp_path: Path, sources: list[Source]
+) -> None:
+    """No precedents, or close ones that agree: the model is asked as before."""
+    provider = FakeProvider([VERDICT])
+    verdict = triage_run(saved_run(tmp_path), provider, FULL, sources, gates=DEFAULT_GATES)
+    assert verdict.fix is Fix.CABLE
+    assert verdict.gate_reason == ""
+    assert len(provider.prompts) == 1

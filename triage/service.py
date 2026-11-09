@@ -10,11 +10,12 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from triage.abstain import SourceGate, reason_to_abstain
 from triage.answer import VERDICT_SCHEMA, MalformedAnswerError, Verdict, parse_verdict
 from triage.checks import DEFAULT_CHECKS, VerdictCheck, apply_checks
 from triage.evidence import ERROR_ONLY, FULL, SavedRun, build_evidence
 from triage.llm import LLMProvider, ModelUnavailableError, OllamaProvider
-from triage.prompt import Source, build_prompt
+from triage.prompt import Fix, Source, build_prompt
 
 
 def triage_run(
@@ -22,7 +23,9 @@ def triage_run(
     provider: LLMProvider,
     level: str = FULL,
     sources: Sequence[Source] = (),
+    *,
     checks: tuple[VerdictCheck, ...] = (),
+    gates: Sequence[SourceGate] = (),
 ) -> Verdict:
     """Decide what to do about one failed run.
 
@@ -37,10 +40,17 @@ def triage_run(
         sources: Past runs and documents to offer; none for the scenarios without retrieval.
         checks: Rules the verdict must agree with; one that contradicts the evidence becomes
             UNKNOWN. None by default, so a measurement of the model alone stays one.
+        gates: Rules on the sources alone; when one finds no basis for an answer, the
+            verdict is UNKNOWN and the model is not asked. None by default.
 
     Returns:
         The verdict: the action to take, what to act on, why, and what it cited.
     """
+    reason = reason_to_abstain(sources, gates)
+    if reason:
+        return Verdict(
+            fix=Fix.UNKNOWN, where="no precedent to follow", because=reason, gate_reason=reason
+        )
     evidence = build_evidence(run, level)
     system, user = build_prompt(evidence, sources)
     reply = provider.complete(system, user)

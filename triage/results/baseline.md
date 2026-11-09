@@ -7,7 +7,9 @@ flowchart LR
     run["Saved run<br/>results, logs, sequence"] --> ev["evidence.py<br/>first failure"]
     hist[("History runs<br/>neutral ids")] --> ret["retrieval.py<br/>top 3"]
     ev --> pr["prompt.py<br/>instructions + fix list"]
-    ret --> pr
+    ret --> gate{"abstain.py<br/>precedents agree<br/>and close?"}
+    gate -- yes --> pr
+    gate -- no --> unk["UNKNOWN<br/>model not asked"]
     pr --> llm["qwen2.5:3b<br/>(Ollama, local, schema)"]
     llm --> an["answer.py<br/>parse + refuse unusable"]
     an --> chk["checks.py<br/>release the run ran?<br/>firmware unchanged?<br/>SCPI error?"]
@@ -19,22 +21,23 @@ flowchart LR
 |---|---|---|---|---|---|---|---|
 | error only |  | 3 of 9 | 1 to 6 | 9 of 27 | 0 | 18 | 0 |
 | full evidence | to error only | 4 of 9 | 2 to 7 | 13 of 27 | 0 | 14 | 0 |
+| full evidence, no firmware line | to full evidence | 4 of 9 | 2 to 7 | 13 of 27 | 0 | 14 | 0 |
 
 ## By fault
 
 Questions right, of those asked, for each fault.
 
-| Fault | Expected | error only | full evidence |
-|---|---|---|---|
-| cable_loss | CABLE | 0/3 | 3/3 |
-| config_decimal_error | CONFIGURATION | 0/3 | 0/3 |
-| config_parameter_missing | CONFIGURATION | 3/3 | 3/3 |
-| config_parameter_out_of_range | CONFIGURATION | 0/3 | 0/3 |
-| link_down | LINK | 0/3 | 0/3 |
-| link_flaky | LINK | 0/3 | 1/3 |
-| output_command_change | FIRMWARE | 0/3 | 3/3 |
-| reset_leaks_offset | FIRMWARE | 3/3 | 3/3 |
-| slow_responses | TIMEOUT | 3/3 | 0/3 |
+| Fault | Expected | error only | full evidence | full evidence, no firmware line |
+|---|---|---|---|---|
+| cable_loss | CABLE | 0/3 | 3/3 | 3/3 |
+| config_decimal_error | CONFIGURATION | 0/3 | 0/3 | 3/3 |
+| config_parameter_missing | CONFIGURATION | 3/3 | 3/3 | 3/3 |
+| config_parameter_out_of_range | CONFIGURATION | 0/3 | 0/3 | 0/3 |
+| link_down | LINK | 0/3 | 0/3 | 0/3 |
+| link_flaky | LINK | 0/3 | 1/3 | 1/3 |
+| output_command_change | FIRMWARE | 0/3 | 3/3 | 3/3 |
+| reset_leaks_offset | FIRMWARE | 3/3 | 3/3 | 0/3 |
+| slow_responses | TIMEOUT | 3/3 | 0/3 | 0/3 |
 
 ## error only: 3 of 9 faults solved (95% interval 1 to 6); 9 of 27 questions right; 0 UNKNOWN, 18 wrong, 0 malformed
 
@@ -92,9 +95,9 @@ Confident wrong choices: FIRMWARE x15, TIMEOUT x3.
 | link_flaky-1 | LINK | CABLE | ✗ | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> CABLE (cable and connectors) because No signal or intermittent signal; the path is open, and the instrument logs indicate no... |
 | link_flaky-2 | LINK | CABLE | ✗ | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> CABLE (signal generator and spectrum analyzer cables) because The instrument logs indicate no signal reaching the analyzer,... |
 | link_flaky-3 | LINK | LINK | ✓ | `Failed: path_loss_5000mhz: 110.132770235 dB, limit 2.85410196625 to 3.85410196625 dB,...` -> LINK (the path between the instruments) because Multiple warnings indicate no signal reaching the analyzer, suggesting the path... |
-| output_command_change-1 | FIRMWARE | FIRMWARE | ✓ | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE (instrument firmware) because The instrument logs show command rejection errors and data out of range issues, indicating... |
-| output_command_change-2 | FIRMWARE | FIRMWARE | ✓ | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE (instrument firmware) because The test failures are attributed to the instrument firmware, specifically the 'Undefined... |
-| output_command_change-3 | FIRMWARE | FIRMWARE | ✓ | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE (instrument firmware) because The test failures are attributed to the instrument firmware, specifically the 'Undefined... |
+| output_command_change-1 | FIRMWARE | FIRMWARE | ✓ | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE (instrument firmware) because The instrument error is related to the firmware version, which has changed since the last... |
+| output_command_change-2 | FIRMWARE | FIRMWARE | ✓ | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE (instrument firmware) because The instrument error is related to the firmware version, which has changed since the last... |
+| output_command_change-3 | FIRMWARE | FIRMWARE | ✓ | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE (instrument firmware) because The instrument error is related to the firmware version, which has changed since the last... |
 | reset_leaks_offset-1 | FIRMWARE | FIRMWARE | ✓ | `AssertionError: the generator carries a level offset of -2 dB, but the bench...` -> FIRMWARE (generator firmware) because The generator's firmware is different from the last passing run, which may have introduced... |
 | reset_leaks_offset-2 | FIRMWARE | FIRMWARE | ✓ | `AssertionError: the generator carries a level offset of -2 dB, but the bench...` -> FIRMWARE (generator firmware) because The generator's firmware is different from the last passing run, which may have introduced... |
 | reset_leaks_offset-3 | FIRMWARE | FIRMWARE | ✓ | `AssertionError: the generator carries a level offset of -2 dB, but the bench...` -> FIRMWARE (generator firmware) because The generator's firmware is different from the last passing run, which may have introduced... |
@@ -104,12 +107,47 @@ Confident wrong choices: FIRMWARE x15, TIMEOUT x3.
 
 Confident wrong choices: FIRMWARE x9, CABLE x5.
 
+## full evidence, no firmware line: 4 of 9 faults solved (95% interval 2 to 7); 13 of 27 questions right; 0 UNKNOWN, 14 wrong, 0 malformed
+
+| Question | Expected | Chosen | | Error shown → the model's answer |
+|---|---|---|---|---|
+| cable_loss-1 | CABLE | CABLE | ✓ | `Failed: path_loss_100mhz: 1.8898817412 dB, limit 0 to 0.974341649025 dB, margin -0.91554...` -> CABLE (cable and connectors) because The test failed due to path_loss measurements exceeding the cable datasheet limits,... |
+| cable_loss-2 | CABLE | CABLE | ✓ | `Failed: path_loss_100mhz: 1.3898817412 dB, limit 0 to 0.974341649025 dB, margin -0.41554...` -> CABLE (cable and connectors) because The test failed due to path_loss measurements exceeding the cable datasheet limits,... |
+| cable_loss-3 | CABLE | CABLE | ✓ | `Failed: path_loss_100mhz: 2.8898817412 dB, limit 0 to 0.974341649025 dB, margin -1.91554...` -> CABLE (cable and connectors) because The test failed due to path_loss measurements exceeding the cable datasheet limits,... |
+| config_decimal_error-1 | CONFIGURATION | CONFIGURATION | ✓ | `AssertionError: the generator carries a level offset of 0 dB, but the bench configuration...` -> CONFIGURATION (bench configuration) because The generator's level offset is expected to be 15 dB, but the configuration indicates... |
+| config_decimal_error-2 | CONFIGURATION | CONFIGURATION | ✓ | `AssertionError: the generator carries a level offset of 0 dB, but the bench configuration...` -> CONFIGURATION (bench configuration) because The generator's level offset is expected to be 15 dB, but the configuration indicates... |
+| config_decimal_error-3 | CONFIGURATION | CONFIGURATION | ✓ | `AssertionError: the generator carries a level offset of 0 dB, but the bench configuration...` -> CONFIGURATION (bench configuration) because The generator's level offset is expected to be 15 dB, but the configuration indicates... |
+| config_parameter_missing-1 | CONFIGURATION | CONFIGURATION | ✓ | `ConfigurationError: BENCH_LEVEL_OFFSET_DB is not set in the bench configuration` -> CONFIGURATION (bench configuration) because ConfigurationError: BENCH_LEVEL_OFFSET_DB is not set in the bench configuration |
+| config_parameter_missing-2 | CONFIGURATION | CONFIGURATION | ✓ | `ConfigurationError: BENCH_LEVEL_OFFSET_DB is not set in the bench configuration` -> CONFIGURATION (bench configuration) because ConfigurationError: BENCH_LEVEL_OFFSET_DB is not set in the bench configuration |
+| config_parameter_missing-3 | CONFIGURATION | CONFIGURATION | ✓ | `ConfigurationError: BENCH_LEVEL_OFFSET_DB is not set in the bench configuration` -> CONFIGURATION (bench configuration) because ConfigurationError: BENCH_LEVEL_OFFSET_DB is not set in the bench configuration |
+| config_parameter_out_of_range-1 | CONFIGURATION | FIRMWARE | ✗ | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> FIRMWARE (test code and its configuration) because The configuration error suggests a regression in the firmware that limits the... |
+| config_parameter_out_of_range-2 | CONFIGURATION | FIRMWARE | ✗ | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> FIRMWARE (test code and its configuration) because The configuration error suggests a regression in the firmware that limits the... |
+| config_parameter_out_of_range-3 | CONFIGURATION | FIRMWARE | ✗ | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> FIRMWARE (test code and its configuration) because The configuration error suggests a regression in the firmware that limits the... |
+| link_down-1 | LINK | CABLE | ✗ | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> CABLE (cable and connectors) because No signal or intermittent signal; the path is open, and the test... |
+| link_down-2 | LINK | CABLE | ✗ | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> CABLE (signal generator and spectrum analyzer cables) because The tests failed due to path_loss values exceeding the limits,... |
+| link_down-3 | LINK | CABLE | ✗ | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> CABLE (cable and connectors) because No signal or intermittent signal; the path is open, and the test... |
+| link_flaky-1 | LINK | CABLE | ✗ | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> CABLE (cable and connectors) because No signal or intermittent signal; the path is open, and the test failed due to path_loss... |
+| link_flaky-2 | LINK | CABLE | ✗ | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> CABLE (signal generator and spectrum analyzer cables) because The tests failed due to signal loss or attenuation, indicated by... |
+| link_flaky-3 | LINK | LINK | ✓ | `Failed: path_loss_5000mhz: 110.132770235 dB, limit 2.85410196625 to 3.85410196625 dB,...` -> LINK (Path between instruments) because Tests show no signal reaching the analyzer, indicating the path is not open. |
+| output_command_change-1 | FIRMWARE | FIRMWARE | ✓ | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE (Instrument firmware) because The instrument error is related to 'Undefined header', which suggests a firmware... |
+| output_command_change-2 | FIRMWARE | FIRMWARE | ✓ | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE (Instrument firmware) because The instrument error is related to 'Undefined header', which suggests a firmware... |
+| output_command_change-3 | FIRMWARE | FIRMWARE | ✓ | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE (instrument firmware) because The instrument error is related to undefined header, which could indicate a firmware... |
+| reset_leaks_offset-1 | FIRMWARE | CONFIGURATION | ✗ | `AssertionError: the generator carries a level offset of -2 dB, but the bench...` -> CONFIGURATION (bench configuration) because The generator's level offset is -2 dB, but the configuration expects 0 dB, leading to... |
+| reset_leaks_offset-2 | FIRMWARE | CONFIGURATION | ✗ | `AssertionError: the generator carries a level offset of -2 dB, but the bench...` -> CONFIGURATION (bench configuration) because The generator's level offset is -2 dB, but the configuration expects 0 dB, leading to... |
+| reset_leaks_offset-3 | FIRMWARE | CONFIGURATION | ✗ | `AssertionError: the generator carries a level offset of -2 dB, but the bench...` -> CONFIGURATION (bench configuration) because The generator's level offset is -2 dB, but the configuration expects 0 dB, leading to... |
+| slow_responses-1 | TIMEOUT | FIRMWARE | ✗ | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> FIRMWARE (previous release) because The test_instruments_identify_as_the_release_under_test failed with an... |
+| slow_responses-2 | TIMEOUT | FIRMWARE | ✗ | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> FIRMWARE (previous release) because The test_instruments_identify_as_the_release_under_test failed with an... |
+| slow_responses-3 | TIMEOUT | FIRMWARE | ✗ | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> FIRMWARE (previous release) because The test_instruments_identify_as_the_release_under_test failed with an... |
+
+Confident wrong choices: FIRMWARE x6, CABLE x5, CONFIGURATION x3.
+
 ## Findings
 
 - Best scenario: full evidence, 4 of 9 faults solved (95% interval 2 to 7); 13 of 27 questions right; 0 UNKNOWN, 14 wrong, 0 malformed.
-- A fault's questions split (some right, some wrong) in 1 of 18 fault-and-scenario cells; otherwise they were answered alike, so the fault, not the question, is the unit the scores count.
+- A fault's questions split (some right, some wrong) in 2 of 27 fault-and-scenario cells; otherwise they were answered alike, so the fault, not the question, is the unit the scores count.
 - error only to full evidence raised faults solved by 1 (3 to 4 of 9); confident wrong answers went from 18 to 14 of 27.
-- Most common confident wrong choice: FIRMWARE (24 times across the scenarios).
-- Right in every question of every scenario: config_parameter_missing, reset_leaks_offset.
+- full evidence to full evidence, no firmware line did not change the faults solved (4 to 4 of 9); confident wrong answers went from 14 to 14 of 27.
+- Most common confident wrong choice: FIRMWARE (30 times across the scenarios).
+- Right in every question of every scenario: config_parameter_missing.
 
 These are one machine's deterministic numbers (temperature 0, fixed seed); another machine's model may differ in wording and the odd verdict. A verdict whose reasoning is sound but whose action is wrong still counts as a miss.
