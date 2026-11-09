@@ -25,6 +25,10 @@ before the numbers were seen, is the lowest same-fault score rounded down: 0.95.
 no history run a precedent it has, and 18 of 27 the closest other-fault run. The ranges
 overlap where cable_loss, link_down and link_flaky sit (0.97 to 0.98), so similarity alone
 can't tell those apart; PrecedentsDisagree is the gate meant for them.
+
+Measured on the held-out scenario (ADR 0013), this gate refused six right answers to prevent
+three wrong ones, and no threshold would have done better on that data: the precedent that
+misled the model was closer than the ones that helped it.
 """
 
 
