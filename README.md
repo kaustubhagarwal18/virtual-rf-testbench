@@ -50,152 +50,100 @@ assistant's accuracy be measured rather than guessed.
 
 ## How the triage assistant works
 
-When the bench suite fails, the triage assistant reads the saved run and answers one
-question: **is this the firmware, the bench or the test — and what fixed it last time?**
-It is a small retrieval-augmented pipeline that runs entirely on your machine.
+When the bench suite fails, the assistant reads the saved run and answers one question:
+**is this the firmware, the bench or the test, and what fixed it last time?**
 
-### The models
-
-| Role | Model | Where it runs |
-|---|---|---|
-| Answering | `qwen2.5:3b` | Local [Ollama](https://ollama.com), temperature 0, fixed seed |
-| Retrieval (embeddings) | `nomic-embed-text` | Local Ollama |
-
-Both are local, so no run data leaves the machine. `qwen2.5:3b` is the largest model that
-answers comfortably on an 8 GB laptop. The model is given **no tools**, and everything under
-`EVIDENCE` and `SOURCES` is treated as untrusted data — the system prompt tells it never to
-follow instructions found inside a run's logs.
+| | |
+|---|---|
+| **Answers with** | one action from a fixed list (`CABLE`, `LINK`, `ALIGNMENT`, `CONFIGURATION`, `TIMEOUT`, `TEST_CLEANUP`, `FIRMWARE`), or `UNKNOWN`, plus where to act, why, and the past runs it cites |
+| **Models** | `qwen2.5:3b` answers, `nomic-embed-text` embeds; both on local [Ollama](https://ollama.com), temperature 0, fixed seed |
+| **Privacy** | nothing leaves the machine; the model gets no tools, and logs are treated as untrusted data |
+| **Measured on** | 27 failed runs of 9 known faults, scored per fault, with a 95% interval |
 
 ### The pipeline
 
-```mermaid
-flowchart TB
-    run["Failed run<br/>results.json, logs.txt, sequence.log"] --> ev["evidence.py<br/>find the first failure"]
-    ev --> q["embed the failure<br/>(nomic-embed-text)"]
-    hist[("History runs<br/>past failures + how each was fixed")] --> idx["embed + index<br/>(cosine similarity)"]
-    q --> sim["top 3 most similar past runs"]
-    idx --> sim
-    ev --> pr["prompt.py<br/>evidence + sources + fixed action list"]
-    sim --> pr
-    pr --> llm["qwen2.5:3b<br/>(local Ollama)"]
-    llm --> an["answer.py<br/>parse strictly, reject unusable replies"]
-    an --> verdict["Verdict<br/>action · where · why · cited sources"]
-    label["label.json"] -. answer key, scoring only, never shown to the model .-> score["evaluate.py"]
-    verdict --> score
-```
+<p align="center">
+  <img src="docs/images/triage-pipeline.svg" width="860" alt="Triage pipeline: a failed run becomes evidence; retrieval (RAG) finds the three most similar resolved runs and answers UNKNOWN if they disagree; otherwise qwen2.5:3b picks one action, checks refuse a verdict that contradicts the run, and the result is a verdict or UNKNOWN with the reason.">
+</p>
 
-The model must choose **one** action from a fixed list, by its key, rather than writing its
-own — so scoring is an exact match and no second model is needed to judge the wording:
-`CABLE`, `LINK`, `ALIGNMENT`, `CONFIGURATION`, `TIMEOUT`, `TEST_CLEANUP`, `FIRMWARE`,
-`UNKNOWN`. It is told to choose `UNKNOWN` rather than guess, because a confident wrong action
-costs an engineer hours. A reply that cites a source it was never given, or names an action
-off the list, is rejected as unusable and counted as a miss — never interpreted generously.
+**Retrieval is what turns a guess into a lookup.** The failure is embedded and matched
+against past runs that record how each was resolved. The three closest travel into the
+prompt under neutral ids (`past-3fa2c1d0`, never a folder name that would give the answer
+away), and the model may cite only those ids.
 
-### Measuring it: eight scenarios
+### Guardrails against a confident wrong answer
 
-27 question runs, three per fault, are scored on whether the model names the fix that
-actually resolves the failure. A fault's three runs differ only in size and noise and are
-nearly always answered alike, so the **fault** is the unit scored: a fault is solved when
-all three of its questions are right, and the interval is over the 9 faults. The scenarios
-are an **ablation**: each adds exactly one thing to the one it names, so any change in the
-score is attributable to that one thing.
+A wrong action costs an engineer hours; `UNKNOWN` costs a minute. Every layer below can only
+turn an answer into `UNKNOWN` or refuse it, never pick a different action.
 
-| Scenario | What the model sees | Faults solved (95% interval) | Questions right | `UNKNOWN` | Wrong | Malformed |
-|---|---|---|---|---|---|---|
-| **error only** | Just the first failure's message: what someone pastes into a chat window | **3 of 9** (1 to 6) | 9 of 27 | 0 | 18 | 0 |
-| **full evidence** | The whole run's structured evidence: first failure and its numbers, whether firmware changed, which tests ran, notable log lines | **4 of 9** (2 to 7) | 13 of 27 | 0 | 14 | 0 |
-| **full + retrieval** | Full evidence **plus the 3 most similar past runs**, each with its recorded cause, fix and action key, cited by neutral ids | **5 of 9** (2 to 7) | 15 of 27 | 0 | 9 | 3 |
-| **+ checks** | The same answers, with verdicts the evidence contradicts turned into `UNKNOWN` | **5 of 9** (2 to 7) | 15 of 27 | 6 | 3 | 3 |
-| **+ checks, own fault held out** | The same, with no past run of the question's own fault | **3 of 9** (1 to 6) | 12 of 27 | 5 | 10 | 0 |
-| **full evidence, no firmware line** | Full evidence without its "Firmware: …" line: an ablation | **4 of 9** (2 to 7) | 13 of 27 | 0 | 14 | 0 |
-| **+ checks + gates** | Retrieval with checks, answering `UNKNOWN` unasked when the precedents disagree or none is close | **5 of 9** (2 to 7) | 15 of 27 | 9 | 0 | 3 |
-| **+ checks + gates, own fault held out** | The same, with no past run of the question's own fault | **1 of 9** (0 to 4) | 5 of 27 | 19 | 3 | 0 |
+| Layer | What it does | Measured effect |
+|---|---|---|
+| **Fixed action list** | the model picks a key, so scoring is an exact match | no judge model needed |
+| **Reply schema** | one action from the enum; `cited` limited to the offered ids; 512-token cap | an invented citation can't be written |
+| **Strict parser** | anything unusable is counted as malformed, never read generously | 3 of 27 with retrieval, all `link_down` |
+| **Disagreement gate** | top 3 past runs resolved different ways → `UNKNOWN`, model not asked | wrong answers 3 → 0, at a cost of 3 right ones |
+| **Checks** | `FIRMWARE` on a release the run didn't run, or on unchanged firmware; `TIMEOUT` beside an SCPI error | turned 3 wrong answers into `UNKNOWN`, cost none |
 
-These are counts, with an interval, rather than percentages. The numbers are deterministic
-(temperature 0, fixed seed) on one machine; another machine's model may differ in wording and
-the odd verdict.
+### Results
+
+<p align="center">
+  <img src="docs/images/triage-results.svg" width="860" alt="Faults solved out of 9: error only 3, full evidence 5, without the version line 4; with retrieval 6, with checks 6, with the disagreement gate 5 and no wrong answers; with the question's own fault held out, 4 with checks and 1 with both gates.">
+</p>
+
+Counts, not percentages: with 9 faults, "6 of 9, 3 to 8" is honest where "67%" is not.
+Every question's answer is in [`triage/results/rag.md`](triage/results/rag.md).
 
 ### What the numbers say
 
-- **Retrieval adds one fault, and three of its five are recall.** It offered a past run of
-  the question's own fault for all 27 questions, yet took the score only from 4 to 5 of 9.
-  Three of the five solved faults have no size to vary, so their questions repeat a history
-  run almost word for word.
-- **One look-alike precedent outvotes two right ones.** For `config_decimal_error`,
-  `reset_leaks_offset` and `slow_responses`, retrieval offers two runs of the question's own
-  fault and one of a look-alike (the other level-offset fault; a timeout from the firmware
-  regression), and the model follows the look-alike every time.
-- **An earlier version of these numbers was inflated.** Five pairs of history runs are
-  identical, and retrieval indexed both copies, so a question could be offered the same
-  precedent two or three times. Indexed once, retrieval fell from 8 to 5 faults solved.
-- **Naming each action by its symptom ended the CABLE/LINK mix-up.** `CABLE` reads "signal
-  present but attenuated", `LINK` "no signal or intermittent signal; the path is open", and
-  each precedent ends `Action: LINK`. `link_flaky` is solved with retrieval, and with its own
-  fault held out `link_down` is solved from the `link_flaky` precedents.
-- **`link_down` with retrieval fails on format, not judgement.** The model pastes a source's
-  text into `cited` instead of its id, so the replies are refused as malformed.
-- **The checks turn some fallbacks into `UNKNOWN`.** With retrieval they overruled 6 wrong
-  answers: a `FIRMWARE` verdict naming a precedent's release on a run still on 0.1.0. They
-  cost no right answer.
-- **Abstaining when the precedents disagree works; abstaining when none is close doesn't.**
-  Two gates answer `UNKNOWN` without asking the model. When the precedents were resolved by
-  different actions (the look-alike case above), the gate prevented 7 wrong answers for 1
-  right one, and with a precedent available it took wrong answers from 3 to 0. When the
-  closest precedent falls below a similarity threshold set from the history, the gate gave
-  up 6 right answers to prevent 3 wrong ones: the precedent that misled the model was closer
-  than the ones that helped it (ADR 0013). The API doesn't apply either gate yet.
-- **The firmware line cuts both ways.** Without it, `config_decimal_error` is solved and
-  `reset_leaks_offset` is lost: the line pulls the model to `FIRMWARE` when it rules
-  firmware out, and is the one clue to a regression that changed nothing else.
-- **Leading with the instrument error changed no score.** Full evidence now opens with
-  `Instrument error: -113,"Undefined header"`, ahead of the timeout it caused;
-  `output_command_change` was already solved, and with no precedent the model still copied
-  a timeout precedent.
-- **The small model is sensitive to wording.** Rewording two action descriptions moved the
-  error-only scenario, whose evidence didn't change, from 12 to 9 questions right.
+- **Retrieval helps most when the fault has happened before:** 5 → 6 of 9, and wrong answers
+  11 → 6. With the fault held out, it drops to 4 of 9, even with the checks.
+- **A small model follows the odd precedent out.** Offered two past runs of its own fault
+  and one look-alike, it often copies the look-alike. That is why the gate exists.
+- **Wording matters.** "Firmware: … (unchanged)" pulled the model to `FIRMWARE`. Saying
+  "Instruments: … the same as the last passing run" solved one more fault and lost none.
+- **Four of the six solved faults are recall, not reasoning:** their runs have no size to
+  vary, so a question repeats a past run almost word for word. The report says so.
+- **Two ideas didn't pay off:** leading the evidence with the SCPI error changed no score,
+  and a similarity threshold gave up 6 right answers to prevent 3 wrong ones.
 
-The full breakdown, every question's answer included, is in
-[`triage/results/rag.md`](triage/results/rag.md); the two no-retrieval scenarios on their own
-are in [`triage/results/baseline.md`](triage/results/baseline.md). ADR 0012 has the
-measurements in more detail, and ADR 0013 the gates and the ablation.
+### How the evaluation got more honest
 
-### Why retrieval is in-memory, for now
+Each review found a way the score could flatter the assistant, and closed it.
 
-The retriever embeds the history runs and ranks them by cosine similarity in-process. It sits
-behind a small `Retriever` interface, so a pgvector-backed store can drop in later without the
-rest of the pipeline noticing. At the current history size (27 runs) an exact in-memory search
-gives the same top 3 as a database would, so pgvector is deliberately deferred.
+| ADR | What changed | Retrieval score after it |
+|---|---|---|
+| [0008](docs/adr/0008-triage-design.md) | fixed action list, one prompt for every scenario | 6 of 9 questions |
+| [0009](docs/adr/0009-honest-triage-evaluation.md) | neutral source ids (the folder name gave the answer), 27 questions, a held-out scenario | 18 of 27 questions |
+| [0012](docs/adr/0012-score-faults-key-labels-by-action.md) | score faults, not questions; label each run's action; **index identical runs once** (they inflated 5 → 8 of 9) | 5 of 9 faults |
+| [0013](docs/adr/0013-abstain-from-retrieval.md) | gates before the model; an ablation of the firmware line | 5 of 9 faults |
+| [0014](docs/adr/0014-api-gate-cited-ids-version-wording.md) | the disagreement gate in the API, cited ids in the schema, version wording | **6 of 9 faults** |
 
-### See it on one run
+### Try it
 
-With local Ollama running and both models pulled (see [Quick start](#quick-start) below), show
-the same failure triaged with and without past runs, side by side — on `cable_loss`, retrieval
-flips the verdict from `FIRMWARE` to `CABLE`, citing the precedents it drew on:
+With local Ollama running and both models pulled (see [Quick start](#quick-start)):
 
 ```
 make triage-demo RUN=triage/data/runs/questions/cable_loss-1
 ```
 
-`make triage RUN=…` explains one run without retrieval, and `make eval` scores all eight
-scenarios and rewrites `triage/results/rag.md`.
+shows one failure triaged with and without past runs, side by side. `make triage RUN=…`
+explains one run, and `make eval` scores all eight scenarios; answers are cached in
+`.cache/triage-answers/`, so a rerun asks only what changed.
 
-### Ask it over HTTP
-
-`make triage-api` serves the same pipeline on `http://127.0.0.1:8000`, with the history runs
-loaded for retrieval. It needs local Ollama with both models, like `make eval`. From another
-terminal, triage a saved run by posting its results file:
+`make triage-api` serves the same pipeline on `http://127.0.0.1:8000`. From another terminal:
 
 ```
 jq -n --slurpfile results triage/data/runs/questions/cable_loss-1/results.json '{results: $results[0]}' | curl -s -X POST http://127.0.0.1:8000/triage -H 'Content-Type: application/json' -d @-
 ```
 
-The reply is the verdict as JSON: `fix`, `action`, `where`, `because`, `cited` and, when a
-check overruled the model, `overruled`. `POST /history` adds a resolved run (its evidence
-plus a `label` with `fault`, `cause`, `fix` and, optionally, the `action` key) so later
-failures can cite it, and
-`GET /health` reports how many past runs are loaded. Interactive docs are at
-`http://127.0.0.1:8000/docs`. The service listens on localhost only and keeps its history in
-memory (ADR 0010).
+The reply is the verdict as JSON: `fix`, `action`, `where`, `because`, `cited`, plus
+`overruled` when a check stood in for the model and `gate_reason` when the past runs
+disagreed and the model wasn't asked. `POST /history` adds a resolved run (its evidence plus
+a `label` with `fault`, `cause`, `fix` and, optionally, `action`), and `GET /health` reports
+how many past runs are loaded. Interactive docs are at `http://127.0.0.1:8000/docs`. The
+service listens on localhost only and keeps its history in memory (ADR 0010); retrieval is
+an exact in-memory search behind a `Retriever` interface, so pgvector can replace it once the
+history outgrows memory.
 
 ## Status
 

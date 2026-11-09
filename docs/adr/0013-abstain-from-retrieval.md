@@ -3,6 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-11-09
 - **Amends:** ADR 0012
+- **Amended by:** ADR 0014 (the API now applies `PrecedentsDisagree`)
 
 ## Context
 

@@ -215,7 +215,7 @@ flowchart LR
     hist[("History<br/>resolved runs, neutral ids")] --> ret["retrieval.py<br/>top 3 by cosine"]
     run --> ret
     ev --> pr["prompt.py<br/>fixed list of actions"]
-    ret --> gate{"abstain.py<br/>precedents agree<br/>and close? (eval only)"}
+    ret --> gate{"abstain.py<br/>precedents agree?"}
     gate -- yes --> pr
     gate -- no --> unk["UNKNOWN<br/>model not asked"]
     pr --> llm["qwen2.5:3b<br/>local Ollama, JSON schema"]
@@ -239,9 +239,12 @@ flowchart LR
   `FIRMWARE` when the firmware is the same release as the last passing run, and `TIMEOUT`
   when a failed test reports an SCPI error. A check never picks another action in the
   model's place.
-- **Gates** (`abstain.py`, evaluation only) answer `UNKNOWN` before the model is asked when
-  the retrieved precedents record different actions, or the closest is below a similarity
-  threshold that `tools/calibrate_abstention.py` sets from the history alone (ADR 0013).
+- **Gates** (`abstain.py`) answer `UNKNOWN` before the model is asked. The API applies one:
+  the retrieved precedents record different actions. The evaluation also scores a second,
+  the closest precedent below a similarity threshold that `tools/calibrate_abstention.py`
+  sets from the history alone, which cost more than it saved (ADR 0013).
+- **The reply's schema** lists the ids of the sources offered with each question, so the
+  model can cite only those; the parser still refuses anything else.
 - **The evaluation** scores eight scenarios, each changing one thing in another: error text
   only, full evidence, full evidence without its firmware line, plus retrieval, plus the
   checks, the same with the question's own fault held out of the history, and both of those
@@ -342,5 +345,6 @@ flowchart LR
 | [0011](adr/0011-ci-image-build-scan-publish.md) | Build the image once in CI, scan it with Trivy, bench it, and publish it from `main` |
 | [0012](adr/0012-score-faults-key-labels-by-action.md) | Score faults, not questions; name each action by its symptom; record the action key in every label; three checks |
 | [0013](adr/0013-abstain-from-retrieval.md) | Gates that abstain from retrieval alone, the instrument error first, and a firmware-line ablation |
+| [0014](adr/0014-api-gate-cited-ids-version-wording.md) | The disagreement gate in the API, cited ids in the reply schema, and version wording without "firmware" when unchanged |
 
 What comes next is in the [roadmap](ROADMAP.md).

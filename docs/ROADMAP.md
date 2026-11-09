@@ -34,6 +34,8 @@
   recall (ADR 0009, ADR 0012). Labels record the action key the score is checked against.
 - Gates that answer `UNKNOWN` from the precedents alone, a firmware-line ablation, and
   the instrument error first in the evidence, each measured (ADR 0013).
+- The disagreement gate in the API, cited ids in the reply schema, and version wording
+  that doesn't name firmware when it is unchanged (ADR 0014).
 - A FastAPI service (`make triage-api`): `POST /triage`, `POST /history`, `GET /health`
   (ADR 0010).
 
@@ -67,8 +69,11 @@
 - The question runs of the faults with nothing to scale (the configuration faults, the
   firmware faults and `link_down`) repeat their history runs' scenario, so they are easier
   than the sized ones. The fault, not the question, is the unit scored (ADR 0012).
-- With retrieval, the model's answers on `link_down` are unusable: it puts a source's text
-  in `cited` instead of its id, so all three are refused as malformed.
+- With retrieval, the model's answers on `link_down` are unusable: it chooses `ALIGNMENT`,
+  then rambles until the 512-token cap cuts the reply off, so all three are malformed.
+- The disagreement gate the API applies costs right answers as well as wrong ones: with a
+  precedent available, wrong answers go from 3 to 0 and right answers from 18 to 15
+  (ADR 0014).
 - The similarity gate refuses more right answers than it prevents wrong ones when the
   question's own fault is held out (6 against 3); ADR 0013 shows why no threshold fixes it.
 - `qwen2.5:3b` is sensitive to wording: rewording two action descriptions moved the

@@ -28,7 +28,11 @@ it, so the package version moves only with a release.
 - **Abstention gates** (`triage/abstain.py`, ADR 0013), scored in two new scenarios:
   `UNKNOWN` without asking the model when the precedents record different actions or the
   closest is below 0.95 similarity. `tools/calibrate_abstention.py` sets the threshold from
-  the history runs alone. The API doesn't apply them.
+  the history runs alone. The API applies the disagreement gate only, and says why in
+  `gate_reason` (ADR 0014).
+- **Cited ids in the schema:** each question's reply schema lists the source ids it was
+  offered, and replies are capped at 512 tokens, so a runaway reply ends as malformed
+  instead of hanging until the timeout (ADR 0014).
 - **A firmware-line ablation:** an evaluation-only evidence level without the
   "Firmware: …" line, and a scenario that scores it.
 - **A persistent answer cache** for `make eval` under `.cache/triage-answers/`, keyed by the
@@ -50,7 +54,10 @@ it, so the package version moves only with a release.
 - The held-out scenario applies the checks too.
 - Full evidence opens with the SCPI errors the failed tests reported, ahead of the timeout
   they caused.
-- `triage_run` takes `checks` and `gates` as keyword arguments.
+- `triage_run` takes `checks` and `gates` as keyword arguments, and `LLMProvider.complete`
+  an optional per-reply schema.
+- Unchanged instrument versions read "Instruments: … the same as the last passing run.",
+  without the word firmware; it lifted full evidence from 4 to 5 of 9 faults (ADR 0014).
 
 - The simulator image is repinned to the current `python:3.13.18-slim-trixie` digest,
   applies Debian security updates at build time, and no longer contains `pip`. That took
@@ -72,8 +79,11 @@ it, so the package version moves only with a release.
 
 ### Known issues
 
-- With retrieval, the model's answers on `link_down` are unusable: it puts a source's text
-  in `cited` instead of its id, so all three are refused as malformed.
+- With retrieval, the model's answers on `link_down` are unusable: it chooses `ALIGNMENT`,
+  then rambles until the 512-token cap cuts the reply off, so all three are malformed.
+- The disagreement gate the API applies costs right answers as well as wrong ones: with a
+  precedent available, wrong answers go from 3 to 0 and right answers from 18 to 15
+  (ADR 0014).
 - The similarity gate refuses more right answers than it prevents wrong ones when the
   question's own fault is held out (6 against 3); ADR 0013 shows why no threshold fixes it.
 - `qwen2.5:3b` is sensitive to wording: rewording two action descriptions moved the

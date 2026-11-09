@@ -1,0 +1,133 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 560" width="900" height="560" role="img" aria-labelledby="title desc">
+  <title id="title">Triage results: faults solved out of 9</title>
+  <desc id="desc">Faults solved out of 9, with 95% intervals, and confident wrong answers out of 27, for each scenario. Without retrieval: error only 3, full evidence 5, full evidence without the firmware line 4. With retrieval: 6, with checks 6, with checks and gates 5. With the question's own fault held out: with checks 4, with checks and gates 1.</desc>
+  <defs>
+    <linearGradient id="barBase" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8957e5"/>
+      <stop offset="1" stop-color="#a371f7"/>
+    </linearGradient>
+    <linearGradient id="barRag" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#2f81f7"/>
+      <stop offset="1" stop-color="#8957e5"/>
+    </linearGradient>
+    <linearGradient id="barHeld" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#d4a72c"/>
+      <stop offset="1" stop-color="#e3b341"/>
+    </linearGradient>
+    <filter id="shadow" x="-5%" y="-10%" width="110%" height="130%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#1f2328" flood-opacity="0.08"/>
+    </filter>
+    <style>
+      text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; }
+      .panel { fill: #ffffff; stroke: #d0d7de; stroke-width: 1; }
+      .heading { font-size: 17px; font-weight: 700; fill: #1f2328; }
+      .caption { font-size: 12.5px; fill: #59636e; }
+      .group { font-size: 11px; font-weight: 700; fill: #59636e; letter-spacing: 0.08em; }
+      .name { font-size: 13.5px; font-weight: 600; fill: #1f2328; }
+      .note { font-size: 11.5px; fill: #59636e; }
+      .track { fill: #f6f8fa; stroke: #eaeef2; stroke-width: 1; }
+      .tick { stroke: #eaeef2; stroke-width: 1; }
+      .whisker { stroke: #1f2328; stroke-width: 1.4; opacity: 0.55; }
+      .value { font-size: 14px; font-weight: 700; fill: #1f2328; }
+      .wrong { font-size: 13px; font-weight: 600; fill: #cf222e; }
+      .wrong-zero { font-size: 13px; font-weight: 600; fill: #1a7f37; }
+      .colhead { font-size: 11px; font-weight: 600; fill: #59636e; }
+      .axis { font-size: 10.5px; fill: #8c959f; }
+      .rule { stroke: #eaeef2; stroke-width: 1; }
+      @media (prefers-color-scheme: dark) {
+        .panel { fill: #161b22; stroke: #30363d; }
+        .heading, .name, .value { fill: #e6edf3; }
+        .caption, .group, .note, .colhead { fill: #9198a1; }
+        .track { fill: #21262d; stroke: #30363d; }
+        .tick, .rule { stroke: #30363d; }
+        .whisker { stroke: #e6edf3; }
+        .wrong { fill: #ff7b72; }
+        .wrong-zero { fill: #56d364; }
+        .axis { fill: #6e7681; }
+      }
+    </style>
+  </defs>
+
+  <g filter="url(#shadow)"><rect x="20" y="16" width="860" height="528" rx="18" class="panel"/></g>
+
+  <text x="48" y="54" class="heading">Faults solved, out of 9</text>
+  <text x="48" y="76" class="caption">A fault is solved when all three of its questions are right. The thin line is the 95% interval.</text>
+
+  <!-- column heads and axis -->
+  <text x="330" y="108" class="colhead">FAULTS SOLVED</text>
+  <text x="776" y="108" class="colhead">WRONG, OF 27</text>
+  <g class="axis" text-anchor="middle">
+    <text x="330" y="124">0</text><text x="430" y="124">3</text><text x="530" y="124">6</text><text x="630" y="124">9</text>
+  </g>
+
+  <!-- ===== Without retrieval ===== -->
+  <text x="48" y="150" class="group">WITHOUT RETRIEVAL</text>
+
+  <text x="48" y="178" class="name">Error message only</text>
+  <rect x="330" y="164" width="300" height="20" rx="10" class="track"/>
+  <rect x="330" y="164" width="100" height="20" rx="10" fill="url(#barBase)"/>
+  <line x1="363.3" y1="174" x2="530" y2="174" class="whisker"/>
+  <text x="644" y="179" class="value">3</text>
+  <text x="776" y="179" class="wrong">18</text>
+
+  <text x="48" y="214" class="name">Full evidence</text>
+  <rect x="330" y="200" width="300" height="20" rx="10" class="track"/>
+  <rect x="330" y="200" width="166.7" height="20" rx="10" fill="url(#barBase)"/>
+  <line x1="396.7" y1="210" x2="563.3" y2="210" class="whisker"/>
+  <text x="644" y="215" class="value">5</text>
+  <text x="776" y="215" class="wrong">11</text>
+
+  <text x="48" y="250" class="name">Full evidence, no version line</text>
+  <rect x="330" y="236" width="300" height="20" rx="10" class="track"/>
+  <rect x="330" y="236" width="133.3" height="20" rx="10" fill="url(#barBase)" opacity="0.55"/>
+  <line x1="396.7" y1="246" x2="563.3" y2="246" class="whisker"/>
+  <text x="644" y="251" class="value">4</text>
+  <text x="776" y="251" class="wrong">14</text>
+  <text x="48" y="266" class="note">ablation</text>
+
+  <line x1="48" y1="284" x2="852" y2="284" class="rule"/>
+
+  <!-- ===== With retrieval ===== -->
+  <text x="48" y="308" class="group">WITH RETRIEVAL (RAG)</text>
+
+  <text x="48" y="336" class="name">+ top 3 past runs</text>
+  <rect x="330" y="322" width="300" height="20" rx="10" class="track"/>
+  <rect x="330" y="322" width="200" height="20" rx="10" fill="url(#barRag)"/>
+  <line x1="430" y1="332" x2="596.7" y2="332" class="whisker"/>
+  <text x="644" y="337" class="value">6</text>
+  <text x="776" y="337" class="wrong">6</text>
+
+  <text x="48" y="372" class="name">+ checks</text>
+  <rect x="330" y="358" width="300" height="20" rx="10" class="track"/>
+  <rect x="330" y="358" width="200" height="20" rx="10" fill="url(#barRag)"/>
+  <line x1="430" y1="368" x2="596.7" y2="368" class="whisker"/>
+  <text x="644" y="373" class="value">6</text>
+  <text x="776" y="373" class="wrong">3</text>
+
+  <text x="48" y="408" class="name">+ checks + disagreement gate</text>
+  <rect x="330" y="394" width="300" height="20" rx="10" class="track"/>
+  <rect x="330" y="394" width="166.7" height="20" rx="10" fill="url(#barRag)"/>
+  <line x1="396.7" y1="404" x2="563.3" y2="404" class="whisker"/>
+  <text x="644" y="409" class="value">5</text>
+  <text x="776" y="409" class="wrong-zero">0</text>
+  <text x="48" y="424" class="note">what the API runs</text>
+
+  <line x1="48" y1="442" x2="852" y2="442" class="rule"/>
+
+  <!-- ===== Held out ===== -->
+  <text x="48" y="466" class="group">OWN FAULT HELD OUT — A FAILURE NEVER SEEN BEFORE</text>
+
+  <text x="48" y="494" class="name">Retrieval + checks</text>
+  <rect x="330" y="480" width="300" height="20" rx="10" class="track"/>
+  <rect x="330" y="480" width="133.3" height="20" rx="10" fill="url(#barHeld)"/>
+  <line x1="396.7" y1="490" x2="563.3" y2="490" class="whisker"/>
+  <text x="644" y="495" class="value">4</text>
+  <text x="776" y="495" class="wrong">11</text>
+
+  <text x="48" y="526" class="name">+ both gates</text>
+  <rect x="330" y="512" width="300" height="20" rx="10" class="track"/>
+  <rect x="330" y="512" width="33.3" height="20" rx="10" fill="url(#barHeld)"/>
+  <line x1="330" y1="522" x2="463.3" y2="522" class="whisker"/>
+  <text x="644" y="527" class="value">1</text>
+  <text x="776" y="527" class="wrong">3</text>
+</svg>

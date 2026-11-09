@@ -115,8 +115,9 @@ DEFAULT_GATES: tuple[SourceGate, ...] = (PrecedentsDisagree(), WeakPrecedent())
 """The gates the evaluation's abstention scenarios apply, in order."""
 
 SERVICE_GATES: tuple[SourceGate, ...] = (PrecedentsDisagree(),)
-"""The gates the API applies: disagreement only. Measured in ADR 0013, it prevented 7 wrong
-answers for 1 right one; WeakPrecedent gave up 6 right answers for 3 wrong ones."""
+"""The gates the API applies: disagreement only. Measured in ADR 0014, it prevented 8 wrong
+answers for 6 right ones, a trade worth making when a wrong action costs hours and UNKNOWN
+a minute; WeakPrecedent gave up 6 right answers for 3 wrong ones."""
 
 
 def reason_to_abstain(sources: Sequence[Source], gates: Sequence[SourceGate]) -> str:
