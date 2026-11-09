@@ -12,11 +12,18 @@ from fastapi import status
 from fastapi.testclient import TestClient
 
 from tests.unit.triage.test_evidence import FAILING_TEST, write_run
-from triage.api import MAX_LINE_LENGTH, MAX_LINES, EvidenceLevel, create_app, main
+from triage.api import (
+    MAX_LINE_LENGTH,
+    MAX_LINES,
+    ActionKey,
+    EvidenceLevel,
+    create_app,
+    main,
+)
 from triage.embed import FakeEmbedder
 from triage.evidence import LEVELS, SavedRun, build_evidence
 from triage.llm import FakeProvider, ModelUnavailableError
-from triage.prompt import build_prompt
+from triage.prompt import Fix, build_prompt
 from triage.retrieval import InMemoryRetriever
 
 CABLE_REPLY = json.dumps({"fix": "CABLE", "where": "the cable", "because": "loss", "cited": []})
@@ -276,3 +283,30 @@ def test_the_data_set_has_every_saved_run() -> None:
     """The real-run test above covers all 54 runs, not an empty list."""
     expected_runs = 54
     assert len(SAVED_RUNS) == expected_runs
+
+
+def test_the_api_accepts_exactly_the_action_keys_on_the_list() -> None:
+    """A label's action type and the list of actions can't drift apart."""
+    assert set(get_args(ActionKey)) == set(Fix.__members__)
+
+
+def test_an_added_runs_action_reaches_a_later_prompt() -> None:
+    """A resolved run posted with its action shows the model that action as a precedent."""
+    provider = FakeProvider([CABLE_REPLY])
+    client = TestClient(create_app(provider, empty_history()))
+    added = client.post(
+        "/history", json={"results": RESULTS, "label": {**LABEL, "action": "CABLE"}}
+    )
+    assert added.status_code == status.HTTP_201_CREATED
+    client.post("/triage", json={"results": RESULTS})
+    assert "Action: CABLE" in provider.prompts[0][1]
+
+
+@pytest.mark.parametrize("action", ["cable", "REPLACE", "", 3])
+def test_an_action_off_the_list_is_refused(action: object) -> None:
+    """Only the list's keys, spelt exactly, are accepted as a label's action."""
+    client = TestClient(create_app(FakeProvider([CABLE_REPLY]), empty_history()))
+    response = client.post(
+        "/history", json={"results": RESULTS, "label": {**LABEL, "action": action}}
+    )
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT

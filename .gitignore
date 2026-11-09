@@ -22,6 +22,9 @@ htmlcov/
 /results/
 reports/
 
+# Cached model answers (make eval)
+.cache/
+
 # Terraform and cluster state
 .terraform/
 *.tfstate

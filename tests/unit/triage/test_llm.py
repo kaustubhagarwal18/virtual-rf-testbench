@@ -3,6 +3,7 @@
 import json
 import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -174,3 +175,71 @@ def test_the_cache_names_the_inner_model() -> None:
     """A report headed by the cache's model names the model that actually answered."""
     assert CachingProvider(OllamaProvider(model="qwen2.5:3b")).model == "qwen2.5:3b"
     assert CachingProvider(FakeProvider()).model == DEFAULT_MODEL
+
+
+class IdentifiedFake(FakeProvider):
+    """A fake model that names its identity, so its answers can be stored on disk."""
+
+    def __init__(self, replies: list[str], model: str = "fake-3b") -> None:
+        """Answer from the list, as the given model."""
+        super().__init__(replies)
+        self.model = model
+
+    def identity(self) -> dict[str, object]:
+        """Say which model this is."""
+        return {"model": self.model}
+
+
+def test_stored_answers_are_reused_by_a_later_run(tmp_path: Path) -> None:
+    """A second run with the same model and prompt asks the model nothing."""
+    first = CachingProvider(IdentifiedFake(["stored"]), tmp_path)
+    assert first.complete("s", "u") == "stored"
+    later_model = IdentifiedFake(["never asked"])
+    later = CachingProvider(later_model, tmp_path)
+    assert later.complete("s", "u") == "stored"
+    assert (first.asked, later.asked, later_model.prompts) == (1, 0, [])
+
+
+@pytest.mark.parametrize(
+    ("model", "system", "user"),
+    [("other-7b", "s", "u"), ("fake-3b", "other instructions", "u"), ("fake-3b", "s", "other")],
+)
+def test_a_different_model_or_prompt_is_asked_again(
+    tmp_path: Path, model: str, system: str, user: str
+) -> None:
+    """Changing the model, the instructions or the question misses the stored answer."""
+    CachingProvider(IdentifiedFake(["stored"]), tmp_path).complete("s", "u")
+    later = CachingProvider(IdentifiedFake(["fresh"], model), tmp_path)
+    assert later.complete(system, user) == "fresh"
+    assert later.asked == 1
+
+
+@pytest.mark.parametrize("damage", ["not json", "[]", '{"reply": "x"}', "{}"])
+def test_a_damaged_or_mismatched_file_is_ignored(tmp_path: Path, damage: str) -> None:
+    """A stored file that doesn't parse or doesn't match the prompt exactly is never used."""
+    CachingProvider(IdentifiedFake(["stored"]), tmp_path).complete("s", "u")
+    (stored,) = tmp_path.glob("*.json")
+    stored.write_text(damage, encoding="utf-8")
+    assert CachingProvider(IdentifiedFake(["fresh"]), tmp_path).complete("s", "u") == "fresh"
+
+
+def test_a_stored_answer_leaves_no_partial_file(tmp_path: Path) -> None:
+    """Answers are written whole: one file per answer, and no partial file left behind."""
+    cached = CachingProvider(IdentifiedFake(["a", "b"]), tmp_path)
+    cached.complete("s", "u1")
+    cached.complete("s", "u2")
+    assert sorted(path.suffix for path in tmp_path.iterdir()) == [".json", ".json"]
+    assert not list(tmp_path.glob("*.partial"))
+
+
+def test_storing_answers_needs_an_identity(tmp_path: Path) -> None:
+    """A provider that can't say which model it is can't have its answers stored."""
+    with pytest.raises(ValueError, match="has no identity"):
+        CachingProvider(FakeProvider(), tmp_path)
+
+
+def test_the_ollama_identity_names_everything_that_decides_an_answer() -> None:
+    """Model, temperature, seed, context and format each change the key."""
+    identity = OllamaProvider(model="qwen2.5:3b", response_format=VERDICT_SCHEMA).identity()
+    assert set(identity) == {"model", "temperature", "seed", "num_ctx", "format"}
+    assert identity["format"] == VERDICT_SCHEMA

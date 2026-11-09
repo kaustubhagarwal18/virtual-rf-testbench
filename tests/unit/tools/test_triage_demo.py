@@ -85,7 +85,15 @@ def cable_run(tmp_path: Path) -> SavedRun:
     """Return a saved cable_loss question run, so its resolving fix is CABLE."""
     folder = write_run(tmp_path / "cable_loss", [FAILING_TEST])
     (folder / "label.json").write_text(
-        json.dumps({"fault": "cable_loss", "category": "bench", "cause": "worn cable", "fix": "x"}),
+        json.dumps(
+            {
+                "fault": "cable_loss",
+                "category": "bench",
+                "cause": "worn cable",
+                "fix": "x",
+                "action": "CABLE",
+            }
+        ),
         encoding="utf-8",
     )
     return SavedRun.load(folder)

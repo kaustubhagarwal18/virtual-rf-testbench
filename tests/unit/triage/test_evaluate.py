@@ -12,7 +12,6 @@ from tests.unit.triage.test_evidence import FAILING_TEST, write_run
 from tools.faults import CATALOGUE
 from triage.embed import FakeEmbedder
 from triage.evaluate import (
-    EXPECTED_FIX,
     MALFORMED,
     SCENARIOS,
     Outcome,
@@ -25,6 +24,7 @@ from triage.evaluate import (
     main,
     render,
     render_report,
+    score_line,
     wilson_interval,
 )
 from triage.evidence import ERROR_ONLY, FULL, SavedRun
@@ -34,9 +34,12 @@ from triage.retrieval import InMemoryRetriever
 
 
 def question(folder: Path, fault: str) -> Path:
-    """Write a question run folder labelled with a fault."""
+    """Write a question run labelled with a fault and, for a catalogue fault, its action."""
     run = write_run(folder, [FAILING_TEST])
-    (run / "label.json").write_text(json.dumps({"fault": fault}), encoding="utf-8")
+    label: dict[str, str] = {"fault": fault}
+    if fault in CATALOGUE:
+        label["action"] = CATALOGUE[fault].label.action
+    (run / "label.json").write_text(json.dumps(label), encoding="utf-8")
     return run
 
 
@@ -45,9 +48,31 @@ def verdict(fix: Fix) -> str:
     return json.dumps({"fix": fix.name, "where": "x", "because": "y", "cited": []})
 
 
-def test_every_catalogue_fault_has_an_expected_fix() -> None:
-    """A fault with no scoring key would silently never be counted right."""
-    assert set(CATALOGUE) <= set(EXPECTED_FIX)
+@pytest.mark.parametrize("name", sorted(CATALOGUE))
+def test_every_catalogue_fault_records_an_action_on_the_list(name: str) -> None:
+    """A fault's action is a key the model can choose, and never UNKNOWN."""
+    action = CATALOGUE[name].label.action
+    assert action in Fix.__members__
+    assert action != Fix.UNKNOWN.name
+
+
+SAVED_LABELS = sorted(Path("triage/data/runs").glob("*/*/label.json"))
+"""Every saved run's label in the data set."""
+
+
+@pytest.mark.parametrize(
+    "path", SAVED_LABELS, ids=lambda path: f"{path.parent.parent.name}/{path.parent.name}"
+)
+def test_every_saved_label_records_its_faults_action(path: Path) -> None:
+    """The data set's labels agree with the catalogue, so the answer key has one source."""
+    label = json.loads(path.read_text(encoding="utf-8"))
+    assert label["action"] == CATALOGUE[label["fault"]].label.action
+
+
+def test_the_data_set_has_a_label_for_every_run() -> None:
+    """The label test above covers all 54 runs, not an empty list."""
+    expected_labels = 54
+    assert len(SAVED_LABELS) == expected_labels
 
 
 def test_the_expected_fix_comes_from_the_label(tmp_path: Path) -> None:
@@ -100,7 +125,8 @@ def test_the_report_shows_counts_not_percentages(tmp_path: Path) -> None:
         tmp_path / "q", FakeProvider([verdict(Fix.LINK)]), [Scenario("full evidence", FULL)]
     )[0]
     report = render([result], "qwen2.5:3b")
-    assert "full evidence: 0 of 1 right" in report
+    assert "full evidence: 0 of 1 faults solved" in report
+    assert "0 of 1 questions right" in report
     assert "MISS" in report
     assert set(re.findall(r"\d+%", report)) == {"95%"}
 
@@ -118,7 +144,7 @@ def test_the_cli_runs_the_scored_scenarios(
         == 0
     )
     out = capsys.readouterr().out
-    assert "full evidence: 1 of 1 right" in out
+    assert "full evidence: 1 of 1 faults solved" in out
 
 
 def test_an_injected_provider_overrides_the_model_flag(
@@ -137,11 +163,14 @@ def test_an_injected_provider_overrides_the_model_flag(
     assert "huge" not in out  # the injected provider answered, not a model called "huge"
 
 
-def test_an_unknown_fault_has_no_expected_fix(tmp_path: Path) -> None:
-    """A run labelled with a fault not in the scoring key is an error, not a silent miss."""
-    run = SavedRun.load(question(tmp_path / "mystery", "brand_new_fault"))
-    with pytest.raises(KeyError, match="no expected fix"):
-        expected_fix(run)
+@pytest.mark.parametrize("action", [None, "", "REPLACE_EVERYTHING", "cable", 3])
+def test_a_label_without_a_known_action_has_no_expected_fix(tmp_path: Path, action: object) -> None:
+    """A missing, unknown or wrongly spelt action is an error naming the fix, not a miss."""
+    run = write_run(tmp_path / "mystery", [FAILING_TEST])
+    label = {"fault": "brand_new_fault"} if action is None else {"fault": "x", "action": action}
+    (run / "label.json").write_text(json.dumps(label), encoding="utf-8")
+    with pytest.raises(KeyError, match="make fault-dataset"):
+        expected_fix(SavedRun.load(run))
 
 
 def test_evaluate_runs_as_a_module() -> None:
@@ -401,3 +430,61 @@ def test_each_kind_of_answer_has_its_own_mark(chosen: str, mark: str) -> None:
 def test_no_results_have_no_findings() -> None:
     """With nothing scored there is nothing to conclude, rather than an error."""
     assert not findings([])
+
+
+def two_faults(tmp_path: Path) -> Path:
+    """Write three cable_loss and two slow_responses questions, numbered like the data set."""
+    for number in (1, 2, 3):
+        question(tmp_path / "q" / f"cable_loss-{number}", "cable_loss")
+    for number in (1, 2):
+        question(tmp_path / "q" / f"slow_responses-{number}", "slow_responses")
+    return tmp_path / "q"
+
+
+def test_a_fault_is_solved_only_when_all_its_questions_are(tmp_path: Path) -> None:
+    """Two of three cable questions right is a split fault, not a solved one."""
+    replies = [verdict(Fix.CABLE), verdict(Fix.LINK), verdict(Fix.CABLE)]
+    replies += [verdict(Fix.TIMEOUT)] * 2
+    result = evaluate(two_faults(tmp_path), FakeProvider(replies), [Scenario("s", FULL)])[0]
+    assert result.by_fault == {"cable_loss": (2, 3), "slow_responses": (2, 2)}
+    assert (result.faults, result.faults_solved, result.faults_split) == (2, 1, 1)
+    assert (result.right, result.total) == (4, 5)
+    assert score_line(result).startswith("1 of 2 faults solved (95% interval ")
+
+
+def test_the_report_has_a_row_per_fault_and_a_column_per_scenario(tmp_path: Path) -> None:
+    """The by-fault table shows each fault's questions right in each scenario."""
+    results = evaluate(
+        two_faults(tmp_path),
+        FakeProvider([verdict(Fix.CABLE)]),
+        [Scenario("error only", ERROR_ONLY), Scenario("full evidence", FULL)],
+    )
+    report = render_report(results, "qwen2.5:3b")
+    assert "| Fault | Expected | error only | full evidence |" in report
+    assert "| cable_loss | CABLE | 3/3 | 3/3 |" in report
+    assert "| slow_responses | TIMEOUT | 0/2 | 0/2 |" in report
+
+
+def test_the_findings_count_how_often_a_faults_questions_split(tmp_path: Path) -> None:
+    """The finding that justifies scoring by fault is computed, not asserted."""
+    replies = [verdict(Fix.CABLE), verdict(Fix.LINK), verdict(Fix.CABLE)]
+    replies += [verdict(Fix.TIMEOUT)] * 2
+    result = evaluate(two_faults(tmp_path), FakeProvider(replies), [Scenario("s", FULL)])[0]
+    assert "split (some right, some wrong) in 1 of 2 fault-and-scenario cells" in " ".join(
+        findings([result])
+    )
+
+
+def test_the_cli_says_how_many_prompts_reached_the_model(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A run reports how many prompts it asked; a rerun of the same prompts asks none."""
+    question(tmp_path / "q" / "cable_loss-1", "cable_loss")
+    provider = CachingProvider(FakeProvider([verdict(Fix.CABLE)]))
+    arguments = ["--questions", str(tmp_path / "q"), "--scenario", "full evidence"]
+    main(arguments, provider)
+    first = capsys.readouterr().out
+    main(arguments, provider)
+    second = capsys.readouterr().out
+    assert "asked the model 1 new prompts" in first
+    assert "asked the model 0 new prompts" in second

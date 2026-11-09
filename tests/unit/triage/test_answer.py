@@ -1,15 +1,17 @@
 """Tests for parsing and refusing the model's answer."""
 
+import json
+
 import pytest
 
 from triage.answer import MalformedAnswerError, parse_verdict
 from triage.prompt import Fix
 
 
-def test_an_action_named_by_its_text_is_accepted() -> None:
-    """The model may answer with the action's wording, not only its key."""
-    verdict = parse_verdict('{"fix": "replace the cable and recalibrate"}')
-    assert verdict.fix is Fix.CABLE
+@pytest.mark.parametrize("fix", list(Fix), ids=lambda fix: fix.name)
+def test_an_action_named_by_its_text_is_accepted(fix: Fix) -> None:
+    """The model may answer with any action's wording, not only its key."""
+    assert parse_verdict(json.dumps({"fix": fix.value})).fix is fix
 
 
 def test_text_around_the_json_is_tolerated() -> None:

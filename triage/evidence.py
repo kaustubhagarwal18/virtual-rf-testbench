@@ -154,6 +154,18 @@ def failed_tests(run: SavedRun) -> list[dict[str, Any]]:
     return [test for test in run.results.get("tests", []) if test["outcome"] != "passed"]
 
 
+def instrument_errors(run: SavedRun) -> list[str]:
+    """List the SCPI errors the instruments reported in the tests that didn't pass.
+
+    Args:
+        run: The run.
+
+    Returns:
+        Each error, such as '-113,"Undefined header"', in the order the tests ran.
+    """
+    return [str(error) for test in failed_tests(run) for error in test.get("instrument_errors", [])]
+
+
 def first_failure(run: SavedRun) -> FirstFailure | None:
     """Find the one thing that went wrong first, which the rest of the run follows from.
 

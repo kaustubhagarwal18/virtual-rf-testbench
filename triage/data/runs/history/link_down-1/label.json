@@ -4,5 +4,6 @@
   "unit": "",
   "category": "bench",
   "cause": "Nothing is connected between the generator and the analyzer",
-  "fix": "Reconnected the cable between the instruments and recalibrated"
+  "fix": "Reconnected the cable between the instruments and recalibrated",
+  "action": "LINK"
 }

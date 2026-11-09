@@ -1,16 +1,19 @@
 """Rules that check the model's verdict against facts the evidence states outright.
 
-A small model has a fallback answer: when unsure, it blames the firmware. But whether the
-firmware changed is not a judgement, it is in the results file. A check turns a verdict that
-contradicts such a fact into UNKNOWN. It never picks a different action in its place: that
-would be a guess, and a confident wrong action is the failure that costs an engineer hours.
+A small model has fallback answers: when unsure, it blames the firmware or the timeout, or
+copies a precedent's diagnosis whole. But some facts are not judgements, they are in the
+results file: which releases the run ran, whether that changed, and whether the instruments
+reported an SCPI error. A check turns a verdict that contradicts
+such a fact into UNKNOWN. It never picks a different action in its place: that would be a
+guess, and a confident wrong action is the failure that costs an engineer hours.
 """
 
+import re
 from dataclasses import replace
 from typing import Protocol
 
 from triage.answer import Verdict
-from triage.evidence import SavedRun, firmware_changed
+from triage.evidence import SavedRun, firmware_changed, instrument_errors
 from triage.prompt import Fix
 
 
@@ -58,7 +61,84 @@ class FirmwareUnchangedCheck:
         )
 
 
-DEFAULT_CHECKS: tuple[VerdictCheck, ...] = (FirmwareUnchangedCheck(),)
+RELEASE_PATTERN = re.compile(r"\b\d+\.\d+\.\d+(?:-[0-9A-Za-z]+(?:\.[0-9A-Za-z]+)*)?\b")
+"""A release number such as 0.2.0 or 0.2.0-rc2, as the bench's firmware versions are written."""
+
+
+class ForeignReleaseCheck:
+    """Refuse a firmware verdict that blames a release this run didn't run.
+
+    With retrieval, the model sometimes copies a precedent's diagnosis whole, release number
+    included: 'release 0.2.0-rc2 doesn't clear the offset' for a run still on 0.1.0. The run
+    records which releases it ran, so a verdict naming another one is contradicted by the
+    evidence. When the run recorded no versions, nothing can be compared and the verdict is
+    left alone.
+    """
+
+    def review(self, run: SavedRun, verdict: Verdict) -> Verdict:
+        """Overrule FIRMWARE when it names a release that isn't one of the run's own.
+
+        Args:
+            run: The run the verdict is about.
+            verdict: The model's verdict.
+
+        Returns:
+            The verdict, or UNKNOWN with the reason it was overruled.
+        """
+        versions = run.results.get("firmware_versions") or {}
+        if verdict.fix is not Fix.FIRMWARE or not versions:
+            return verdict
+        named = RELEASE_PATTERN.findall(f"{verdict.where} {verdict.because}")
+        foreign = [release for release in named if release not in versions.values()]
+        if not foreign:
+            return verdict
+        ran = ", ".join(f"{role} {version}" for role, version in sorted(versions.items()))
+        return replace(
+            verdict,
+            fix=Fix.UNKNOWN,
+            overruled=(
+                f"the model blamed release {foreign[0]}, but this run ran {ran}: the "
+                "diagnosis belongs to another run"
+            ),
+        )
+
+
+class TimeoutWithInstrumentErrorCheck:
+    """Refuse a timeout verdict when the instruments reported an error in the failed tests.
+
+    A slow instrument answers late but accepts the command, so it queues no SCPI error. A
+    test that timed out and also reports one, such as -113 "Undefined header", is waiting
+    for an answer to a command the instrument refused: raising the timeout would not help.
+    """
+
+    def review(self, run: SavedRun, verdict: Verdict) -> Verdict:
+        """Overrule TIMEOUT when a failed test reports an instrument error.
+
+        Args:
+            run: The run the verdict is about.
+            verdict: The model's verdict.
+
+        Returns:
+            The verdict, or UNKNOWN with the reason it was overruled.
+        """
+        errors = instrument_errors(run)
+        if verdict.fix is not Fix.TIMEOUT or not errors:
+            return verdict
+        return replace(
+            verdict,
+            fix=Fix.UNKNOWN,
+            overruled=(
+                f"the model chose TIMEOUT, but the instruments reported {errors[0]}: a "
+                "rejected command, not a slow instrument"
+            ),
+        )
+
+
+DEFAULT_CHECKS: tuple[VerdictCheck, ...] = (
+    ForeignReleaseCheck(),
+    FirmwareUnchangedCheck(),
+    TimeoutWithInstrumentErrorCheck(),
+)
 """The checks the service applies to every verdict."""
 
 

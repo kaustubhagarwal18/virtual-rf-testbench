@@ -15,11 +15,16 @@ class Fix(StrEnum):
     """What an engineer would actually do about a failed run.
 
     The model picks one of these rather than writing an action of its own, so scoring is an
-    exact comparison and no second model has to judge the wording.
+    exact comparison and no second model has to judge the wording. Where two actions act on
+    the same hardware (CABLE and LINK), each says first which symptom it answers, so the
+    choice turns on what the evidence shows rather than on which words a fix shares.
     """
 
-    CABLE = "replace the cable and recalibrate"
-    LINK = "reconnect or reseat the link between the instruments"
+    CABLE = "signal present but attenuated: replace the cable and recalibrate"
+    LINK = (
+        "no signal or intermittent signal; the path is open: reconnect or reseat the link "
+        "between the instruments"
+    )
     ALIGNMENT = "run the instrument's self-alignment"
     CONFIGURATION = "correct the bench configuration"
     TIMEOUT = "raise the session timeout to the instrument's response time"

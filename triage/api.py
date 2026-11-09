@@ -63,6 +63,11 @@ REQUEST_FOLDER = Path("request")
 
 DEFAULT_PORT = 8000
 
+ActionKey = Literal[
+    "CABLE", "LINK", "ALIGNMENT", "CONFIGURATION", "TIMEOUT", "TEST_CLEANUP", "FIRMWARE", "UNKNOWN"
+]
+"""The action keys a label may record: triage.prompt.Fix's names, spelled as a type."""
+
 EvidenceLevel = Literal["full", "error-only"]
 """The evidence levels a request may ask for: triage.evidence.LEVELS, spelled as a type."""
 
@@ -215,11 +220,14 @@ class Label(BaseModel):
         fault: What was wrong, as a short name.
         cause: Why it failed.
         fix: What was done about it.
+        action: The key of the action taken, such as LINK; optional, but a past run that
+            records it gives the model the action itself, not only a description of it.
     """
 
     fault: str = Field(min_length=1, max_length=100)
     cause: str = Field(min_length=1, max_length=MAX_TEXT)
     fix: str = Field(min_length=1, max_length=MAX_TEXT)
+    action: ActionKey | None = None
 
 
 class ResolvedRunRequest(Evidence):

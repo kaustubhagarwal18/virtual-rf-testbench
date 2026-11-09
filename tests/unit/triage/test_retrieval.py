@@ -118,3 +118,17 @@ def test_an_added_run_can_be_retrieved_and_is_kept_once(tmp_path: Path) -> None:
     assert first == second
     assert len(retriever.sources) == 1
     assert retriever.similar_to(question, count=3) == [first]
+
+
+@pytest.mark.parametrize(("action", "shown"), [("LINK", True), (None, False), ("", False)])
+def test_a_source_states_the_action_taken_when_the_label_records_one(
+    tmp_path: Path, action: str | None, shown: bool
+) -> None:
+    """A precedent hands the model the action key itself, when the ticket recorded it."""
+    run = SavedRun.load(labelled_run(tmp_path / "run", "link_down", "unplugged", "reconnected"))
+    label = {"fault": "link_down", "cause": "unplugged", "fix": "reconnected"}
+    if action is not None:
+        label["action"] = action
+    text = history_source(run, label).text
+    assert ("Action: LINK" in text) is shown
+    assert ("Action:" in text) is shown

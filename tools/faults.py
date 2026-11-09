@@ -48,12 +48,15 @@ class Label:
     Attributes:
         category: firmware, bench or test.
         cause: What went wrong.
-        fix: What fixed it.
+        fix: What fixed it, in words.
+        action: The key of the action that fixed it, from triage's fixed list (CABLE, LINK,
+            ...): what a ticket's resolution category records, and what triage is scored on.
     """
 
     category: str
     cause: str
     fix: str
+    action: str
 
 
 @dataclass(frozen=True)
@@ -276,6 +279,7 @@ CATALOGUE: dict[str, Fault] = {
                 "bench",
                 "Extra loss in the cable between generator and analyzer, from a damaged cable",
                 "Replaced the cable and recalibrated the path loss",
+                action="CABLE",
             ),
             history_sizes=(0.8, 1.2, 2.0),
             question_sizes=(1.5, 1.0, 2.5),
@@ -288,6 +292,7 @@ CATALOGUE: dict[str, Fault] = {
                 "test",
                 "The test's 2 s instrument timeout is shorter than the generator's response time",
                 "Raised the session timeout to cover the instrument's specified response time",
+                action="TIMEOUT",
             ),
             history_sizes=(2.5, 3.0, 4.0),
             question_sizes=(3.5, 2.2, 5.0),
@@ -301,6 +306,7 @@ CATALOGUE: dict[str, Fault] = {
                 "bench",
                 "Nothing is connected between the generator and the analyzer",
                 "Reconnected the cable between the instruments and recalibrated",
+                action="LINK",
             ),
             history_sizes=(1.0, 1.0, 1.0),
             question_sizes=(1.0, 1.0, 1.0),
@@ -314,6 +320,7 @@ CATALOGUE: dict[str, Fault] = {
                 "A loose connector: the signal disappears for one sweep in a few, so a "
                 "measurement fails for no reason visible in its own numbers",
                 "Reseated and replaced the connector, then reran the suite",
+                action="LINK",
             ),
             history_sizes=(2.0, 3.0, 5.0),
             question_sizes=(4.0, 6.0, 7.0),
@@ -326,6 +333,7 @@ CATALOGUE: dict[str, Fault] = {
                 "The bench configuration has no level_offset_db, so the setup sequence "
                 "can't check what offset the generator should carry",
                 "Set level_offset_db in the bench configuration",
+                action="CONFIGURATION",
             ),
         ),
         ConfigFault(
@@ -336,6 +344,7 @@ CATALOGUE: dict[str, Fault] = {
                 "The bench configuration asks for an 80 dB level offset, beyond the "
                 "generator's +-50 dB range",
                 "Corrected level_offset_db to a value the generator accepts",
+                action="CONFIGURATION",
             ),
         ),
         ConfigFault(
@@ -346,6 +355,7 @@ CATALOGUE: dict[str, Fault] = {
                 "The bench configuration asks for a 15 dB level offset where 1.5 dB was "
                 "meant: a misplaced decimal point, and far more than the cable's loss",
                 "Corrected level_offset_db to 1.5",
+                action="CONFIGURATION",
             ),
         ),
         ReleaseFault(
@@ -356,6 +366,7 @@ CATALOGUE: dict[str, Fault] = {
                 "Release 0.2.0-rc2 no longer clears the level offset on *RST, so an offset "
                 "set by one test is still there for the tests that follow",
                 "Reported the regression; the release restored *RST clearing the offset",
+                action="FIRMWARE",
             ),
         ),
         ReleaseFault(
@@ -366,6 +377,7 @@ CATALOGUE: dict[str, Fault] = {
                 "Release 0.2.0-rc1 dropped the short form of the RF output command: "
                 "OUTP ON now gives -113",
                 "Reported the regression; the release restored OUTPut without :STATe",
+                action="FIRMWARE",
             ),
         ),
     )

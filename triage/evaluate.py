@@ -2,8 +2,8 @@
 
 Each scenario adds one thing to a neighbour, so any change in the score is attributable to
 that one thing: the error message alone, the whole run's evidence, that evidence plus the
-past runs most like it (retrieval), the same with a check on firmware verdicts, and the same
-retrieval with the question's own fault held out of the history.
+past runs most like it (retrieval), the same with the checks on the verdict, and the same
+again with the question's own fault held out of the history.
 
 An answer is one of four things: right, UNKNOWN (the model abstained), a confident wrong
 action, or malformed (unusable). They are counted apart, because a confident wrong action is
@@ -38,6 +38,8 @@ from triage.service import triage_run
 from triage.textfmt import clip
 
 DEFAULT_QUESTIONS = Path("triage/data/runs/questions")
+DEFAULT_CACHE = Path(".cache/triage-answers")
+"""Where the model's answers persist between runs; git ignores it."""
 MALFORMED = "malformed"
 """What a reply that couldn't be parsed counts as: neither right nor a real wrong answer."""
 
@@ -49,20 +51,6 @@ RETRIEVAL_TITLE = "Triage: retrieval against the no-retrieval baseline"
 
 Z_95 = 1.96
 """The normal quantile for a two-sided 95% interval."""
-
-EXPECTED_FIX: dict[str, Fix] = {
-    "cable_loss": Fix.CABLE,
-    "link_down": Fix.LINK,
-    "link_flaky": Fix.LINK,
-    "slow_responses": Fix.TIMEOUT,
-    "config_parameter_missing": Fix.CONFIGURATION,
-    "config_parameter_out_of_range": Fix.CONFIGURATION,
-    "config_decimal_error": Fix.CONFIGURATION,
-    "reset_leaks_offset": Fix.FIRMWARE,
-    "output_command_change": Fix.FIRMWARE,
-}
-"""The action that resolves each fault: the scoring key. ALIGNMENT and TEST_CLEANUP have no
-fault of their own; they are there so a right answer can't come from a short list of options."""
 
 
 @dataclass(frozen=True)
@@ -93,18 +81,19 @@ SCENARIOS = (
     Scenario("full evidence", FULL, adds_to="error only"),
     Scenario("full + retrieval", FULL, retrieve=True, adds_to="full evidence"),
     Scenario(
-        "full + retrieval + firmware check",
+        "full + retrieval + checks",
         FULL,
         retrieve=True,
         checked=True,
         adds_to="full + retrieval",
     ),
     Scenario(
-        "full + retrieval, own fault held out",
+        "full + retrieval + checks, own fault held out",
         FULL,
         retrieve=True,
         hold_out=True,
-        adds_to="full + retrieval",
+        checked=True,
+        adds_to="full + retrieval + checks",
     ),
 )
 """The scenarios, each adding exactly one thing to the one it names."""
@@ -261,6 +250,46 @@ class ScenarioResult:
         return sum(1 for outcome in self.outcomes if outcome.precedent_offered)
 
     @property
+    def by_fault(self) -> dict[str, tuple[int, int]]:
+        """Count each fault's questions: how many were right, of how many asked.
+
+        Returns:
+            (right, asked) for each fault, in name order.
+        """
+        counts: dict[str, tuple[int, int]] = {}
+        for outcome in self.outcomes:
+            right, asked = counts.get(outcome.fault, (0, 0))
+            counts[outcome.fault] = (right + outcome.right, asked + 1)
+        return dict(sorted(counts.items()))
+
+    @property
+    def faults(self) -> int:
+        """How many faults were asked about.
+
+        Returns:
+            The count.
+        """
+        return len(self.by_fault)
+
+    @property
+    def faults_solved(self) -> int:
+        """How many faults had every one of their questions right.
+
+        Returns:
+            The count.
+        """
+        return sum(1 for right, asked in self.by_fault.values() if right == asked)
+
+    @property
+    def faults_split(self) -> int:
+        """How many faults had some questions right and some wrong.
+
+        Returns:
+            The count; zero means a fault's questions always behave as one.
+        """
+        return sum(1 for right, asked in self.by_fault.values() if 0 < right < asked)
+
+    @property
     def wrong_choices(self) -> dict[str, int]:
         """What the model chose when it named a wrong action, counted.
 
@@ -285,7 +314,7 @@ def wilson_interval(successes: int, total: int) -> tuple[float, float]:
         total: How many were asked.
 
     Returns:
-        The interval's low and high ends, in questions; (0, 0) when nothing was asked.
+        The interval's low and high ends, in the unit counted; (0, 0) when nothing was asked.
     """
     if total == 0:
         return 0.0, 0.0
@@ -304,27 +333,34 @@ def wilson_interval(successes: int, total: int) -> tuple[float, float]:
 
 
 def score_line(result: ScenarioResult) -> str:
-    """Summarise one scenario: right with its interval, then the other three outcomes.
+    """Summarise one scenario: faults solved with their interval, then the question counts.
+
+    The fault is the unit scored. A fault's questions differ only in size, timing and
+    reading noise, and in practice they are answered alike, so 27 questions carry about as
+    much evidence as 9 faults; an interval over the questions would be too narrow.
 
     Args:
         result: The scenario's result.
 
     Returns:
-        A line such as '18 of 27 right (95% interval 13 to 22); 2 UNKNOWN, 6 wrong, 1 malformed'.
+        A line such as '6 of 9 faults solved (95% interval 3 to 8); 18 of 27 questions right;
+        0 UNKNOWN, 9 wrong, 0 malformed'.
     """
-    low, high = wilson_interval(result.right, result.total)
+    low, high = wilson_interval(result.faults_solved, result.faults)
     return (
-        f"{result.right} of {result.total} right (95% interval {low:.0f} to {high:.0f}); "
+        f"{result.faults_solved} of {result.faults} faults solved (95% interval {low:.0f} to "
+        f"{high:.0f}); {result.right} of {result.total} questions right; "
         f"{result.abstained} UNKNOWN, {result.confidently_wrong} wrong, "
         f"{result.malformed} malformed"
     )
 
 
 def expected_fix(run: SavedRun) -> Fix:
-    """Return the fix that resolves a question run, from its label.
+    """Return the fix that resolves a question run, from the action its label records.
 
     The label is read here, and only here: it is the answer key, used to score the model's
-    verdict, never shown to the model.
+    verdict, never shown to the model. The action comes from the fault catalogue through
+    `make fault`, so there is one answer key, not a second table to keep in step.
 
     Args:
         run: The question run.
@@ -333,13 +369,16 @@ def expected_fix(run: SavedRun) -> Fix:
         The resolving fix.
 
     Raises:
-        KeyError: If the run's fault has no expected fix, which means a fault was added
-            without saying how it is fixed.
+        KeyError: If the label records no action, or one that isn't on the list; the
+            message says to rebuild the data set.
     """
-    fault = load_label(run)["fault"]
-    if fault not in EXPECTED_FIX:
-        raise KeyError(f"{fault} has no expected fix in EXPECTED_FIX")
-    return EXPECTED_FIX[fault]
+    action = load_label(run).get("action")
+    if not isinstance(action, str) or action not in Fix.__members__:
+        raise KeyError(
+            f"{run.folder.name}: the label records no known action ({action!r}); rebuild "
+            "the data set with 'make fault-dataset'"
+        )
+    return Fix[action]
 
 
 def _sources_for(
@@ -501,7 +540,7 @@ flowchart LR
     ret --> pr
     pr --> llm["qwen2.5:3b<br/>(Ollama, local, schema)"]
     llm --> an["answer.py<br/>parse + refuse unusable"]
-    an --> chk["checks.py<br/>firmware unchanged?"]
+    an --> chk["checks.py<br/>firmware unchanged?<br/>SCPI error behind a timeout?"]
     chk --> score["evaluate.py<br/>right fix?"]
     label["label.json"] -. answer key, never shown .-> score
 ```"""
@@ -535,6 +574,50 @@ def _report_rows(result: ScenarioResult) -> list[str]:
     return lines
 
 
+def _summary_table(results: Sequence[ScenarioResult]) -> list[str]:
+    """Write the scenarios side by side: faults solved first, then the question counts.
+
+    Args:
+        results: The scenario results.
+
+    Returns:
+        The table's lines.
+    """
+    lines = [
+        "| Scenario | Adds | Faults solved | 95% interval | Questions right | UNKNOWN | Wrong "
+        "| Malformed |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for result in results:
+        low, high = wilson_interval(result.faults_solved, result.faults)
+        lines.append(
+            f"| {result.name} | {result.scenario.adds_to and 'to ' + result.scenario.adds_to} "
+            f"| {result.faults_solved} of {result.faults} | {low:.0f} to {high:.0f} "
+            f"| {result.right} of {result.total} | {result.abstained} "
+            f"| {result.confidently_wrong} | {result.malformed} |"
+        )
+    return lines
+
+
+def _fault_table(results: Sequence[ScenarioResult]) -> list[str]:
+    """Write each fault's questions right, scenario by scenario.
+
+    Args:
+        results: The scenario results.
+
+    Returns:
+        The table's lines: one row per fault, one column per scenario.
+    """
+    header = " | ".join(result.name for result in results)
+    lines = [f"| Fault | Expected | {header} |", "|---|---|" + "---|" * len(results)]
+    expected = {outcome.fault: outcome.expected.name for outcome in results[0].outcomes}
+    for fault in results[0].by_fault:
+        counts = [result.by_fault.get(fault, (0, 0)) for result in results]
+        cells = " | ".join(f"{right}/{asked}" for right, asked in counts)
+        lines.append(f"| {fault} | {expected[fault]} | {cells} |")
+    return lines
+
+
 def render_report(
     results: Sequence[ScenarioResult], model: str, title: str = BASELINE_TITLE
 ) -> str:
@@ -550,27 +633,28 @@ def render_report(
         The report, showing for each question the failure the model saw and what it answered.
     """
     total = results[0].total if results else 0
+    faults = results[0].faults if results else 0
     lines = [
         f"# {title}",
         "",
         f"Model: `{model}`, temperature 0, fixed seed, replies constrained to the answer's "
-        f"JSON schema. Scored on whether the model named the fix that resolves each failure, "
-        f"over {total} questions. ✓ right, ? UNKNOWN, ✗ a confident wrong action, "
-        "! unusable reply.",
+        f"JSON schema. Scored on whether the model named the fix that resolves each failure: "
+        f"{total} questions, {total // faults if faults else 0} for each of {faults} faults. "
+        "A fault is solved when every one of its questions is right, and the interval is over "
+        "faults, because a fault's questions are answered alike (see Findings). "
+        "✓ right, ? UNKNOWN, ✗ a confident wrong action, ! unusable reply.",
         "",
         PIPELINE_DIAGRAM,
         "",
-        "| Scenario | Adds | Right | 95% interval | UNKNOWN | Wrong | Malformed |",
-        "|---|---|---|---|---|---|---|",
+        *_summary_table(results),
+        "",
+        "## By fault",
+        "",
+        "Questions right, of those asked, for each fault.",
+        "",
+        *(_fault_table(results) if results else []),
+        "",
     ]
-    for result in results:
-        low, high = wilson_interval(result.right, result.total)
-        lines.append(
-            f"| {result.name} | {result.scenario.adds_to and 'to ' + result.scenario.adds_to} "
-            f"| {result.right} of {result.total} | {low:.0f} to {high:.0f} | "
-            f"{result.abstained} | {result.confidently_wrong} | {result.malformed} |"
-        )
-    lines.append("")
     for result in results:
         lines += [f"## {result.name}: {score_line(result)}", "", *_report_rows(result), ""]
     lines += ["## Findings", ""]
@@ -578,10 +662,8 @@ def render_report(
     lines += [
         "",
         "These are one machine's deterministic numbers (temperature 0, fixed seed); another "
-        "machine's model may differ in wording and the odd verdict. The interval treats the "
-        "questions as independent, which they are only in part: the three questions of a "
-        "fault with nothing to scale repeat one scenario. A verdict whose reasoning is sound "
-        "but whose action is wrong still counts as a miss.",
+        "machine's model may differ in wording and the odd verdict. A verdict whose reasoning "
+        "is sound but whose action is wrong still counts as a miss.",
     ]
     return "\n".join(lines) + "\n"
 
@@ -601,18 +683,36 @@ def _step_findings(results: Sequence[ScenarioResult]) -> list[str]:
         prior = by_name.get(result.scenario.adds_to)
         if prior is None:
             continue
-        delta = result.right - prior.right
+        delta = result.faults_solved - prior.faults_solved
         change = (
-            f"{'raised' if delta > 0 else 'lowered'} the score by {abs(delta)}"
+            f"{'raised' if delta > 0 else 'lowered'} faults solved by {abs(delta)}"
             if delta
-            else "did not change the score"
+            else "did not change the faults solved"
         )
         sentences.append(
-            f"{prior.name} to {result.name} {change} ({prior.right} to {result.right} of "
-            f"{result.total}); confident wrong answers went from {prior.confidently_wrong} "
-            f"to {result.confidently_wrong}."
+            f"{prior.name} to {result.name} {change} ({prior.faults_solved} to "
+            f"{result.faults_solved} of {result.faults}); confident wrong answers went from "
+            f"{prior.confidently_wrong} to {result.confidently_wrong} of {result.total}."
         )
     return sentences
+
+
+def _agreement_finding(results: Sequence[ScenarioResult]) -> str:
+    """Say how often a fault's questions disagreed, which is why the fault is the unit scored.
+
+    Args:
+        results: The scenario results.
+
+    Returns:
+        One sentence counting the fault-and-scenario cells whose questions split.
+    """
+    cells = sum(result.faults for result in results)
+    split = sum(result.faults_split for result in results)
+    return (
+        f"A fault's questions split (some right, some wrong) in {split} of {cells} "
+        "fault-and-scenario cells; otherwise they were answered alike, so the fault, not the "
+        "question, is the unit the scores count."
+    )
 
 
 def _retrieval_findings(results: Sequence[ScenarioResult]) -> list[str]:
@@ -660,14 +760,16 @@ def findings(results: Sequence[ScenarioResult]) -> list[str]:
         results: The scenario results.
 
     Returns:
-        One sentence per finding: the best scenario, what each added step did, retrieval
-        recall and the hold-out result, the most common confident wrong choice, and which
-        faults were answered right in every question of every scenario.
+        One sentence per finding: the best scenario, how often a fault's questions split,
+        what each added step did, retrieval recall and the hold-out result, the most common
+        confident wrong choice, and which faults were answered right in every question of
+        every scenario.
     """
     if not results:
         return []
-    best = max(results, key=lambda result: result.right)
+    best = max(results, key=lambda result: (result.faults_solved, result.right))
     conclusions = [f"Best scenario: {best.name}, {score_line(best)}."]
+    conclusions.append(_agreement_finding(results))
     conclusions += _step_findings(results)
     conclusions += _retrieval_findings(results)
     wrong: dict[str, int] = {}
@@ -720,12 +822,21 @@ def main(
     parser.add_argument(
         "--model", default=DEFAULT_MODEL, help=f"Ollama model to ask (default: {DEFAULT_MODEL})"
     )
+    parser.add_argument(
+        "--cache-dir",
+        type=Path,
+        default=DEFAULT_CACHE,
+        help=f"where the model's answers persist between runs (default: {DEFAULT_CACHE})",
+    )
+    parser.add_argument("--no-cache", action="store_true", help="ask the model every prompt again")
     parsed = parser.parse_args(arguments)
     provider = provider or CachingProvider(
-        OllamaProvider(model=parsed.model, response_format=VERDICT_SCHEMA)
+        OllamaProvider(model=parsed.model, response_format=VERDICT_SCHEMA),
+        None if parsed.no_cache else parsed.cache_dir,
     )
     chosen = parsed.scenario or names
     scenarios = [scenario for scenario in SCENARIOS if scenario.name in chosen]
+    asked_before = provider.asked if isinstance(provider, CachingProvider) else 0
     try:
         if retriever is None and any(scenario.retrieve for scenario in scenarios):
             retriever = InMemoryRetriever.from_history(  # pragma: no cover - needs Ollama
@@ -737,6 +848,8 @@ def main(
         return 1
     model = str(getattr(provider, "model", DEFAULT_MODEL))
     sys.stdout.write(render(results, model))
+    if isinstance(provider, CachingProvider):
+        sys.stdout.write(f"\nasked the model {provider.asked - asked_before} new prompts\n")
     if parsed.report is not None:
         parsed.report.parent.mkdir(parents=True, exist_ok=True)
         title = (

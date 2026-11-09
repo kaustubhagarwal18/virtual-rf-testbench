@@ -85,12 +85,15 @@ def history_source(run: SavedRun, label: dict[str, Any]) -> Source:
 
     Args:
         run: A history run.
-        label: Its label: the fault, the cause and the fix applied.
+        label: Its label: the fault, the cause, the fix applied and, if recorded, the action.
 
     Returns:
-        The source: the run's evidence plus its recorded cause and fix, under a neutral id.
+        The source: the run's evidence plus its recorded cause and fix, and the key of the
+        action taken when the label records one, under a neutral id.
     """
     text = f"{build_evidence(run, FULL)}\nCause: {label['cause']}\nFix applied: {label['fix']}"
+    if label.get("action"):
+        text += f"\nAction: {label['action']}"
     return Source(source_id=neutral_id(text), text=text, fault=str(label.get("fault", "")))
 
 
