@@ -3,11 +3,13 @@ COVERAGE_FLOOR := 80
 EVAL_REPORT ?= triage/results/rag.md
 FIRMWARE_VERSION ?= $(shell uv version --short 2>/dev/null)
 REVISION ?= $(shell git rev-parse --short HEAD 2>/dev/null)
+IMAGE := virtual-rf-testbench-simulators:$(or $(FIRMWARE_VERSION),dev)
+BENCH_BUILD ?= --build
 
 export FIRMWARE_VERSION REVISION
 PYTHON_PATHS := $(PACKAGES) tests
 
-.PHONY: setup lint fmt test summary bench-up bench-down bench-logs bench-test bench-summary fault fault-dataset triage triage-demo triage-api eval clean
+.PHONY: setup lint fmt test summary image image-name image-scan bench-up bench-down bench-logs bench-test bench-summary fault fault-dataset triage triage-demo triage-api eval clean
 
 setup:
 	uv sync
@@ -36,8 +38,17 @@ test:
 summary:
 	uv run python -m tools.results_summary reports/junit.xml --coverage reports/coverage.xml --coverage-floor $(COVERAGE_FLOOR)
 
+image:
+	docker compose build
+
+image-name:
+	@echo $(IMAGE)
+
+image-scan:
+	trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed --no-progress $(IMAGE)
+
 bench-up:
-	docker compose up --build --detach --wait --wait-timeout 90
+	docker compose up $(BENCH_BUILD) --detach --wait --wait-timeout 90
 
 bench-down:
 	docker compose down --remove-orphans
