@@ -8,7 +8,9 @@ from pathlib import Path
 import pytest
 
 from tests.unit.triage.test_evidence import FAILING_TEST, write_run
+from triage.abstain import DEFAULT_GATES
 from triage.answer import MalformedAnswerError
+from triage.checks import DEFAULT_CHECKS
 from triage.evidence import ERROR_ONLY, FULL, SavedRun
 from triage.llm import FakeProvider, ModelUnavailableError
 from triage.prompt import Fix, Source
@@ -95,7 +97,7 @@ def test_the_cli_reports_an_unreachable_model(
     class Down:
         """A provider that is never reachable."""
 
-        def complete(self, system: str, user: str) -> str:
+        def complete(self, system: str, user: str, schema: object = None) -> str:
             """Fail as an unreachable model does."""
             raise ModelUnavailableError("start it with 'ollama serve'")
 
@@ -113,3 +115,70 @@ def test_service_runs_as_a_module() -> None:
         check=True,
     )
     assert "Explain one failed bench run" in completed.stdout
+
+
+def unchanged_firmware_run(tmp_path: Path) -> Path:
+    """Write a failed run whose firmware is the same release as the last passing run's."""
+    folder = write_run(tmp_path / "run", [FAILING_TEST])
+    results = json.loads((folder / "results.json").read_text(encoding="utf-8"))
+    results["firmware_versions"] = {"analyzer": "0.1.0", "generator": "0.1.0"}
+    (folder / "results.json").write_text(json.dumps(results), encoding="utf-8")
+    return folder
+
+
+FIRMWARE_REPLY = json.dumps({"fix": "FIRMWARE", "where": "fw", "because": "x", "cited": []})
+
+
+def test_the_cli_says_when_a_check_overruled_the_model(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A FIRMWARE answer on unchanged firmware prints UNKNOWN and the reason it was overruled."""
+    assert main([str(unchanged_firmware_run(tmp_path))], FakeProvider([FIRMWARE_REPLY])) == 0
+    out = capsys.readouterr().out
+    assert "fix:   UNKNOWN" in out
+    assert "note:  the model chose FIRMWARE" in out
+
+
+def test_checks_are_off_unless_asked_for(tmp_path: Path) -> None:
+    """The pipeline applies no checks by default, so the evaluation can measure the model alone."""
+    run = SavedRun.load(unchanged_firmware_run(tmp_path))
+    assert triage_run(run, FakeProvider([FIRMWARE_REPLY])).fix is Fix.FIRMWARE
+    checked = triage_run(run, FakeProvider([FIRMWARE_REPLY]), checks=DEFAULT_CHECKS)
+    assert checked.fix is Fix.UNKNOWN
+
+
+def test_a_gate_that_objects_answers_unknown_without_asking_the_model(tmp_path: Path) -> None:
+    """Disagreeing precedents give UNKNOWN, and the model is never sent a prompt."""
+    sources = [Source("past-a", "a", "cable_loss", "CABLE"), Source("past-b", "b", "x", "LINK")]
+    provider = FakeProvider([VERDICT])
+    verdict = triage_run(saved_run(tmp_path), provider, FULL, sources, gates=DEFAULT_GATES)
+    assert verdict.fix is Fix.UNKNOWN
+    assert verdict.cited == []
+    assert "different actions" in verdict.gate_reason
+    assert not provider.prompts
+
+
+@pytest.mark.parametrize("sources", [[], [Source("past-a", "a", "cable_loss", "CABLE", 0.99)]])
+def test_gates_that_find_no_objection_leave_the_answer_to_the_model(
+    tmp_path: Path, sources: list[Source]
+) -> None:
+    """No precedents, or close ones that agree: the model is asked as before."""
+    provider = FakeProvider([VERDICT])
+    verdict = triage_run(saved_run(tmp_path), provider, FULL, sources, gates=DEFAULT_GATES)
+    assert verdict.fix is Fix.CABLE
+    assert verdict.gate_reason == ""
+    assert len(provider.prompts) == 1
+
+
+def test_the_model_is_asked_to_cite_only_the_sources_it_was_given(tmp_path: Path) -> None:
+    """With sources, the reply's schema lists their ids; without, the provider's default holds."""
+    sources = [Source("past-a", "a"), Source("past-b", "b")]
+    provider = FakeProvider([VERDICT])
+    triage_run(saved_run(tmp_path), provider, FULL, sources)
+    triage_run(saved_run(tmp_path), provider, FULL)
+    narrowed, default = provider.schemas
+    assert narrowed is not None
+    properties = narrowed["properties"]
+    assert isinstance(properties, dict)
+    assert properties["cited"]["items"]["enum"] == ["past-a", "past-b"]
+    assert default is None

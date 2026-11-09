@@ -1,8 +1,0 @@
-{
-  "fault": "config_parameter_missing",
-  "size": null,
-  "unit": "",
-  "category": "test",
-  "cause": "The bench configuration has no level_offset_db, so the setup sequence can't check what offset the generator should carry",
-  "fix": "Set level_offset_db in the bench configuration"
-}

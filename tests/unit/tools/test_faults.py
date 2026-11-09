@@ -18,17 +18,27 @@ from tools.faults import (
 FAULTS_PER_CATEGORY = 2
 """How many faults each cause needs, so no category can be guessed right by default."""
 
+QUESTIONS_PER_FAULT = 3
+"""How many question runs each fault has in the data set."""
 
-def test_question_sizes_differ_from_every_history_size() -> None:
-    """A fault with a size uses a question size absent from history, so retrieval can't copy.
+
+@pytest.mark.parametrize("name", sorted(CATALOGUE))
+def test_question_sizes_differ_from_every_history_size(name: str) -> None:
+    """A fault with a size uses question sizes absent from history, so retrieval can't copy.
 
     Faults with nothing to scale, such as a disconnected cable, repeat their single value.
     """
-    for fault in CATALOGUE.values():
-        sizes = set(fault.history_sizes)
-        if isinstance(fault, AdminFault) and len(sizes) > 1:
-            assert fault.question_size not in sizes
-            assert len(fault.history_sizes) == len(sizes)
+    fault = CATALOGUE[name]
+    history = set(fault.history_sizes)
+    if isinstance(fault, AdminFault) and len(history) > 1:
+        assert not history & set(fault.question_sizes)
+        assert len(fault.question_sizes) == len(set(fault.question_sizes))
+
+
+@pytest.mark.parametrize("name", sorted(CATALOGUE))
+def test_every_fault_has_three_question_runs(name: str) -> None:
+    """Three questions per fault, so one lucky or unlucky answer moves the score less."""
+    assert len(CATALOGUE[name].question_sizes) == QUESTIONS_PER_FAULT
 
 
 def test_an_admin_fault_restores_the_baseline_release_clears_then_switches_on() -> None:
@@ -49,7 +59,7 @@ def test_an_admin_fault_restores_the_baseline_release_clears_then_switches_on() 
 
 
 def test_an_admin_fault_without_a_size_uses_its_question_size() -> None:
-    """No size means the question size."""
+    """No size means the first question size."""
     fault = CATALOGUE["slow_responses"]
     bench = FakeBench()
     fault.apply(bench, None, "0.1.0")

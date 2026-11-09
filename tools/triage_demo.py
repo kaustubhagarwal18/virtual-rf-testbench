@@ -14,17 +14,18 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from triage.answer import MalformedAnswerError
+from triage.answer import VERDICT_SCHEMA, MalformedAnswerError
 from triage.embed import OllamaEmbedder
 from triage.evaluate import expected_fix
 from triage.evidence import FULL, SavedRun, error_only_evidence
+from triage.label import load_label
 from triage.llm import DEFAULT_MODEL, LLMProvider, ModelUnavailableError, OllamaProvider
 from triage.prompt import Fix, Source
 from triage.retrieval import DEFAULT_HISTORY, DEFAULT_TOP_K, InMemoryRetriever, Retriever
 from triage.service import triage_run
 from triage.textfmt import clip
 
-DEFAULT_RUN = Path("triage/data/runs/questions/cable_loss")
+DEFAULT_RUN = Path("triage/data/runs/questions/cable_loss-1")
 """The run the demo shows when none is named: retrieval flips its verdict to the right fix."""
 
 UNUSABLE = "unusable"
@@ -117,7 +118,7 @@ def run_demo(
     error = error_only_evidence(run)
     baseline = _answer(run, provider, expected, ())
     retrieval = _answer(run, provider, expected, retriever.similar_to(run, top_k))
-    return DemoResult(run.folder.name, expected, error, baseline, retrieval)
+    return DemoResult(str(load_label(run)["fault"]), expected, error, baseline, retrieval)
 
 
 def _answer_lines(title: str, answer: Answer, expected: Fix) -> list[str]:
@@ -201,7 +202,7 @@ def main(
         "--model", default=DEFAULT_MODEL, help=f"Ollama model to ask (default: {DEFAULT_MODEL})"
     )
     parsed = parser.parse_args(arguments)
-    provider = provider or OllamaProvider(model=parsed.model)
+    provider = provider or OllamaProvider(model=parsed.model, response_format=VERDICT_SCHEMA)
     try:
         run = SavedRun.load(parsed.run)
         if retriever is None:

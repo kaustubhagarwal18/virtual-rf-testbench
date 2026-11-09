@@ -1,0 +1,9 @@
+{
+  "fault": "cable_loss",
+  "size": 2.5,
+  "unit": "dB",
+  "category": "bench",
+  "cause": "Extra loss in the cable between generator and analyzer, from a damaged cable",
+  "fix": "Replaced the cable and recalibrated the path loss",
+  "action": "CABLE"
+}

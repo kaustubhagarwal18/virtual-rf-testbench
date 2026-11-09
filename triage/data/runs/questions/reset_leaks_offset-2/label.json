@@ -1,0 +1,9 @@
+{
+  "fault": "reset_leaks_offset",
+  "size": null,
+  "unit": "",
+  "category": "firmware",
+  "cause": "Release 0.2.0-rc2 no longer clears the level offset on *RST, so an offset set by one test is still there for the tests that follow",
+  "fix": "Reported the regression; the release restored *RST clearing the offset",
+  "action": "FIRMWARE"
+}

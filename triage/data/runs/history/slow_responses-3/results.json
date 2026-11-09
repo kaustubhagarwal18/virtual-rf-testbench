@@ -1,7 +1,7 @@
 {
-  "run_id": "20261105T044508.751323Z",
-  "started": "2026-11-05T04:45:08+00:00",
-  "duration_s": 11.815,
+  "run_id": "20261109T065402.002325Z",
+  "started": "2026-11-09T06:54:02+00:00",
+  "duration_s": 11.915,
   "firmware_versions": {
     "generator": "0.1.0",
     "analyzer": "0.1.0"
@@ -25,7 +25,7 @@
     {
       "id": "tests/bench/test_bench.py::test_instruments_identify_as_the_release_under_test",
       "outcome": "error",
-      "duration_s": 6.526,
+      "duration_s": 6.535,
       "message": "drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within the 2000 ms timeout while opening a session (Query '*STB?')",
       "instrument_errors": [],
       "measurements": []
@@ -33,7 +33,7 @@
     {
       "id": "tests/bench/test_bench.py::test_reset_leaves_the_generator_at_safe_defaults",
       "outcome": "error",
-      "duration_s": 2.503,
+      "duration_s": 2.525,
       "message": "drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within the 2000 ms timeout while opening a session (Query '*STB?')",
       "instrument_errors": [],
       "measurements": []
@@ -41,7 +41,7 @@
     {
       "id": "tests/bench/test_bench.py::test_path_loss_calibration_matches_the_cable_datasheet",
       "outcome": "error",
-      "duration_s": 2.504,
+      "duration_s": 2.539,
       "message": "drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within the 2000 ms timeout while opening a session (Query '*STB?')",
       "instrument_errors": [],
       "measurements": []

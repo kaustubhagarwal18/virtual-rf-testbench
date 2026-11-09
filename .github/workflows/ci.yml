@@ -16,6 +16,8 @@ env:
   UV_VERSION: "0.13.7"
   GITLEAKS_VERSION: "8.30.1"
   GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+  TRIVY_VERSION: "0.76.1"
+  TRIVY_SHA256: "c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0"
 
 jobs:
   lint:
@@ -72,8 +74,42 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+  image:
+    name: Image (build and scan)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+      - name: Build the simulator image
+        run: make image
+      - name: Install Trivy (pinned version, checksum verified)
+        run: |
+          archive="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          curl -sSfL --retry 5 --retry-delay 10 -o "$archive" \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/${archive}"
+          echo "${TRIVY_SHA256}  ${archive}" | sha256sum --check --strict
+          tar -xzf "$archive" trivy
+      - name: Scan the image; fail on a fixable high or critical vulnerability
+        run: >-
+          ./trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed --no-progress
+          "$(make --silent image-name)"
+      - name: Save the image, so the bench tests and publishes exactly what was scanned
+        run: docker save "$(make --silent image-name)" --output simulators.tar
+      - name: Keep the image for the bench and publish jobs
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: simulator-image
+          path: simulators.tar
+          if-no-files-found: error
+          retention-days: 1
+
   bench:
     name: Bench (containers)
+    needs: [image]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -87,8 +123,14 @@ jobs:
           cache-python: true
       - name: Install dependencies from the lockfile
         run: uv sync --locked
-      - name: Build the simulator image and start the bench
-        run: make bench-up
+      - name: Fetch the scanned image
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: simulator-image
+      - name: Load the scanned image and start the bench from it, without rebuilding
+        run: |
+          docker load --input simulators.tar
+          make bench-up BENCH_BUILD=--no-build
       - name: Bench suite against the containers
         run: make bench-test
       - name: Results summary on the run page
@@ -108,6 +150,40 @@ jobs:
       - name: Stop the bench
         if: ${{ always() }}
         run: make bench-down
+
+  publish:
+    name: Publish image
+    needs: [lint, test, image, bench, secrets]
+    # Only main is published: a pull request's image is built and scanned, never pushed.
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+      - name: Fetch the scanned image
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: simulator-image
+      - name: Push it to GitHub Container Registry, tagged with its version and commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Tags are immutable by convention (version-commit), so a deployment pins one exactly.
+        run: |
+          docker load --input simulators.tar
+          local_image=$(make --silent image-name)
+          owner=$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
+          remote="ghcr.io/${owner}/virtual-rf-testbench-simulators:${local_image##*:}-${GITHUB_SHA::7}"
+          echo "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker tag "$local_image" "$remote"
+          docker push "$remote"
+          echo "Pushed \`$remote\`" >> "$GITHUB_STEP_SUMMARY"
 
   secrets:
     name: Secret scan
@@ -131,7 +207,7 @@ jobs:
 
   report:
     name: Results comment
-    needs: [lint, test, bench, secrets]
+    needs: [lint, test, image, bench, secrets]
     # Pull requests from this repository only: GitHub gives fork pull requests a read-only token.
     if: >-
       ${{ !cancelled() && github.event_name == 'pull_request'
@@ -163,6 +239,7 @@ jobs:
         env:
           LINT_RESULT: ${{ needs.lint.result }}
           TEST_RESULT: ${{ needs.test.result }}
+          IMAGE_RESULT: ${{ needs.image.result }}
           BENCH_RESULT: ${{ needs.bench.result }}
           SECRETS_RESULT: ${{ needs.secrets.result }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -173,6 +250,7 @@ jobs:
           reports/test-reports-3.13/junit.xml reports/bench-reports/bench-junit.xml
           --coverage reports/test-reports-3.13/coverage.xml --coverage-floor 80
           --job "Lint=$LINT_RESULT" --job "Test (Python 3.13)=$TEST_RESULT"
+          --job "Image (build and scan)=$IMAGE_RESULT"
           --job "Bench (containers)=$BENCH_RESULT" --job "Secret scan=$SECRETS_RESULT"
           --run-url "$RUN_URL" --commit "$COMMIT_SHA"
           > reports/comment.md

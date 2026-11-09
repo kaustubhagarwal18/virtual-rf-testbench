@@ -4,5 +4,6 @@
   "unit": "",
   "category": "test",
   "cause": "The bench configuration asks for an 80 dB level offset, beyond the generator's +-50 dB range",
-  "fix": "Corrected level_offset_db to a value the generator accepts"
+  "fix": "Corrected level_offset_db to a value the generator accepts",
+  "action": "CONFIGURATION"
 }

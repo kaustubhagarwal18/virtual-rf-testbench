@@ -38,8 +38,8 @@ give the answer away in the evidence.
   as a closed ticket would record them). Triage reads the first two and is scored against the
   third. A run in which nothing failed isn't saved.
 - **The data set keeps questions apart from history.** Each fault has three history runs,
-  which triage may retrieve, and one question run, which it is asked about. For the two
-  sized faults the question uses a size absent from history. The firmware fault has no size,
+  which triage may retrieve, and one question run, which it is asked about (three since
+  ADR 0009). For the two sized faults the question uses a size absent from history. The firmware fault has no size,
   so its question repeats release `0.2.0-rc1`: it is the easiest question in the set, and a
   write-up has to say so rather than count it as evidence that retrieval generalises.
 - **A fault run sets the release it needs.** Applying a bench fault first starts the bench on

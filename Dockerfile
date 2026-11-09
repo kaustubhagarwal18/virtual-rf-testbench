@@ -5,7 +5,7 @@
 FROM ghcr.io/astral-sh/uv:0.13.7@sha256:96f40d3904aad8d0bd010539001d36c8e2188b981e1334471a90c4a1d93bb490 AS uv
 
 # Build stage: install the locked runtime dependencies and the project into /opt/venv.
-FROM python:3.13.18-slim-trixie@sha256:ae14d4ce8771606477a81446e7ef429edd6762305fc50c84507c1041fa8285d1 AS build
+FROM python:3.13.18-slim-trixie@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90 AS build
 COPY --from=uv /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -20,7 +20,7 @@ COPY measurements ./measurements
 RUN uv sync --locked --no-dev --no-editable
 
 # Runtime stage: the environment only, run as an unprivileged user.
-FROM python:3.13.18-slim-trixie@sha256:ae14d4ce8771606477a81446e7ef429edd6762305fc50c84507c1041fa8285d1 AS runtime
+FROM python:3.13.18-slim-trixie@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90 AS runtime
 ARG FIRMWARE_VERSION=""
 ARG REVISION="unknown"
 LABEL org.opencontainers.image.title="virtual-rf-testbench simulators" \
@@ -29,7 +29,15 @@ LABEL org.opencontainers.image.title="virtual-rf-testbench simulators" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.version="${FIRMWARE_VERSION}" \
       org.opencontainers.image.revision="${REVISION}"
-RUN useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin simulator
+# Debian security fixes newer than the pinned base image are applied at build time; the
+# Trivy scan in CI is what checks they are there. The simulators run from /opt/venv and never
+# install anything, so the base image's pip, and the copies of urllib3 and msgpack it vendors,
+# are removed rather than patched.
+RUN apt-get update \
+    && apt-get upgrade --yes \
+    && rm -rf /var/lib/apt/lists/* \
+    && python -m pip uninstall --yes --root-user-action=ignore pip \
+    && useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin simulator
 COPY --from=build /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}" \
     PYTHONDONTWRITEBYTECODE=1 \

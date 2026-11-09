@@ -1,8 +1,0 @@
-{
-  "fault": "link_down",
-  "size": 1.0,
-  "unit": "",
-  "category": "bench",
-  "cause": "Nothing is connected between the generator and the analyzer",
-  "fix": "Reconnected the cable between the instruments and recalibrated"
-}

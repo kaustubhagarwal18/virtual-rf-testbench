@@ -11,12 +11,13 @@ from pathlib import Path
 
 import pytest
 
+from triage.answer import VERDICT_SCHEMA
 from triage.evidence import FULL, SavedRun
 from triage.llm import OllamaProvider
 from triage.prompt import Fix
 from triage.service import triage_run
 
-QUESTION_RUN = Path("triage/data/runs/questions/cable_loss")
+QUESTION_RUN = Path("triage/data/runs/questions/cable_loss-1")
 """One saved run, which the data set in the repository always has."""
 
 pytestmark = pytest.mark.ollama
@@ -24,8 +25,8 @@ pytestmark = pytest.mark.ollama
 
 @pytest.fixture(name="provider")
 def fixture_provider() -> OllamaProvider:
-    """Return the local model, or skip when it isn't running."""
-    provider = OllamaProvider()
+    """Return the local model, constrained to the answer's schema, or skip when it isn't running."""
+    provider = OllamaProvider(response_format=VERDICT_SCHEMA)
     if not provider.available():
         pytest.skip("Ollama isn't running; start it with 'ollama serve'")
     return provider

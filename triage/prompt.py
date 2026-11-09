@@ -15,11 +15,16 @@ class Fix(StrEnum):
     """What an engineer would actually do about a failed run.
 
     The model picks one of these rather than writing an action of its own, so scoring is an
-    exact comparison and no second model has to judge the wording.
+    exact comparison and no second model has to judge the wording. Where two actions act on
+    the same hardware (CABLE and LINK), each says first which symptom it answers, so the
+    choice turns on what the evidence shows rather than on which words a fix shares.
     """
 
-    CABLE = "replace the cable and recalibrate"
-    LINK = "reconnect or reseat the link between the instruments"
+    CABLE = "signal present but attenuated: replace the cable and recalibrate"
+    LINK = (
+        "no signal or intermittent signal; the path is open: reconnect or reseat the link "
+        "between the instruments"
+    )
     ALIGNMENT = "run the instrument's self-alignment"
     CONFIGURATION = "correct the bench configuration"
     TIMEOUT = "raise the session timeout to the instrument's response time"
@@ -33,12 +38,23 @@ class Source:
     """One past run or document offered to the model.
 
     Attributes:
-        source_id: What the model must cite to use it.
+        source_id: What the model must cite to use it. A neutral id that says nothing about
+            the run, so the model can't read the answer off the name.
         text: What it says, including how it was resolved.
+        fault: The labelled fault of a past run, for scoring and for holding a fault out of
+            retrieval; empty when unknown. Never put in a prompt.
+        action: The key of the action that resolved a past run, as its label records it;
+            empty when not recorded. Read by the abstention gates, not by the prompt builder
+            (the source's text states it already).
+        similarity: How alike this source and the run being triaged are, as the retriever
+            scored them (cosine, 1 is identical); None when the retriever doesn't say.
     """
 
     source_id: str
     text: str
+    fault: str = ""
+    action: str = ""
+    similarity: float | None = None
 
 
 SYSTEM_PROMPT = f"""You triage failed runs of an automated RF test bench: a signal generator
