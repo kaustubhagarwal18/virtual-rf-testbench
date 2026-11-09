@@ -93,42 +93,49 @@ off the list, is rejected as unusable and counted as a miss — never interprete
 
 ### Measuring it: five scenarios
 
-27 question runs (three per fault) are scored on whether the model names the fix that
-actually resolves the failure. The scenarios are an **ablation**: each adds exactly one thing
-to the one it names, so any change in the score is attributable to that one thing.
+27 question runs, three per fault, are scored on whether the model names the fix that
+actually resolves the failure. A fault's three runs differ only in size and noise and are
+nearly always answered alike, so the **fault** is the unit scored: a fault is solved when
+all three of its questions are right, and the interval is over the 9 faults. The scenarios
+are an **ablation**: each adds exactly one thing to the one it names, so any change in the
+score is attributable to that one thing.
 
-| Scenario | What the model sees | Right (95% interval) | `UNKNOWN` | Wrong |
-|---|---|---|---|---|
-| **error only** | Just the first failure's message: what someone pastes into a chat window | **12 of 27** (7 to 17) | 0 | 15 |
-| **full evidence** | The whole run's structured evidence: first failure and its numbers, whether firmware changed, which tests ran, notable log lines | **9 of 27** (5 to 14) | 0 | 18 |
-| **full + retrieval** | Full evidence **plus the 3 most similar past runs**, each with its recorded cause and fix, cited by neutral ids | **18 of 27** (13 to 22) | 0 | 9 |
-| **+ firmware check** | The same answers, with `FIRMWARE` on unchanged firmware turned into `UNKNOWN` | **18 of 27** (13 to 22) | 3 | 6 |
-| **retrieval, own fault held out** | Full + retrieval, with no past run of the question's own fault | **9 of 27** (5 to 14) | 0 | 18 |
+| Scenario | What the model sees | Faults solved (95% interval) | Questions right | `UNKNOWN` | Wrong | Malformed |
+|---|---|---|---|---|---|---|
+| **error only** | Just the first failure's message: what someone pastes into a chat window | **3 of 9** (1 to 6) | 9 of 27 | 0 | 18 | 0 |
+| **full evidence** | The whole run's structured evidence: first failure and its numbers, whether firmware changed, which tests ran, notable log lines | **4 of 9** (2 to 7) | 13 of 27 | 0 | 14 | 0 |
+| **full + retrieval** | Full evidence **plus the 3 most similar past runs**, each with its recorded cause, fix and action key, cited by neutral ids | **8 of 9** (5 to 9) | 24 of 27 | 0 | 0 | 3 |
+| **+ checks** | The same answers, with verdicts the evidence contradicts turned into `UNKNOWN` | **8 of 9** (5 to 9) | 24 of 27 | 0 | 0 | 3 |
+| **+ checks, own fault held out** | The same, with no past run of the question's own fault | **3 of 9** (1 to 6) | 11 of 27 | 9 | 7 | 0 |
 
-No reply was malformed. These are counts, with an interval, rather than percentages. The
-numbers are deterministic (temperature 0, fixed seed) on one machine; another machine's
-model may differ in wording and the odd verdict.
+These are counts, with an interval, rather than percentages. The numbers are deterministic
+(temperature 0, fixed seed) on one machine; another machine's model may differ in wording and
+the odd verdict.
 
 ### What the numbers say
 
 - **Retrieval works by finding the same fault.** It offered a past run of the question's own
-  fault for all 27 questions and doubled the score (9 to 18). Hold that fault out and the
-  score drops back to 9, no better than no retrieval at all. Retrieval looks up past fixes;
-  it doesn't help the model reason about a new failure.
-- **The model never says `UNKNOWN`**: 0 times in 108 answers, even with no precedent. When
-  unsure it blames the firmware (`FIRMWARE` is its most common wrong choice). The firmware
-  check catches that where the evidence settles it: it turned the three `slow_responses`
-  misses into `UNKNOWN` and cost no right answer.
-- **Citing a precedent is not acting on it.** All 6 link questions cited a LINK precedent
-  and still chose `CABLE`.
-- **More evidence alone doesn't help** this small model (12 to 9).
-- **Source ids didn't leak the answer.** With the old fault-named ids (`cable_loss-1`), the
-  retrieval scenario chose the same action on all 27 questions. The ids are neutral now
-  anyway, so the measurement doesn't rest on that.
+  fault for all 27 questions and took the score from 4 to 8 of 9 faults, with no confident
+  wrong answer. Hold that fault out and it drops to 3 of 9.
+- **Naming each action by its symptom ended the CABLE/LINK mix-up.** `CABLE` reads "signal
+  present but attenuated", `LINK` "no signal or intermittent signal; the path is open", and
+  each precedent ends `Action: LINK`. Before, all six link questions chose `CABLE` with
+  retrieval; now `link_flaky` is solved, and with its own fault held out `link_down` is solved
+  from the `link_flaky` precedents.
+- **`link_down` is the one fault retrieval misses, and on format, not judgement.** In both
+  retrieval scenarios the model pasted a source's text into `cited` instead of its id, so the
+  three replies are refused as malformed rather than read generously.
+- **The checks turn the model's fallbacks into `UNKNOWN`.** With its own fault held out, the
+  model copies the closest precedent's diagnosis. Three checks overruled 9 such answers: a
+  `FIRMWARE` verdict naming a precedent's release (0.2.0-rc1, 0.2.0-rc2) on a run still on
+  0.1.0, and a `TIMEOUT` verdict on a run whose instruments reported -113. They cost no right
+  answer.
+- **The small model is sensitive to wording.** Rewording two action descriptions moved the
+  error-only scenario, whose evidence didn't change, from 12 to 9 questions right.
 
 The full breakdown, every question's answer included, is in
 [`triage/results/rag.md`](triage/results/rag.md); the two no-retrieval scenarios on their own
-are in [`triage/results/baseline.md`](triage/results/baseline.md). ADR 0009 has the
+are in [`triage/results/baseline.md`](triage/results/baseline.md). ADR 0012 has the
 measurements in more detail.
 
 ### Why retrieval is in-memory, for now
@@ -161,9 +168,10 @@ terminal, triage a saved run by posting its results file:
 jq -n --slurpfile results triage/data/runs/questions/cable_loss-1/results.json '{results: $results[0]}' | curl -s -X POST http://127.0.0.1:8000/triage -H 'Content-Type: application/json' -d @-
 ```
 
-The reply is the verdict as JSON: `fix`, `action`, `where`, `because`, `cited` and, when the
-firmware check overruled the model, `overruled`. `POST /history` adds a resolved run (its
-evidence plus a `label` with `fault`, `cause` and `fix`) so later failures can cite it, and
+The reply is the verdict as JSON: `fix`, `action`, `where`, `because`, `cited` and, when a
+check overruled the model, `overruled`. `POST /history` adds a resolved run (its evidence
+plus a `label` with `fault`, `cause`, `fix` and, optionally, the `action` key) so later
+failures can cite it, and
 `GET /health` reports how many past runs are loaded. Interactive docs are at
 `http://127.0.0.1:8000/docs`. The service listens on localhost only and keeps its history in
 memory (ADR 0010).

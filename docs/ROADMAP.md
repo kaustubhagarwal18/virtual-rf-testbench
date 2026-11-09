@@ -28,9 +28,10 @@
 - The pipeline: evidence led by the first failure, a fixed list of actions, strict parsing
   and a local `qwen2.5:3b` (ADR 0008).
 - Retrieval of the most similar resolved runs, in memory, cited by neutral ids (ADR 0009).
-- A check that turns a `FIRMWARE` verdict into `UNKNOWN` when the firmware is unchanged.
-- The evaluation: five scenarios, each adding one thing, scored as right, `UNKNOWN`,
-  confidently wrong and malformed, with a 95% interval and retrieval recall (ADR 0009).
+- Three checks that turn a verdict the evidence contradicts into `UNKNOWN` (ADR 0012).
+- The evaluation: five scenarios, each adding one thing, scored per fault as right,
+  `UNKNOWN`, confidently wrong and malformed, with a 95% interval over faults and retrieval
+  recall (ADR 0009, ADR 0012). Labels record the action key the score is checked against.
 - A FastAPI service (`make triage-api`): `POST /triage`, `POST /history`, `GET /health`
   (ADR 0010).
 
@@ -63,8 +64,11 @@
   short test runs. ADR 0003 has the details.
 - The question runs of the faults with nothing to scale (the configuration faults, the
   firmware faults and `link_down`) repeat their history runs' scenario, so they are easier
-  than the sized ones and not fully independent. The evaluation's interval assumes
-  independence, so it is, if anything, too narrow.
+  than the sized ones. The fault, not the question, is the unit scored (ADR 0012).
+- With retrieval, the model's answers on `link_down` are unusable: it puts a source's text
+  in `cited` instead of its id, so all three are refused as malformed.
+- `qwen2.5:3b` is sensitive to wording: rewording two action descriptions moved the
+  error-only scenario, whose evidence didn't change, from 12 to 9 questions right.
 - The API's history lives in memory: runs added with `POST /history` are gone when the
   service stops.
 - Starlette warns that its test client's use of `httpx` is deprecated. The warning comes from

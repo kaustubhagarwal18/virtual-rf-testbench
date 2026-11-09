@@ -15,9 +15,18 @@ it, so the package version moves only with a release.
   confidently wrong and malformed, with a 95% Wilson interval, and retrieval recall is
   reported apart from answer accuracy. Two scenarios are new: one with a firmware check,
   and one with the question's own fault held out of the history.
-- **A firmware check** (`triage/checks.py`): a `FIRMWARE` verdict on firmware that is
-  unchanged since the last passing run becomes `UNKNOWN`, with the reason. `make triage` and
-  the API apply it.
+- **Checks on the verdict** (`triage/checks.py`): a `FIRMWARE` verdict becomes `UNKNOWN`
+  when it names a release the run didn't run, or when the firmware is unchanged since the
+  last passing run; a `TIMEOUT` verdict becomes `UNKNOWN` when a failed test reports an SCPI
+  error. Each gives its reason. `make triage`, the API and both retrieval-with-checks
+  scenarios apply them.
+- **Per-fault scores** (ADR 0012): the evaluation reports faults solved out of 9, with the
+  interval over faults, plus a per-fault table; question counts stay beside them.
+- **Action keys in labels.** Every fault label records the action that resolved it
+  (`"action": "LINK"`), the evaluation scores against it, and a history source ends
+  `Action: LINK`. The API's resolved-run label accepts it as an optional field.
+- **A persistent answer cache** for `make eval` under `.cache/triage-answers/`, keyed by the
+  model's settings and both prompts; `--no-cache` asks every prompt again.
 - **Schema-constrained replies.** The answering model is asked through Ollama's structured
   outputs, with the actions as an enum. Replies are still parsed strictly.
 - **A triage HTTP API** (ADR 0010): `make triage-api` serves `POST /triage`,
@@ -29,6 +38,10 @@ it, so the package version moves only with a release.
 - `CHANGELOG.md`, and an up-to-date roadmap and architecture document.
 
 ### Changed
+
+- `CABLE` and `LINK` are described by their symptoms: "signal present but attenuated", and
+  "no signal or intermittent signal; the path is open".
+- The held-out scenario applies the checks too.
 
 - The simulator image is repinned to the current `python:3.13.18-slim-trixie` digest,
   applies Debian security updates at build time, and no longer contains `pip`. That took
@@ -43,8 +56,10 @@ it, so the package version moves only with a release.
 
 ### Known issues
 
-- The questions of the faults with nothing to scale repeat their history runs' scenario, so
-  the questions are not fully independent and the interval is, if anything, too narrow.
+- With retrieval, the model's answers on `link_down` are unusable: it puts a source's text
+  in `cited` instead of its id, so all three are refused as malformed.
+- `qwen2.5:3b` is sensitive to wording: rewording two action descriptions moved the
+  error-only scenario, whose evidence didn't change, from 12 to 9 questions right.
 - The API's history lives in memory; runs added with `POST /history` are lost on restart.
 - The tag-bump pull request waits for a Helm chart to bump.
 - Starlette warns that its test client's use of `httpx` is deprecated.
