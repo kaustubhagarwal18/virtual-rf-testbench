@@ -363,7 +363,7 @@ def test_the_cli_reports_an_unreachable_model_in_one_line(
     class Down:
         """A provider that is never reachable."""
 
-        def complete(self, system: str, user: str) -> str:
+        def complete(self, system: str, user: str, schema: object = None) -> str:
             """Fail as an unreachable model does."""
             raise ModelUnavailableError("start it with 'ollama serve'")
 

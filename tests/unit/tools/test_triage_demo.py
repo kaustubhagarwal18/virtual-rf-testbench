@@ -64,12 +64,13 @@ class StubRetriever:
 class UnreachableProvider:
     """A provider that is never reachable, for the error path."""
 
-    def complete(self, system: str, user: str) -> str:
+    def complete(self, system: str, user: str, schema: object = None) -> str:
         """Fail the way an unreachable model does.
 
         Args:
             system: The instructions (unused).
             user: The question (unused).
+            schema: The reply's schema (unused).
 
         Returns:
             Never; it always raises.
@@ -77,7 +78,7 @@ class UnreachableProvider:
         Raises:
             ModelUnavailableError: Always, naming how to start the model.
         """
-        del system, user
+        del system, user, schema
         raise ModelUnavailableError("start it with 'ollama serve'")
 
 

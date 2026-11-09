@@ -11,14 +11,17 @@ from dataclasses import dataclass, field
 
 from triage.prompt import Fix
 
+_VERDICT_PROPERTIES: dict[str, object] = {
+    "fix": {"type": "string", "enum": [fix.name for fix in Fix]},
+    "where": {"type": "string"},
+    "because": {"type": "string"},
+    "cited": {"type": "array", "items": {"type": "string"}},
+}
+"""The answer's fields, apart so a schema for one question can narrow one of them."""
+
 VERDICT_SCHEMA: dict[str, object] = {
     "type": "object",
-    "properties": {
-        "fix": {"type": "string", "enum": [fix.name for fix in Fix]},
-        "where": {"type": "string"},
-        "because": {"type": "string"},
-        "cited": {"type": "array", "items": {"type": "string"}},
-    },
+    "properties": _VERDICT_PROPERTIES,
     "required": ["fix", "where", "because", "cited"],
 }
 """The answer's shape as a JSON schema, for a model that can be constrained to it.
@@ -27,6 +30,26 @@ The action is an enum of the keys offered, so a constrained reply can't name an 
 the list or leave it empty. parse_verdict still checks everything: the schema narrows what
 the model can say, it doesn't replace reading it strictly.
 """
+
+
+def verdict_schema(source_ids: Sequence[str] = ()) -> dict[str, object]:
+    """Return the answer's schema, with 'cited' narrowed to the sources this question has.
+
+    A model that is constrained to the offered ids can't paste a source's text where its id
+    belongs, which is how a reply that chose the right action used to come back unusable.
+    With no sources there is nothing to narrow to, and the general schema is returned
+    unchanged; parse_verdict still refuses any citation then.
+
+    Args:
+        source_ids: The ids of the sources offered with this question.
+
+    Returns:
+        A schema whose 'cited' items must each be one of the ids, or VERDICT_SCHEMA itself.
+    """
+    if not source_ids:
+        return VERDICT_SCHEMA
+    cited = {"type": "array", "items": {"type": "string", "enum": list(source_ids)}}
+    return {**VERDICT_SCHEMA, "properties": {**_VERDICT_PROPERTIES, "cited": cited}}
 
 
 class MalformedAnswerError(Exception):

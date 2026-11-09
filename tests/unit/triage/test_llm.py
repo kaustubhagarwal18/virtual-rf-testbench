@@ -12,6 +12,7 @@ from tests.utilities.tcp import closed_port, serving_in_background
 from triage.answer import VERDICT_SCHEMA
 from triage.llm import (
     DEFAULT_MODEL,
+    MAX_REPLY_TOKENS,
     CachingProvider,
     FakeProvider,
     ModelUnavailableError,
@@ -74,6 +75,7 @@ def test_the_request_asks_for_json_at_temperature_zero() -> None:
     request = server.requests[0]
     assert request["format"] == "json"
     assert request["options"]["temperature"] == 0
+    assert request["options"]["num_predict"] == MAX_REPLY_TOKENS
     assert [message["role"] for message in request["messages"]] == ["system", "user"]
     assert request["messages"][1]["content"] == "question"
 
@@ -239,7 +241,45 @@ def test_storing_answers_needs_an_identity(tmp_path: Path) -> None:
 
 
 def test_the_ollama_identity_names_everything_that_decides_an_answer() -> None:
-    """Model, temperature, seed, context and format each change the key."""
+    """Model, temperature, seed, context, reply cap and format each change the key."""
     identity = OllamaProvider(model="qwen2.5:3b", response_format=VERDICT_SCHEMA).identity()
-    assert set(identity) == {"model", "temperature", "seed", "num_ctx", "format"}
+    assert set(identity) == {"model", "temperature", "seed", "num_ctx", "num_predict", "format"}
     assert identity["format"] == VERDICT_SCHEMA
+
+
+def test_a_schema_for_one_reply_replaces_the_default() -> None:
+    """A schema passed with the prompt is what Ollama is asked to follow, for that reply only."""
+    server = FakeOllama()
+    narrow: dict[str, object] = {"type": "object", "properties": {"cited": {"enum": ["a"]}}}
+    with serving_in_background(server) as port:
+        provider = OllamaProvider(host=f"http://127.0.0.1:{port}", response_format=VERDICT_SCHEMA)
+        provider.complete("instructions", "question", narrow)
+        provider.complete("instructions", "question")
+    assert [request["format"] for request in server.requests] == [narrow, VERDICT_SCHEMA]
+
+
+def test_a_different_schema_is_a_different_question(tmp_path: Path) -> None:
+    """The same prompts under another schema are asked again; under the same one, not."""
+    narrow: dict[str, object] = {"cited": ["past-1"]}
+    cached = CachingProvider(IdentifiedFake(["default", "narrow"]), tmp_path)
+    assert cached.complete("s", "u") == "default"
+    assert cached.complete("s", "u", narrow) == "narrow"
+    assert cached.complete("s", "u", narrow) == "narrow"
+    later = CachingProvider(IdentifiedFake(["never asked"]), tmp_path)
+    assert (later.complete("s", "u"), later.complete("s", "u", narrow)) == ("default", "narrow")
+    assert (cached.asked, later.asked) == (2, 0)
+
+
+def test_an_answer_stored_without_a_schema_keeps_its_key(tmp_path: Path) -> None:
+    """A prompt with the default schema is stored as before, so earlier answers still match."""
+    CachingProvider(IdentifiedFake(["stored"]), tmp_path).complete("s", "u")
+    stored = json.loads(next(tmp_path.glob("*.json")).read_text(encoding="utf-8"))
+    assert set(stored) == {"identity", "system", "user", "reply"}
+
+
+def test_the_fake_records_each_prompts_schema() -> None:
+    """A test can see which schema each prompt was asked under."""
+    fake = FakeProvider(["a"])
+    fake.complete("s", "u")
+    fake.complete("s", "u", {"x": 1})
+    assert fake.schemas == [None, {"x": 1}]

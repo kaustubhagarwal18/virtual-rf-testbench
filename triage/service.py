@@ -11,7 +11,13 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from triage.abstain import SourceGate, reason_to_abstain
-from triage.answer import VERDICT_SCHEMA, MalformedAnswerError, Verdict, parse_verdict
+from triage.answer import (
+    VERDICT_SCHEMA,
+    MalformedAnswerError,
+    Verdict,
+    parse_verdict,
+    verdict_schema,
+)
 from triage.checks import DEFAULT_CHECKS, VerdictCheck, apply_checks
 from triage.evidence import ERROR_ONLY, FULL, SavedRun, build_evidence
 from triage.llm import LLMProvider, ModelUnavailableError, OllamaProvider
@@ -53,8 +59,10 @@ def triage_run(
         )
     evidence = build_evidence(run, level)
     system, user = build_prompt(evidence, sources)
-    reply = provider.complete(system, user)
-    verdict = parse_verdict(reply, [source.source_id for source in sources])
+    source_ids = [source.source_id for source in sources]
+    schema = verdict_schema(source_ids) if source_ids else None
+    reply = provider.complete(system, user, schema)
+    verdict = parse_verdict(reply, source_ids)
     return apply_checks(run, verdict, checks)
 
 

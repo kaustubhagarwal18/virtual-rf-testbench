@@ -97,7 +97,7 @@ def test_the_cli_reports_an_unreachable_model(
     class Down:
         """A provider that is never reachable."""
 
-        def complete(self, system: str, user: str) -> str:
+        def complete(self, system: str, user: str, schema: object = None) -> str:
             """Fail as an unreachable model does."""
             raise ModelUnavailableError("start it with 'ollama serve'")
 
@@ -168,3 +168,17 @@ def test_gates_that_find_no_objection_leave_the_answer_to_the_model(
     assert verdict.fix is Fix.CABLE
     assert verdict.gate_reason == ""
     assert len(provider.prompts) == 1
+
+
+def test_the_model_is_asked_to_cite_only_the_sources_it_was_given(tmp_path: Path) -> None:
+    """With sources, the reply's schema lists their ids; without, the provider's default holds."""
+    sources = [Source("past-a", "a"), Source("past-b", "b")]
+    provider = FakeProvider([VERDICT])
+    triage_run(saved_run(tmp_path), provider, FULL, sources)
+    triage_run(saved_run(tmp_path), provider, FULL)
+    narrowed, default = provider.schemas
+    assert narrowed is not None
+    properties = narrowed["properties"]
+    assert isinstance(properties, dict)
+    assert properties["cited"]["items"]["enum"] == ["past-a", "past-b"]
+    assert default is None
