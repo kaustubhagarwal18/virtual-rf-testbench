@@ -85,7 +85,7 @@ def test_count_limits_how_many_are_returned(tmp_path: Path) -> None:
     """Retrieval returns at most the number asked for."""
     history = tmp_path / "history"
     for index in range(4):
-        labelled_run(history / f"cable_loss-{index}", "cable_loss", "cable", "new cable")
+        labelled_run(history / f"cable_loss-{index}", "cable_loss", f"cable {index}", "new cable")
     retriever = InMemoryRetriever.from_history(history, FakeEmbedder())
     question = SavedRun.load(labelled_run(tmp_path / "q" / "cable_loss", "cable_loss", "c", "f"))
     wanted = 2
@@ -132,3 +132,18 @@ def test_a_source_states_the_action_taken_when_the_label_records_one(
     text = history_source(run, label).text
     assert ("Action: LINK" in text) is shown
     assert ("Action:" in text) is shown
+
+
+@pytest.mark.parametrize("copies", [2, 3, 5])
+def test_identical_history_runs_are_indexed_once(tmp_path: Path, copies: int) -> None:
+    """Copies of one run take one place, so the top k stays k distinct runs."""
+    history = tmp_path / "history"
+    for index in range(copies):
+        labelled_run(history / f"copy-{index}", "cable_loss", "worn cable", "replaced it")
+    labelled_run(history / "other", "cable_loss", "kinked cable", "replaced it")
+    retriever = InMemoryRetriever.from_history(history, FakeEmbedder())
+    distinct = 2
+    assert len(retriever) == distinct
+    question = SavedRun.load(labelled_run(tmp_path / "q" / "q", "cable_loss", "c", "f"))
+    found = retriever.similar_to(question, count=distinct)
+    assert len({source.source_id for source in found}) == distinct

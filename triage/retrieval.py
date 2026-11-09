@@ -120,10 +120,15 @@ class InMemoryRetriever:
             embedder: How to embed them.
 
         Returns:
-            The retriever, ready to search.
+            The retriever, ready to search. Runs whose sources are identical are indexed
+            once, as add() does, so one copy can't fill several of the top places.
         """
         runs = [SavedRun.load(folder) for folder in sorted(history.iterdir()) if folder.is_dir()]
-        sources = [history_source(run, load_label(run)) for run in runs]
+        unique: dict[str, Source] = {}
+        for run in runs:
+            source = history_source(run, load_label(run))
+            unique.setdefault(source.source_id, source)
+        sources = list(unique.values())
         vectors = _normalise(np.array(embedder.embed([source.text for source in sources])))
         return cls(sources, vectors, embedder)
 

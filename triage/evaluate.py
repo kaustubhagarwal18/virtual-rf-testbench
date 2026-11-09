@@ -618,8 +618,60 @@ def _fault_table(results: Sequence[ScenarioResult]) -> list[str]:
     return lines
 
 
+def repeated_faults(questions: Path) -> list[str]:
+    """Name the faults whose question runs repeat their history runs' scenario.
+
+    A fault with a size (dB of cable loss, seconds of delay, sweeps between drops) is asked
+    at sizes no history run has. A fault without one, whose label records no unit, can only
+    be asked again as it was recorded: its questions differ from its history runs in timing
+    and reading noise alone, so retrieval solving them shows recall, not generalisation.
+
+    Args:
+        questions: The folder of question runs.
+
+    Returns:
+        The faults whose labels record no unit, in name order.
+    """
+    labels = [
+        load_label(SavedRun.load(folder))
+        for folder in sorted(questions.iterdir())
+        if folder.is_dir()
+    ]
+    return sorted({str(label["fault"]) for label in labels if not label.get("unit")})
+
+
+def _repeat_caveat(results: Sequence[ScenarioResult], repeated: Sequence[str]) -> list[str]:
+    """Say which faults repeat a history scenario, and how much of the retrieval score they are.
+
+    Args:
+        results: The scenario results.
+        repeated: The faults whose questions repeat their history runs' scenario.
+
+    Returns:
+        The caveat's lines; none when no fault repeats or no scenario retrieves, since
+        without retrieval a repeated scenario gives the model nothing to recall.
+    """
+    retrieving = [result for result in results if result.scenario.retrieve]
+    if not repeated or not retrieving:
+        return []
+    best = max(retrieving, key=lambda result: (result.faults_solved, result.right))
+    solved = [fault for fault, (right, asked) in best.by_fault.items() if right == asked]
+    among = [fault for fault in solved if fault in repeated]
+    return [
+        "",
+        f"{len(repeated)} faults have no size to vary ({', '.join(repeated)}), so their "
+        "questions repeat their history runs' scenario and differ only in timing and reading "
+        f"noise (see triage/data/README.md). Of the {len(solved)} faults {best.name} solved, "
+        f"{len(among)} are among them: with retrieval, those show the model finding a "
+        "near-identical past run, not generalising to a new one.",
+    ]
+
+
 def render_report(
-    results: Sequence[ScenarioResult], model: str, title: str = BASELINE_TITLE
+    results: Sequence[ScenarioResult],
+    model: str,
+    title: str = BASELINE_TITLE,
+    repeated: Sequence[str] = (),
 ) -> str:
     """Write a detailed Markdown report: the pipeline, the scores, and every question's answer.
 
@@ -628,6 +680,8 @@ def render_report(
         model: The model that answered.
         title: The report's heading; defaults to the baseline title, so a report that
             includes a retrieval scenario is not mislabelled as the no-retrieval floor.
+        repeated: The faults whose questions repeat their history runs' scenario, which the
+            findings must name; none leaves the caveat out.
 
     Returns:
         The report, showing for each question the failure the model saw and what it answered.
@@ -659,6 +713,7 @@ def render_report(
         lines += [f"## {result.name}: {score_line(result)}", "", *_report_rows(result), ""]
     lines += ["## Findings", ""]
     lines += [f"- {finding}" for finding in findings(results)]
+    lines += _repeat_caveat(results, repeated)
     lines += [
         "",
         "These are one machine's deterministic numbers (temperature 0, fixed seed); another "
@@ -855,7 +910,8 @@ def main(
         title = (
             RETRIEVAL_TITLE if any(scenario.retrieve for scenario in scenarios) else BASELINE_TITLE
         )
-        parsed.report.write_text(render_report(results, model, title), encoding="utf-8")
+        report = render_report(results, model, title, repeated_faults(parsed.questions))
+        parsed.report.write_text(report, encoding="utf-8")
         sys.stdout.write(f"\nwrote {parsed.report}\n")
     return 0
 

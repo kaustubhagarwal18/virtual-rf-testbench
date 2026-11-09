@@ -24,6 +24,7 @@ from triage.evaluate import (
     main,
     render,
     render_report,
+    repeated_faults,
     score_line,
     wilson_interval,
 )
@@ -488,3 +489,52 @@ def test_the_cli_says_how_many_prompts_reached_the_model(
     second = capsys.readouterr().out
     assert "asked the model 1 new prompts" in first
     assert "asked the model 0 new prompts" in second
+
+
+def sized_question(folder: Path, fault: str, unit: str) -> Path:
+    """Write a question run whose label records a unit, or none for a fault without a size."""
+    run = question(folder, fault)
+    label = json.loads((run / "label.json").read_text(encoding="utf-8"))
+    (run / "label.json").write_text(json.dumps({**label, "unit": unit}), encoding="utf-8")
+    return run
+
+
+@pytest.mark.parametrize(
+    ("units", "expected"),
+    [
+        ({"cable_loss": "dB", "link_down": ""}, ["link_down"]),
+        ({"cable_loss": "dB", "slow_responses": "s"}, []),
+        (
+            {"link_down": "", "config_parameter_missing": ""},
+            ["config_parameter_missing", "link_down"],
+        ),
+    ],
+)
+def test_faults_without_a_unit_are_the_repeated_ones(
+    tmp_path: Path, units: dict[str, str], expected: list[str]
+) -> None:
+    """A fault with no size to vary repeats its history scenario; a sized one doesn't."""
+    for fault, unit in units.items():
+        sized_question(tmp_path / "q" / f"{fault}-1", fault, unit)
+    assert repeated_faults(tmp_path / "q") == expected
+
+
+def test_the_report_says_how_many_solved_faults_repeat_a_history_run(tmp_path: Path) -> None:
+    """The caveat names the repeated faults and counts them among the best retrieval's solved."""
+    sized_question(tmp_path / "q" / "cable_loss-1", "cable_loss", "dB")
+    sized_question(tmp_path / "q" / "link_down-1", "link_down", "")
+    history_with(tmp_path / "history" / "link_down-1", "link_down")
+    retriever = InMemoryRetriever.from_history(tmp_path / "history", FakeEmbedder())
+    results = evaluate(
+        tmp_path / "q",
+        FakeProvider([verdict(Fix.LINK)]),
+        [Scenario("full evidence", FULL), RETRIEVAL],
+        retriever,
+    )
+    plain, retrieved = results[0], results[1]
+    repeated = repeated_faults(tmp_path / "q")
+    report = render_report([plain, retrieved], "qwen2.5:3b", repeated=repeated)
+    assert "1 faults have no size to vary (link_down)" in report
+    assert "Of the 1 faults full + retrieval solved, 1 are among them" in report
+    assert "no size to vary" not in render_report([plain, retrieved], "qwen2.5:3b")
+    assert "no size to vary" not in render_report([plain], "qwen2.5:3b", repeated=repeated)
