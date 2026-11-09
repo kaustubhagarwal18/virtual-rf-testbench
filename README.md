@@ -108,7 +108,7 @@ score is attributable to that one thing.
 | **+ checks** | The same answers, with verdicts the evidence contradicts turned into `UNKNOWN` | **5 of 9** (2 to 7) | 15 of 27 | 6 | 3 | 3 |
 | **+ checks, own fault held out** | The same, with no past run of the question's own fault | **3 of 9** (1 to 6) | 12 of 27 | 5 | 10 | 0 |
 | **full evidence, no firmware line** | Full evidence without its "Firmware: …" line: an ablation | **4 of 9** (2 to 7) | 13 of 27 | 0 | 14 | 0 |
-| **+ checks + gates** | Retrieval with checks, answering `UNKNOWN` unasked when the precedents disagree or none is close | **8 of 9** (5 to 9) | 24 of 27 | 0 | 0 | 3 |
+| **+ checks + gates** | Retrieval with checks, answering `UNKNOWN` unasked when the precedents disagree or none is close | **5 of 9** (2 to 7) | 15 of 27 | 9 | 0 | 3 |
 | **+ checks + gates, own fault held out** | The same, with no past run of the question's own fault | **1 of 9** (0 to 4) | 5 of 27 | 19 | 3 | 0 |
 
 These are counts, with an interval, rather than percentages. The numbers are deterministic
@@ -137,12 +137,13 @@ the odd verdict.
 - **The checks turn some fallbacks into `UNKNOWN`.** With retrieval they overruled 6 wrong
   answers: a `FIRMWARE` verdict naming a precedent's release on a run still on 0.1.0. They
   cost no right answer.
-- **Abstaining from retrieval alone cost more than it saved.** Two gates answer `UNKNOWN`
-  without asking the model: when the precedents were resolved by different actions, or the
-  closest is below a similarity threshold set from the history runs. Where a precedent of
-  the fault exists they never fired. Held out, they cut wrong answers from 7 to 3 but solved
-  faults from 3 to 1: the precedent that misled the model was closer than the ones that
-  helped it, so no threshold separates them (ADR 0013). The API doesn't apply the gates.
+- **Abstaining when the precedents disagree works; abstaining when none is close doesn't.**
+  Two gates answer `UNKNOWN` without asking the model. When the precedents were resolved by
+  different actions (the look-alike case above), the gate prevented 7 wrong answers for 1
+  right one, and with a precedent available it took wrong answers from 3 to 0. When the
+  closest precedent falls below a similarity threshold set from the history, the gate gave
+  up 6 right answers to prevent 3 wrong ones: the precedent that misled the model was closer
+  than the ones that helped it (ADR 0013). The API doesn't apply either gate yet.
 - **The firmware line cuts both ways.** Without it, `config_decimal_error` is solved and
   `reset_leaks_offset` is lost: the line pulls the model to `FIRMWARE` when it rules
   firmware out, and is the one clue to a regression that changed nothing else.

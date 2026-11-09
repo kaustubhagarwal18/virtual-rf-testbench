@@ -44,41 +44,53 @@ ADR 0012's measurements left three questions open:
 
 ## Measurements
 
-`qwen2.5:3b`, temperature 0, seed 42, on the 8 GB M1. `make eval` asked 33 new prompts and
-took 9 minutes; the gates add none, because a gated question isn't asked and an ungated one
-asks what the scenario without gates asked. All eight scenarios are in
-`triage/results/rag.md`; the three without retrieval are also in `triage/results/baseline.md`.
+`qwen2.5:3b`, temperature 0, seed 42, on the 8 GB M1, with each identical history run
+indexed once (ADR 0012). All eight scenarios are in `triage/results/rag.md`; the three
+without retrieval are also in `triage/results/baseline.md`. The gates ask the model nothing
+new: a gated question isn't asked, and an ungated one asks what the scenario without gates
+asked.
 
 | Scenario | Faults solved (95% interval) | Questions right | `UNKNOWN` | Wrong | Malformed |
 |---|---|---|---|---|---|
 | full evidence | 4 of 9 (2 to 7) | 13 of 27 | 0 | 14 | 0 |
 | full evidence, no firmware line | 4 of 9 (2 to 7) | 13 of 27 | 0 | 14 | 0 |
-| full + retrieval + checks | 8 of 9 (5 to 9) | 24 of 27 | 0 | 0 | 3 |
-| + gates | 8 of 9 (5 to 9) | 24 of 27 | 0 | 0 | 3 |
-| full + retrieval + checks, own fault held out | 3 of 9 (1 to 6) | 11 of 27 | 9 | 7 | 0 |
+| full + retrieval + checks | 5 of 9 (2 to 7) | 15 of 27 | 6 | 3 | 3 |
+| + gates | 5 of 9 (2 to 7) | 15 of 27 | 9 | 0 | 3 |
+| full + retrieval + checks, own fault held out | 3 of 9 (1 to 6) | 12 of 27 | 5 | 10 | 0 |
 | + gates | 1 of 9 (0 to 4) | 5 of 27 | 19 | 3 | 0 |
 
+The first measurement of these scenarios ran on a history that indexed identical runs twice
+and reported no gate firing where a precedent existed. These numbers replace it.
+
+- **The two gates behave differently, and only one earns its place.** Across both
+  retrieval scenarios:
+
+  | Gate | Fired | Wrong answers prevented | Right answers given up | Already `UNKNOWN` |
+  |---|---|---|---|---|
+  | `PrecedentsDisagree` | 16 | 7 | 1 | 8 |
+  | `WeakPrecedent` (held out only) | 12 | 3 | 6 | 3 |
+
+  `PrecedentsDisagree` fires on the look-alike case: two precedents of the question's own
+  fault and one of another (`reset_leaks_offset` beside `config_decimal_error`;
+  `output_command_change`, held out, beside `slow_responses` and `link_flaky`). The model
+  follows the odd one out, and the gate stops it. Its one cost was `config_decimal_error-2`
+  held out. `WeakPrecedent` refused `config_parameter_missing` and
+  `config_parameter_out_of_range`, which the model had solved from another configuration
+  fault's precedents, to stop three wrong answers on `reset_leaks_offset`.
+- **With a precedent of the question's own fault, the gates took wrong answers from 3 to 0
+  and gave up nothing.** Held out, they took faults solved from 3 to 1, all of that from
+  `WeakPrecedent`: the one right answer `PrecedentsDisagree` gave up was on a fault already
+  unsolved (`config_decimal_error`, 1 of 3).
 - **Leading with the instrument error changed no score.** `output_command_change` was
   already solved with full evidence (`FIRMWARE`, 3 of 3). With its own fault held out, the
-  model still chose `TIMEOUT`, copying a `slow_responses` precedent, and the timeout check
-  still overruled it.
+  model followed a `link_flaky` precedent to `LINK` despite the -113 line leading the
+  evidence.
 - **The firmware line cuts both ways, and nets to nothing.** Without it,
   `config_decimal_error` goes from `FIRMWARE` (wrong) to `CONFIGURATION` (right), and
   `reset_leaks_offset` from `FIRMWARE` (right) to `CONFIGURATION` (wrong). Wrong `FIRMWARE`
   answers fall from 9 to 6. So the line does pull the model to `FIRMWARE` when it rules
   firmware out, and is also the evidence that solves the one fault where firmware changed
   and nothing else says so.
-- **With a precedent of the question's own fault, the gates never fired:** 0 of 27. They
-  cost nothing where retrieval works.
-- **Held out, the gates traded 2 faults for 4 fewer wrong answers.** They answered for the
-  model on 19 of 27 questions: 9 the checks had already made `UNKNOWN`, 4 that would have
-  been wrong, and 6 that would have been right.
-  - `PrecedentsDisagree` fired once, on `link_flaky-1`, whose precedents were resolved by
-    `CABLE` and `LINK`; it turned a wrong `CABLE` into `UNKNOWN` and cost nothing.
-  - `WeakPrecedent` fired on the other 18. It prevented the three wrong `CONFIGURATION`
-    answers on `reset_leaks_offset`, but refused `config_parameter_missing` and
-    `config_parameter_out_of_range`, which the model had solved from another configuration
-    fault's precedents.
 
 ## Why no similarity threshold would have worked here
 
@@ -100,10 +112,10 @@ all wrong, which neither gate can catch.
 
 ## Consequences
 
-- The gates run in the evaluation only, and the API doesn't apply them: `WeakPrecedent`
-  costs more right answers than it saves wrong ones, and on this data no threshold would
-  do better. `PrecedentsDisagree` on its own cost nothing in either scenario and prevented
-  one wrong answer; it is the candidate for the API, on evidence of a single question.
+- The gates run in the evaluation only, and the API doesn't apply them yet.
+  `PrecedentsDisagree` prevented 7 wrong answers for 1 right one and is the candidate for
+  the API, on its own. `WeakPrecedent` costs more right answers than it saves wrong ones,
+  and on this data no threshold would do better; it stays in the evaluation as a record.
 - The instrument-error line stays: it changed no score, but it puts the cause before its
   consequence for a person reading the evidence, at the cost of one line.
 - The firmware line stays: removing it loses `reset_leaks_offset`. What to try instead is a
