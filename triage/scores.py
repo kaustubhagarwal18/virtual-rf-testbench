@@ -42,6 +42,8 @@ class Scenario:
         checked: Whether the verdict goes through the service's checks.
         gated: Whether the precedents go through the abstention gates before the model is
             asked, so a question with no basis for an answer gets UNKNOWN unasked.
+        vote: Whether the precedents' majority vote answers instead of the model, which is
+            then never asked; needs precedents to vote.
         adds_to: The scenario this one changes exactly one thing in; empty for the first.
     """
 
@@ -50,6 +52,7 @@ class Scenario:
     precedents: Precedents = Precedents.NONE
     checked: bool = False
     gated: bool = False
+    vote: bool = False
     adds_to: str = ""
 
     @property

@@ -5,8 +5,9 @@ report can be rewritten from the same results without changing a number.
 """
 
 from collections.abc import Sequence
+from dataclasses import replace
 
-from triage.scores import MALFORMED, Outcome, ScenarioResult, wilson_interval
+from triage.scores import MALFORMED, Outcome, Scenario, ScenarioResult, wilson_interval
 from triage.textfmt import clip
 
 BASELINE_TITLE = "Triage baseline (no retrieval)"
@@ -146,14 +147,14 @@ def _summary_table(results: Sequence[ScenarioResult]) -> list[str]:
         The table's lines.
     """
     lines = [
-        "| Scenario | Adds | Faults solved | 95% interval | Questions right | UNKNOWN | Wrong "
-        "| Malformed |",
+        "| Scenario | Changes one thing in | Faults solved | 95% interval | Questions right "
+        "| UNKNOWN | Wrong | Malformed |",
         "|---|---|---|---|---|---|---|---|",
     ]
     for result in results:
         low, high = wilson_interval(result.faults_solved, result.faults)
         lines.append(
-            f"| {result.name} | {result.scenario.adds_to and 'to ' + result.scenario.adds_to} "
+            f"| {result.name} | {result.scenario.adds_to} "
             f"| {result.faults_solved} of {result.faults} | {low:.0f} to {high:.0f} "
             f"| {result.right} of {result.total} | {result.abstained} "
             f"| {result.confidently_wrong} | {result.malformed} |"
@@ -202,8 +203,8 @@ def _repeat_caveat(results: Sequence[ScenarioResult], repeated: Sequence[str]) -
         f"{len(repeated)} faults have no size to vary ({', '.join(repeated)}), so their "
         "questions repeat their history runs' scenario and differ only in timing and reading "
         f"noise (see triage/data/README.md). Of the {len(solved)} faults {best.name} solved, "
-        f"{len(among)} are among them: with retrieval, those show the model finding a "
-        "near-identical past run, not generalising to a new one.",
+        f"{len(among)} are among them: on those, retrieval finds a near-identical past run, "
+        "which shows recall, not generalising to a new one.",
     ]
 
 
@@ -325,7 +326,8 @@ def _retrieval_findings(results: Sequence[ScenarioResult]) -> list[str]:
             continue
         if result.scenario.hold_out:
             sentences.append(
-                f"{result.name}: with no past run of its own fault to go on, the model said "
+                f"{result.name}: with no past run of its own fault to go on, "
+                f"{_answerer(result.scenario)} said "
                 f"UNKNOWN {result.abstained} times and named a wrong action "
                 f"{result.confidently_wrong} times, of {result.total}."
             )
@@ -348,31 +350,60 @@ def _retrieval_findings(results: Sequence[ScenarioResult]) -> list[str]:
     return sentences
 
 
+def _answerer(scenario: Scenario) -> str:
+    """Name who answered in a scenario, for a finding's sentence.
+
+    Args:
+        scenario: The scenario.
+
+    Returns:
+        'the vote' when the precedents' majority vote answered, otherwise 'the model'.
+    """
+    return "the vote" if scenario.vote else "the model"
+
+
+def _settings(scenario: Scenario) -> tuple[object, ...]:
+    """Return what a scenario does, without its name or the one it says it changes.
+
+    Args:
+        scenario: The scenario.
+
+    Returns:
+        Its evidence level, precedents, checks, gates and who answers.
+    """
+    return (scenario.level, scenario.precedents, scenario.checked, scenario.gated, scenario.vote)
+
+
 def _gate_findings(results: Sequence[ScenarioResult]) -> list[str]:
     """Say how often the gates answered for the model, and what that cost or saved.
 
-    Each gated scenario is compared, question by question, with the scenario it adds the
-    gates to: a gated question that scenario got right is a right answer given up, and one
-    it got confidently wrong is a wrong answer prevented.
+    Each gated scenario is compared, question by question, with the scored scenario that
+    is the same in every way but the gates: a gated question that scenario got right is a
+    right answer given up, and one it got confidently wrong is a wrong answer prevented. The
+    neighbour is found by its settings, not by `adds_to`, since a vote scenario names its
+    model twin there, which is gated too.
 
     Args:
         results: The scenario results.
 
     Returns:
-        One sentence per gated scenario whose neighbour was also scored.
+        One sentence per gated scenario whose ungated neighbour was also scored.
     """
-    by_name = {result.name: result for result in results}
     sentences = []
     for result in results:
-        prior = by_name.get(result.scenario.adds_to)
-        if not result.scenario.gated or prior is None:
+        if not result.scenario.gated:
+            continue
+        ungated = _settings(replace(result.scenario, gated=False))
+        prior = next((other for other in results if _settings(other.scenario) == ungated), None)
+        if prior is None:
             continue
         before = {outcome.question: outcome for outcome in prior.outcomes}
         gated = [outcome for outcome in result.outcomes if outcome.sources.gated]
         given_up = sum(1 for outcome in gated if before[outcome.question].right)
         prevented = sum(1 for outcome in gated if before[outcome.question].confidently_wrong)
         sentences.append(
-            f"{result.name}: the gates answered UNKNOWN without asking the model on "
+            f"{result.name}: the gates answered UNKNOWN "
+            f"{'before the vote' if result.scenario.vote else 'without asking the model'} on "
             f"{len(gated)} of {result.total} questions; without the gates, {prevented} of "
             f"those were confident wrong answers and {given_up} were right."
         )

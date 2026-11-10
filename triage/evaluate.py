@@ -5,7 +5,9 @@ that one thing: the error message alone, the whole run's evidence, that evidence
 firmware line (an ablation), the evidence plus the past runs most like it (retrieval), the
 same with the checks on the verdict, the same again with the question's own fault held out
 of the history, and both retrieval scenarios with gates that answer UNKNOWN from the
-precedents alone.
+precedents alone. Five more replace the model with a majority vote over the same precedents
+(triage.vote), each the twin of a model scenario, to show what the model adds beyond
+retrieval.
 
 An answer is one of four things: right, UNKNOWN (the model abstained), a confident wrong
 action, or malformed (unusable). They are counted apart, because a confident wrong action is
@@ -22,7 +24,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from triage.abstain import DEFAULT_GATES
-from triage.answer import VERDICT_SCHEMA, MalformedAnswerError
+from triage.answer import VERDICT_SCHEMA, MalformedAnswerError, Verdict
 from triage.checks import DEFAULT_CHECKS
 from triage.embed import OllamaEmbedder
 from triage.evidence import (
@@ -45,6 +47,7 @@ from triage.report import BASELINE_TITLE, RETRIEVAL_TITLE, render, render_report
 from triage.retrieval import DEFAULT_HISTORY, DEFAULT_TOP_K, InMemoryRetriever, Retriever
 from triage.scores import MALFORMED, Outcome, Precedents, Scenario, ScenarioResult, SourcesUsed
 from triage.service import triage_run
+from triage.vote import vote_run
 
 DEFAULT_QUESTIONS = Path("triage/data/runs/questions")
 DEFAULT_CACHE = Path(".cache/triage-answers")
@@ -85,8 +88,50 @@ SCENARIOS = (
         gated=True,
         adds_to="full + retrieval + checks, own fault held out",
     ),
+    Scenario(
+        "majority vote",
+        FULL,
+        precedents=Precedents.ALL,
+        vote=True,
+        adds_to="full + retrieval",
+    ),
+    Scenario(
+        "majority vote + checks",
+        FULL,
+        precedents=Precedents.ALL,
+        checked=True,
+        vote=True,
+        adds_to="full + retrieval + checks",
+    ),
+    Scenario(
+        "majority vote + checks, own fault held out",
+        FULL,
+        precedents=Precedents.OWN_FAULT_HELD_OUT,
+        checked=True,
+        vote=True,
+        adds_to="full + retrieval + checks, own fault held out",
+    ),
+    Scenario(
+        "majority vote + checks + gates",
+        FULL,
+        precedents=Precedents.ALL,
+        checked=True,
+        gated=True,
+        vote=True,
+        adds_to="full + retrieval + checks + gates",
+    ),
+    Scenario(
+        "majority vote + checks + gates, own fault held out",
+        FULL,
+        precedents=Precedents.OWN_FAULT_HELD_OUT,
+        checked=True,
+        gated=True,
+        vote=True,
+        adds_to="full + retrieval + checks + gates, own fault held out",
+    ),
 )
-"""The scenarios, each changing exactly one thing in the one it names."""
+"""The scenarios, each changing exactly one thing in the one it names. A vote scenario
+names its model twin: the one thing it changes is the vote answering in the model's place."""
 
 
 def expected_fix(run: SavedRun) -> Fix:
@@ -140,6 +185,27 @@ def _sources_for(
     return tuple(retriever.similar_to(run, DEFAULT_TOP_K, exclude_fault=excluded))
 
 
+def _decide(
+    run: SavedRun, provider: LLMProvider, scenario: Scenario, sources: Sequence[Source]
+) -> Verdict:
+    """Answer one question the scenario's way: by the model, or by the precedents' vote.
+
+    Args:
+        run: The question run.
+        provider: The answering model, never asked in a vote scenario.
+        scenario: The scenario, which says who answers and with which gates and checks.
+        sources: The precedents retrieval found for the question.
+
+    Returns:
+        The verdict, after the scenario's gates and checks.
+    """
+    checks = DEFAULT_CHECKS if scenario.checked else ()
+    gates = DEFAULT_GATES if scenario.gated else ()
+    if scenario.vote:
+        return vote_run(run, sources, checks=checks, gates=gates)
+    return triage_run(run, provider, scenario.level, sources, checks=checks, gates=gates)
+
+
 def evaluate_question(
     run: SavedRun, provider: LLMProvider, scenario: Scenario, retriever: Retriever | None
 ) -> Outcome:
@@ -166,10 +232,8 @@ def evaluate_question(
         error=error_only_evidence(run),
         sources=SourcesUsed(offered_faults=tuple(source.fault for source in sources)),
     )
-    checks = DEFAULT_CHECKS if scenario.checked else ()
-    gates = DEFAULT_GATES if scenario.gated else ()
     try:
-        verdict = triage_run(run, provider, scenario.level, sources, checks=checks, gates=gates)
+        verdict = _decide(run, provider, scenario, sources)
     except MalformedAnswerError as unusable:
         return replace(base, answer=f"unusable: {unusable}")
     if verdict.gate_reason:
@@ -182,10 +246,15 @@ def evaluate_question(
     fault_by_id = {source.source_id: source.fault for source in sources}
     cited = f" citing {', '.join(verdict.cited)}" if verdict.cited else ""
     overruled = f" [overruled: {verdict.overruled}]" if verdict.overruled else ""
+    answer = (
+        f"{verdict.fix.name} by majority vote, model not asked: {verdict.because}{overruled}"
+        if scenario.vote
+        else f"{verdict.fix.name} ({verdict.where}){cited} because {verdict.because}{overruled}"
+    )
     return replace(
         base,
         chosen=verdict.fix.name,
-        answer=f"{verdict.fix.name} ({verdict.where}){cited} because {verdict.because}{overruled}",
+        answer=answer,
         sources=replace(
             base.sources,
             cited=tuple(verdict.cited),
