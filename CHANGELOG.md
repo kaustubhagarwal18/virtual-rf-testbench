@@ -33,6 +33,10 @@ it, so the package version moves only with a release.
 - **Cited ids in the schema:** each question's reply schema lists the source ids it was
   offered, and replies are capped at 512 tokens, so a runaway reply ends as malformed
   instead of hanging until the timeout (ADR 0014).
+- **A majority-vote baseline** (`triage/vote.py`, ADR 0015): five scenarios answer with the
+  action most of the top 3 precedents were resolved by, with no model asked, through the
+  same gates and checks. On this data set the vote solves 9 of 9 faults against the model's
+  6, which shows how much of the score is retrieval.
 - **A firmware-line ablation:** an evaluation-only evidence level without the
   "Firmware: …" line, and a scenario that scores it.
 - **A persistent answer cache** for `make eval` under `.cache/triage-answers/`, keyed by the
@@ -58,6 +62,10 @@ it, so the package version moves only with a release.
   an optional per-reply schema.
 - Unchanged instrument versions read "Instruments: … the same as the last passing run.",
   without the word firmware; it lifted full evidence from 4 to 5 of 9 faults (ADR 0014).
+- `triage/evaluate.py` is split: results and scores live in `triage/scores.py`, and the
+  report and its findings in `triage/report.py`. A scenario's `retrieve` and `hold_out`
+  flags are one `precedents` field. The report's "Adds" column is now "Changes one thing
+  in", since a vote scenario replaces the model rather than adding to it.
 
 - The simulator image is repinned to the current `python:3.13.18-slim-trixie` digest,
   applies Debian security updates at build time, and no longer contains `pip`. That took
