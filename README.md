@@ -4,9 +4,26 @@
 local assistant that triages its failures.**
 
 [![CI](https://github.com/kaustubhagarwal18/virtual-rf-testbench/actions/workflows/ci.yml/badge.svg)](https://github.com/kaustubhagarwal18/virtual-rf-testbench/actions/workflows/ci.yml)
-![Python 3.13](https://img.shields.io/badge/python-3.13-blue)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 ![Status: early development](https://img.shields.io/badge/status-early%20development-orange)
+<br>
+![Python 3.13](https://img.shields.io/badge/python-3.13-3776AB?logo=python&logoColor=white)
+![uv 0.13.7](https://img.shields.io/badge/uv-0.13.7-DE5FE9)
+![NumPy 2.5](https://img.shields.io/badge/numpy-2.5-013243?logo=numpy&logoColor=white)
+![FastAPI 0.162](https://img.shields.io/badge/fastapi-0.162-009688?logo=fastapi&logoColor=white)
+![RsInstrument 1.131](https://img.shields.io/badge/rsinstrument-1.131-0a3069)
+![Docker Compose](https://img.shields.io/badge/docker-compose-2496ED?logo=docker&logoColor=white)
+![Ollama qwen2.5:3b](https://img.shields.io/badge/ollama-qwen2.5%3A3b-000000?logo=ollama&logoColor=white)
+<br>
+![ruff 0.17](https://img.shields.io/badge/ruff-0.17-D7FF64?logo=ruff&logoColor=black)
+![mypy strict](https://img.shields.io/badge/mypy-strict-2A6DB2)
+![pylint 10/10](https://img.shields.io/badge/pylint-10%2F10-brightgreen)
+![pytest 9.2](https://img.shields.io/badge/pytest-9.2-0A9EDC?logo=pytest&logoColor=white)
+![coverage 100%](https://img.shields.io/badge/coverage-100%25-brightgreen)
+![bandit](https://img.shields.io/badge/security-bandit-yellow)
+![pre-commit](https://img.shields.io/badge/pre--commit-enabled-FAB040?logo=precommit&logoColor=white)
+![Trivy 0.76.1](https://img.shields.io/badge/trivy-0.76.1-1904DA)
+![gitleaks 8.30.1](https://img.shields.io/badge/gitleaks-8.30.1-red)
 
 <p align="center">
   <img src="docs/images/overview.svg" width="860" alt="A new firmware release runs on a virtual bench of a signal generator and a spectrum analyzer. A 20-test regression suite measures it; a pass ships, a failure goes to the triage assistant, which says whether the cause is the firmware, the bench or the test, with what fixed it last time.">
