@@ -98,23 +98,19 @@ cited: past-9e31db17, past-4b20146a
 last time: Corrected level_offset_db to 1.5 (past-9e31db17, past-4b20146a)
 ```
 
-**Findings.**
-- **Stating a fact helps a small model.** A line saying the analyzer logged no signal took
-  full evidence from 5 to 7 of 9.
-- **Past runs can mislead it.** It copies the odd one out: "recalibrated" in `link_down`'s
-  history becomes `ALIGNMENT`, so past runs fix one fault and break two.
-- **Safety costs answers.** The gate prevents 3 wrong answers and gives up 3 right ones; a
-  wrong action costs hours, an `UNKNOWN` a minute.
+<p align="center">
+  <img src="docs/images/findings.svg" width="860" alt="Finding 1, stating a fact helps: a line saying the analyzer logged no signal took full evidence from 5 to 7 of 9 faults, fixing link_down and link_flaky. Finding 2, past runs can mislead: with the three closest past runs, 7 becomes 6; they fix config_parameter_out_of_range, but link_down becomes ALIGNMENT and reset_leaks_offset becomes CONFIGURATION. Finding 3, safety costs answers: the disagreement gate prevents 3 wrong answers and gives up 3 right ones.">
+</p>
+<p align="center"><sub><b>Figure 5.</b> Three findings from the experiments.</sub></p>
 
 [docs/EVALUATION.md](docs/EVALUATION.md) has every scenario and what each experiment taught.
 
 ## 4 · Limitations
 
-- **The data set is small and easy:** 9 faults, each seen before; six have nothing to vary,
-  so their questions repeat a past run. The vote's 9 of 9 shows recall, not reasoning.
-- **One model, one seed, one machine:** a 3B model at temperature 0 on an 8 GB laptop.
-- **`link_down` gets no action** with past runs: the model answers `UNKNOWN`.
-- **The instruments are simulated**, not real hardware.
+<p align="center">
+  <img src="docs/images/limitations.svg" width="860" alt="Four limitations. Small, easy data: 6 of 9 faults repeat a past run, so the vote's 9 of 9 is recall, not reasoning. One small model: qwen2.5:3b at temperature 0, one seed, on an 8 GB laptop; a one-fault difference may be noise. One fault unanswered: with past runs the model wants ALIGNMENT on link_down and a check refuses it, where the vote would say LINK. Simulated bench: no real instruments; noise and errors are modelled, not measured.">
+</p>
+<p align="center"><sub><b>Figure 6.</b> What these results do not show.</sub></p>
 
 ## 5 · Reproduce
 
