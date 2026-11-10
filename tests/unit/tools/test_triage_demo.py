@@ -226,3 +226,14 @@ def test_demo_runs_as_a_module() -> None:
         check=True,
     )
     assert "what retrieval adds" in completed.stdout
+
+
+def test_the_report_states_the_cause_and_what_fixed_the_cited_run(tmp_path: Path) -> None:
+    """The retrieval answer says bench, and quotes the cited past run's recorded fix."""
+    source = Source("cable_loss-1", "path loss high", fix_applied="Replaced the cable")
+    provider = FakeProvider([FIRMWARE_REPLY, CABLE_REPLY])
+    result = run_demo(cable_run(tmp_path), provider, StubRetriever(source))
+    assert (result.baseline.category, result.retrieval.category) == ("firmware", "bench")
+    report = render(result)
+    assert "cause: bench" in report
+    assert "last time: Replaced the cable" in report

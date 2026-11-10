@@ -55,7 +55,7 @@ When the bench suite fails, the assistant reads the saved run and answers one qu
 
 | | |
 |---|---|
-| **Answers with** | one action from a fixed list (`CABLE`, `LINK`, `ALIGNMENT`, `CONFIGURATION`, `TIMEOUT`, `TEST_CLEANUP`, `FIRMWARE`), or `UNKNOWN`, plus where to act, why, and the past runs it cites |
+| **Answers with** | one action from a fixed list (`CABLE`, `LINK`, `ALIGNMENT`, `CONFIGURATION`, `TIMEOUT`, `TEST_CLEANUP`, `FIRMWARE`), or `UNKNOWN`; whether that is the firmware, the bench or the test; where to act and why; the past runs it cites, and what fixed each of them, quoted from its record |
 | **Models** | `qwen2.5:3b` answers, `nomic-embed-text` embeds; both on local [Ollama](https://ollama.com), temperature 0, fixed seed |
 | **Privacy** | nothing leaves the machine; the model gets no tools, and logs are treated as untrusted data |
 | **Measured on** | 27 failed runs of 9 known faults, scored per fault, with a 95% interval |
@@ -142,9 +142,10 @@ explains one run, and `make eval` scores all eight scenarios; answers are cached
 jq -n --slurpfile results triage/data/runs/questions/cable_loss-1/results.json '{results: $results[0]}' | curl -s -X POST http://127.0.0.1:8000/triage -H 'Content-Type: application/json' -d @-
 ```
 
-The reply is the verdict as JSON: `fix`, `action`, `where`, `because`, `cited`, plus
-`overruled` when a check stood in for the model and `gate_reason` when the past runs
-disagreed and the model wasn't asked. `POST /history` adds a resolved run (its evidence plus
+The reply is the verdict as JSON: `fix`, `action`, `where`, `because`, `cited`, `category`
+(`firmware`, `bench`, `test` or `unknown`) and `past_fixes` (each cited run's recorded fix,
+quoted), plus `overruled` when a check stood in for the model and `gate_reason` when the
+past runs disagreed and the model wasn't asked. `POST /history` adds a resolved run (its evidence plus
 a `label` with `fault`, `cause`, `fix` and, optionally, `action`), and `GET /health` reports
 how many past runs are loaded. Interactive docs are at `http://127.0.0.1:8000/docs`. The
 service listens on localhost only and keeps its history in memory (ADR 0010); retrieval is

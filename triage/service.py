@@ -15,8 +15,10 @@ from triage.answer import (
     VERDICT_SCHEMA,
     MalformedAnswerError,
     Verdict,
+    grouped_past_fixes,
     parse_verdict,
     verdict_schema,
+    with_past_fixes,
 )
 from triage.checks import DEFAULT_CHECKS, VerdictCheck, apply_checks
 from triage.evidence import ERROR_ONLY, FULL, SavedRun, build_evidence
@@ -61,7 +63,7 @@ def triage_run(
     schema = verdict_schema(source_ids) if source_ids else None
     reply = provider.complete(system, user, schema)
     verdict = parse_verdict(reply, source_ids)
-    return apply_checks(run, verdict, checks)
+    return with_past_fixes(apply_checks(run, verdict, checks), sources)
 
 
 def describe(verdict: Verdict) -> str:
@@ -71,13 +73,20 @@ def describe(verdict: Verdict) -> str:
         verdict: The verdict.
 
     Returns:
-        The fix, where, why and what was cited, plus why a check overruled the model if one did.
+        The fix, where, why, whether that is the firmware, the bench or the test, what was
+        cited and what fixed each cited run last time, plus why a check overruled the model
+        if one did.
     """
     lines = [
         f"fix:   {verdict.fix.name} ({verdict.fix.value})",
         f"where: {verdict.where}",
         f"why:   {verdict.because}",
+        f"cause: {verdict.category}",
         f"cited: {', '.join(verdict.cited) or 'nothing'}",
+    ]
+    lines += [
+        f"last time: {fix} ({', '.join(source_ids)})"
+        for fix, source_ids in grouped_past_fixes(verdict)
     ]
     if verdict.overruled:
         lines.append(f"note:  {verdict.overruled}")

@@ -13,7 +13,7 @@ from collections import Counter
 from collections.abc import Sequence
 
 from triage.abstain import SourceGate, reason_to_abstain
-from triage.answer import Verdict
+from triage.answer import Verdict, with_past_fixes
 from triage.checks import VerdictCheck, apply_checks
 from triage.evidence import SavedRun
 from triage.prompt import Fix, Source
@@ -101,4 +101,4 @@ def vote_run(
     reason = reason_to_abstain(sources, gates)
     if reason:
         return Verdict.gated(reason)
-    return apply_checks(run, majority_vote(sources), checks)
+    return with_past_fixes(apply_checks(run, majority_vote(sources), checks), sources)

@@ -106,3 +106,15 @@ def test_a_gate_answers_before_the_vote(tmp_path: Path) -> None:
     gated = vote_run(run, sources, gates=(PrecedentsDisagree(),))
     assert gated.fix is Fix.UNKNOWN
     assert gated.gate_reason
+
+
+def test_a_vote_quotes_the_fixes_of_the_runs_that_voted_for_it(tmp_path: Path) -> None:
+    """The winning precedents' recorded fixes come back with the vote, the losers' do not."""
+    run = unchanged_firmware_run(tmp_path / "run")
+    sources = [
+        Source("past-a", "a", "fault", "CABLE", None, fix_applied="replaced the cable"),
+        Source("past-b", "b", "fault", "LINK", None, fix_applied="reseated the link"),
+        Source("past-c", "c", "fault", "CABLE", None, fix_applied="new cable, recalibrated"),
+    ]
+    fixes = [past.fix_applied for past in vote_run(run, sources).past_fixes]
+    assert fixes == ["replaced the cable", "new cable, recalibrated"]

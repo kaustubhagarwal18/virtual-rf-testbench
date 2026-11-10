@@ -99,6 +99,7 @@ def history_source(run: SavedRun, label: dict[str, Any]) -> Source:
         text=text,
         fault=str(label.get("fault", "")),
         action=str(label.get("action") or ""),
+        fix_applied=str(label["fix"]),
     )
 
 

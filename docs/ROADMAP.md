@@ -39,6 +39,8 @@
 - A majority-vote baseline: five scenarios answered by the precedents' most common action,
   each the twin of a model scenario, so the report shows what the model adds beyond
   retrieval (ADR 0015).
+- Answers state the cause (firmware, bench or test) and quote what fixed each cited past run
+  (ADR 0016).
 - A FastAPI service (`make triage-api`): `POST /triage`, `POST /history`, `GET /health`
   (ADR 0010).
 

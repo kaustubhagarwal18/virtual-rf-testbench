@@ -343,3 +343,18 @@ def test_the_service_asks_the_model_when_its_precedents_agree() -> None:
 def test_the_service_applies_the_disagreement_gate_only() -> None:
     """The similarity gate cost more than it saved (ADR 0013), so the API leaves it out."""
     assert [type(gate) for gate in SERVICE_GATES] == [PrecedentsDisagree]
+
+
+def test_the_verdict_states_its_category_and_what_fixed_a_cited_run() -> None:
+    """The response says bench, firmware or test, and quotes each cited run's recorded fix."""
+    provider = FakeProvider([CABLE_REPLY])
+    client = TestClient(create_app(provider, empty_history()))
+    source_id = client.post("/history", json={"results": RESULTS, "label": LABEL}).json()[
+        "source_id"
+    ]
+    provider.replies = [
+        json.dumps({"fix": "CABLE", "where": "cable", "because": "x", "cited": [source_id]})
+    ]
+    body = client.post("/triage", json={"results": RESULTS}).json()
+    assert body["category"] == "bench"
+    assert body["past_fixes"] == [{"source_id": source_id, "fix_applied": "replaced it"}]

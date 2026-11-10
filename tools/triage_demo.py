@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from triage.answer import VERDICT_SCHEMA, MalformedAnswerError
+from triage.answer import VERDICT_SCHEMA, MalformedAnswerError, grouped_past_fixes
 from triage.embed import OllamaEmbedder
 from triage.evaluate import expected_fix
 from triage.evidence import FULL, SavedRun, error_only_evidence
@@ -43,6 +43,10 @@ class Answer:
         because: The model's one-sentence reason, or the parser's complaint when unusable.
         cited: The source ids the model leaned on; empty when it cited none or was unusable.
         right: Whether the chosen action is the one that resolves the fault.
+        category: Firmware, bench, test or unknown, from the chosen action; empty when
+            unusable.
+        last_time: What fixed the cited past runs, quoted from their records, each distinct
+            fix once.
     """
 
     chosen: str
@@ -50,6 +54,8 @@ class Answer:
     because: str
     cited: tuple[str, ...]
     right: bool
+    category: str = ""
+    last_time: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -95,6 +101,8 @@ def _answer(
         because=verdict.because,
         cited=tuple(verdict.cited),
         right=verdict.fix is expected,
+        category=verdict.category,
+        last_time=tuple(fix for fix, _ in grouped_past_fixes(verdict)),
     )
 
 
@@ -140,7 +148,9 @@ def _answer_lines(title: str, answer: Answer, expected: Fix) -> list[str]:
         f"  fix:   {answer.chosen}  [{mark}]{expected_note}",
         f"  where: {answer.where or '-'}",
         f"  why:   {clip(answer.because, 160)}",
+        f"  cause: {answer.category or '-'}",
         f"  cited: {cited}",
+        *(f"  last time: {fix}" for fix in answer.last_time),
     ]
 
 
