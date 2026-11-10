@@ -11,27 +11,13 @@ import pytest
 from tests.unit.triage.test_evidence import FAILING_TEST, write_run
 from tools.faults import CATALOGUE
 from triage.embed import FakeEmbedder
-from triage.evaluate import (
-    MALFORMED,
-    SCENARIOS,
-    Outcome,
-    Scenario,
-    ScenarioResult,
-    _report_rows,
-    evaluate,
-    expected_fix,
-    findings,
-    main,
-    render,
-    render_report,
-    repeated_faults,
-    score_line,
-    wilson_interval,
-)
+from triage.evaluate import SCENARIOS, evaluate, expected_fix, main, repeated_faults
 from triage.evidence import ERROR_ONLY, FULL, SavedRun
 from triage.llm import CachingProvider, FakeProvider, ModelUnavailableError
 from triage.prompt import Fix
+from triage.report import _report_rows, findings, render, render_report, score_line
 from triage.retrieval import InMemoryRetriever
+from triage.scores import MALFORMED, Outcome, Precedents, Scenario, ScenarioResult, wilson_interval
 
 
 def question(folder: Path, fault: str) -> Path:
@@ -249,7 +235,7 @@ def cited(fix: Fix, source_ids: list[str]) -> str:
     return json.dumps({"fix": fix.name, "where": "x", "because": "y", "cited": source_ids})
 
 
-RETRIEVAL = Scenario("full + retrieval", FULL, retrieve=True, adds_to="full evidence")
+RETRIEVAL = Scenario("full + retrieval", FULL, precedents=Precedents.ALL, adds_to="full evidence")
 
 
 def test_findings_flag_a_cited_precedent_the_model_did_not_act_on(tmp_path: Path) -> None:
@@ -288,7 +274,7 @@ def test_the_held_out_scenario_never_offers_the_questions_own_fault(tmp_path: Pa
     history_with(history / "slow_responses-1", "slow_responses")
     question(tmp_path / "q" / "cable_loss-1", "cable_loss")
     retriever = InMemoryRetriever.from_history(history, FakeEmbedder())
-    held_out = Scenario("held out", FULL, retrieve=True, hold_out=True)
+    held_out = Scenario("held out", FULL, precedents=Precedents.OWN_FAULT_HELD_OUT)
     provider = FakeProvider([verdict(Fix.UNKNOWN)])
     result = evaluate(tmp_path / "q", provider, [held_out], retriever)[0]
     assert result.outcomes[0].sources.offered_faults == ("slow_responses",)
@@ -413,7 +399,7 @@ def test_a_retrieval_scenario_without_a_retriever_is_an_error(tmp_path: Path) ->
         evaluate(
             tmp_path / "q",
             FakeProvider([verdict(Fix.CABLE)]),
-            [Scenario("full + retrieval", FULL, retrieve=True)],
+            [Scenario("full + retrieval", FULL, precedents=Precedents.ALL)],
         )
 
 
@@ -506,8 +492,10 @@ def test_the_gated_scenario_answers_disagreement_without_the_model(tmp_path: Pat
     history_resolved_by(history / "slow_responses-1", "slow_responses", "TIMEOUT")
     question(tmp_path / "q" / "cable_loss-1", "cable_loss")
     retriever = InMemoryRetriever.from_history(history, FakeEmbedder())
-    plain = Scenario("checked", FULL, retrieve=True, checked=True)
-    gated = Scenario("gated", FULL, retrieve=True, checked=True, gated=True, adds_to="checked")
+    plain = Scenario("checked", FULL, precedents=Precedents.ALL, checked=True)
+    gated = Scenario(
+        "gated", FULL, precedents=Precedents.ALL, checked=True, gated=True, adds_to="checked"
+    )
     provider = CachingProvider(FakeProvider([verdict(Fix.LINK)]))
     results = evaluate(tmp_path / "q", provider, [plain, gated], retriever)
     assert results[0].confidently_wrong == 1

@@ -21,7 +21,7 @@ from triage.answer import (
 from triage.checks import DEFAULT_CHECKS, VerdictCheck, apply_checks
 from triage.evidence import ERROR_ONLY, FULL, SavedRun, build_evidence
 from triage.llm import LLMProvider, ModelUnavailableError, OllamaProvider
-from triage.prompt import Fix, Source, build_prompt
+from triage.prompt import Source, build_prompt
 
 
 def triage_run(
@@ -54,9 +54,7 @@ def triage_run(
     """
     reason = reason_to_abstain(sources, gates)
     if reason:
-        return Verdict(
-            fix=Fix.UNKNOWN, where="no precedent to follow", because=reason, gate_reason=reason
-        )
+        return Verdict.gated(reason)
     evidence = build_evidence(run, level)
     system, user = build_prompt(evidence, sources)
     source_ids = [source.source_id for source in sources]
