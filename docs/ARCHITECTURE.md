@@ -221,7 +221,7 @@ flowchart LR
     pr --> llm["qwen2.5:3b<br/>local Ollama, JSON schema"]
     llm --> an["answer.py<br/>strict parse"]
     an --> chk["checks.py<br/>verdict contradicts<br/>the evidence → UNKNOWN"]
-    chk --> verdict["Verdict<br/>action, where, why, cited"]
+    chk --> verdict["Verdict<br/>action, cause, where, why,<br/>cited + their recorded fixes"]
     api["POST /history<br/>resolved run + label"] --> hist
 ```
 

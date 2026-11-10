@@ -32,33 +32,32 @@ CABLE_REPLY_NO_CITE = json.dumps(
 
 
 class StubRetriever:
-    """A retriever that always offers one fixed past run, for an offline demo test."""
+    """A retriever that always offers the same past runs, for an offline demo test."""
 
-    def __init__(self, source: Source) -> None:
-        """Keep the single source this retriever offers.
+    def __init__(self, *sources: Source) -> None:
+        """Keep the sources this retriever offers.
 
         Args:
-            source: The past run to offer every time.
+            sources: The past runs to offer every time, most similar first.
         """
-        self.source = source
+        self.sources = sources
 
     def similar_to(
         self, run: SavedRun, count: int, exclude_fault: str | None = None
     ) -> list[Source]:
-        """Return the fixed source, up to the count asked for.
+        """Return the fixed sources, up to the count asked for.
 
         Args:
             run: The run being triaged (unused).
             count: How many to return at most.
-            exclude_fault: A fault to leave out; the fixed source is dropped if it has it.
+            exclude_fault: A fault to leave out; sources with it are dropped.
 
         Returns:
-            The single fixed source, or none when count is zero or it is excluded.
+            The fixed sources without the excluded fault, at most count of them.
         """
         del run
-        if exclude_fault is not None and self.source.fault == exclude_fault:
-            return []
-        return [self.source][:count]
+        kept = [source for source in self.sources if source.fault != exclude_fault]
+        return kept[:count]
 
 
 class UnreachableProvider:
@@ -226,3 +225,30 @@ def test_demo_runs_as_a_module() -> None:
         check=True,
     )
     assert "what retrieval adds" in completed.stdout
+
+
+def test_the_report_states_the_cause_and_what_fixed_the_cited_run(tmp_path: Path) -> None:
+    """The retrieval answer says bench, and quotes the cited past run's recorded fix."""
+    source = Source("cable_loss-1", "path loss high", fix_applied="Replaced the cable")
+    provider = FakeProvider([FIRMWARE_REPLY, CABLE_REPLY])
+    result = run_demo(cable_run(tmp_path), provider, StubRetriever(source))
+    assert (result.baseline.category, result.retrieval.category) == ("firmware", "bench")
+    report = render(result)
+    assert "cause: bench" in report
+    assert "last time: Replaced the cable (cable_loss-1)" in report
+
+
+def test_the_report_says_which_cited_run_each_fix_came_from(tmp_path: Path) -> None:
+    """Two cited runs fixed different ways: each fix is printed beside the run that recorded it."""
+    sources = [
+        Source("past-a", "a", fix_applied="Replaced the cable"),
+        Source("past-b", "b", fix_applied="Reseated the connector"),
+    ]
+
+    reply = json.dumps(
+        {"fix": "CABLE", "where": "cable", "because": "x", "cited": ["past-a", "past-b"]}
+    )
+    provider = FakeProvider([FIRMWARE_REPLY, reply])
+    report = render(run_demo(cable_run(tmp_path), provider, StubRetriever(*sources)))
+    assert "last time: Replaced the cable (past-a)" in report
+    assert "last time: Reseated the connector (past-b)" in report

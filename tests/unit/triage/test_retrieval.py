@@ -169,3 +169,10 @@ def test_identical_history_runs_are_indexed_once(tmp_path: Path, copies: int) ->
     question = SavedRun.load(labelled_run(tmp_path / "q" / "q", "cable_loss", "c", "f"))
     found = retriever.similar_to(question, count=distinct)
     assert len({source.source_id for source in found}) == distinct
+
+
+def test_a_history_source_keeps_the_fix_applied_apart(tmp_path: Path) -> None:
+    """The fix a ticket records is kept on its own, so an answer can quote it word for word."""
+    run = SavedRun.load(labelled_run(tmp_path / "run", "cable_loss", "worn cable", "replaced it"))
+    source = history_source(run, load_label(run))
+    assert source.fix_applied == "replaced it"

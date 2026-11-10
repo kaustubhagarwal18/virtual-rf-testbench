@@ -33,6 +33,32 @@ class Fix(StrEnum):
     UNKNOWN = "insufficient evidence to act"
 
 
+_CATEGORY_BY_FIX: dict[Fix, str] = {
+    Fix.CABLE: "bench",
+    Fix.LINK: "bench",
+    Fix.ALIGNMENT: "bench",
+    Fix.CONFIGURATION: "test",
+    Fix.TIMEOUT: "test",
+    Fix.TEST_CLEANUP: "test",
+    Fix.FIRMWARE: "firmware",
+    Fix.UNKNOWN: "unknown",
+}
+"""Which of the three causes each action answers. A fixed fact about the action, so it is
+looked up, never asked of the model; a test checks it against every fault's label."""
+
+
+def fix_category(fix: Fix) -> str:
+    """Say whether an action answers the firmware, the bench or the test code.
+
+    Args:
+        fix: The action.
+
+    Returns:
+        'firmware', 'bench' or 'test'; 'unknown' for UNKNOWN, which names no cause.
+    """
+    return _CATEGORY_BY_FIX[fix]
+
+
 @dataclass(frozen=True)
 class Source:
     """One past run or document offered to the model.
@@ -48,6 +74,8 @@ class Source:
             (the source's text states it already).
         similarity: How alike this source and the run being triaged are, as the retriever
             scored them (cosine, 1 is identical); None when the retriever doesn't say.
+        fix_applied: What fixed this past run, as its label records it, so an answer citing
+            it can quote it word for word; empty when not recorded. The text states it too.
     """
 
     source_id: str
@@ -55,6 +83,7 @@ class Source:
     fault: str = ""
     action: str = ""
     similarity: float | None = None
+    fix_applied: str = ""
 
 
 SYSTEM_PROMPT = f"""You triage failed runs of an automated RF test bench: a signal generator

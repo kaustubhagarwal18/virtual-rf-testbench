@@ -33,6 +33,11 @@ it, so the package version moves only with a release.
 - **Cited ids in the schema:** each question's reply schema lists the source ids it was
   offered, and replies are capped at 512 tokens, so a runaway reply ends as malformed
   instead of hanging until the timeout (ADR 0014).
+- **Answers state the cause and what fixed it last time** (ADR 0016). Every verdict says
+  whether its action answers the firmware, the bench or the test (`category`, looked up from
+  the action), and quotes the recorded fix of each past run it cites (`past_fixes`), word
+  for word from the run's label. `make triage`, `make triage-demo` and the API show both;
+  the prompt is unchanged, so no stored answer moved.
 - **A majority-vote baseline** (`triage/vote.py`, ADR 0015): five scenarios answer with the
   action most of the top 3 precedents were resolved by, with no model asked, through the
   same gates and checks. On this data set the vote solves 9 of 9 faults against the model's

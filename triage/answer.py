@@ -7,9 +7,9 @@ something to interpret generously: interpreting it would flatter the result.
 
 import json
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
-from triage.prompt import Fix
+from triage.prompt import Fix, Source, fix_category
 
 _VERDICT_PROPERTIES: dict[str, object] = {
     "fix": {"type": "string", "enum": [fix.name for fix in Fix]},
@@ -57,6 +57,19 @@ class MalformedAnswerError(Exception):
 
 
 @dataclass(frozen=True)
+class PastFix:
+    """What fixed a past run the verdict cites, as that run's label records it.
+
+    Attributes:
+        source_id: The cited run's neutral id.
+        fix_applied: Its recorded fix, word for word.
+    """
+
+    source_id: str
+    fix_applied: str
+
+
+@dataclass(frozen=True)
 class Verdict:
     """What the model decided.
 
@@ -68,6 +81,8 @@ class Verdict:
         overruled: Why a check replaced the model's choice, or empty when none did.
         gate_reason: Why UNKNOWN was answered from the precedents alone, without asking the
             model; empty when the model was asked.
+        past_fixes: What fixed each cited past run, quoted from its record, never written by
+            the model; empty until with_past_fixes fills it in.
     """
 
     fix: Fix
@@ -76,6 +91,16 @@ class Verdict:
     cited: list[str] = field(default_factory=list)
     overruled: str = ""
     gate_reason: str = ""
+    past_fixes: tuple[PastFix, ...] = ()
+
+    @property
+    def category(self) -> str:
+        """Say whether the chosen action answers the firmware, the bench or the test code.
+
+        Returns:
+            'firmware', 'bench', 'test', or 'unknown' for UNKNOWN.
+        """
+        return fix_category(self.fix)
 
     @classmethod
     def gated(cls, reason: str) -> "Verdict":
@@ -167,3 +192,53 @@ def parse_verdict(reply: str, source_ids: Sequence[str] = ()) -> Verdict:
         because=str(parsed.get("because", "")).strip(),
         cited=citations,
     )
+
+
+def with_past_fixes(verdict: Verdict, sources: Sequence[Source]) -> Verdict:
+    """Attach what fixed each cited past run, quoted from the sources it was offered.
+
+    The quote comes from the record, not the model, so it can't be misremembered. A cited
+    source whose fix wasn't recorded is left out rather than shown as blank.
+
+    Args:
+        verdict: The verdict, whose citations are already checked against the sources.
+        sources: The sources offered for this run.
+
+    Returns:
+        The verdict with past_fixes in the order the sources were cited.
+    """
+    fix_by_id = {source.source_id: source.fix_applied for source in sources}
+    past_fixes = tuple(
+        PastFix(source_id, fix_by_id[source_id])
+        for source_id in verdict.cited
+        if fix_by_id.get(source_id)
+    )
+    return replace(verdict, past_fixes=past_fixes)
+
+
+def grouped_past_fixes(verdict: Verdict) -> list[tuple[str, tuple[str, ...]]]:
+    """Group the cited runs' fixes by their text, so one fix recorded twice reads once.
+
+    Args:
+        verdict: The verdict, with its past fixes attached.
+
+    Returns:
+        Each distinct fix with the ids of the runs that recorded it, in first-cited order.
+    """
+    groups: dict[str, list[str]] = {}
+    for past in verdict.past_fixes:
+        groups.setdefault(past.fix_applied, []).append(past.source_id)
+    return [(fix, tuple(source_ids)) for fix, source_ids in groups.items()]
+
+
+def past_fix_lines(verdict: Verdict) -> list[str]:
+    """Write each distinct past fix beside the cited runs that recorded it.
+
+    Args:
+        verdict: The verdict, with its past fixes attached.
+
+    Returns:
+        Lines such as 'Corrected level_offset_db to 1.5 (past-a, past-c)', in first-cited
+        order, so each fix can be traced to the run it came from.
+    """
+    return [f"{fix} ({', '.join(source_ids)})" for fix, source_ids in grouped_past_fixes(verdict)]

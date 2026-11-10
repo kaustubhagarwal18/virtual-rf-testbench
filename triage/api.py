@@ -241,6 +241,18 @@ class ResolvedRunRequest(Evidence):
     label: Label
 
 
+class PastFixResponse(BaseModel):
+    """What fixed a cited past run, quoted from its record.
+
+    Attributes:
+        source_id: The cited run's neutral id.
+        fix_applied: Its recorded fix, word for word.
+    """
+
+    source_id: str
+    fix_applied: str
+
+
 class VerdictResponse(BaseModel):
     """What to do about a failed run.
 
@@ -253,6 +265,9 @@ class VerdictResponse(BaseModel):
         overruled: Why a check replaced the model's choice, or empty.
         gate_reason: Why UNKNOWN was answered from the past runs alone, without asking the
             model, or empty when the model was asked.
+        category: Whether the action answers the firmware, the bench or the test code, or
+            unknown for UNKNOWN.
+        past_fixes: What fixed each cited past run, quoted from its record, in citation order.
     """
 
     fix: str
@@ -262,6 +277,8 @@ class VerdictResponse(BaseModel):
     cited: list[str]
     overruled: str
     gate_reason: str
+    category: str
+    past_fixes: list[PastFixResponse]
 
 
 class AddedResponse(BaseModel):
@@ -365,6 +382,11 @@ def create_app(
             cited=verdict.cited,
             overruled=verdict.overruled,
             gate_reason=verdict.gate_reason,
+            category=verdict.category,
+            past_fixes=[
+                PastFixResponse(source_id=past.source_id, fix_applied=past.fix_applied)
+                for past in verdict.past_fixes
+            ],
         )
 
     @app.post("/history", status_code=status.HTTP_201_CREATED)

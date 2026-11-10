@@ -9,12 +9,12 @@ import pytest
 
 from tests.unit.triage.test_evidence import FAILING_TEST, write_run
 from triage.abstain import DEFAULT_GATES
-from triage.answer import MalformedAnswerError
+from triage.answer import MalformedAnswerError, PastFix, Verdict
 from triage.checks import DEFAULT_CHECKS
 from triage.evidence import ERROR_ONLY, FULL, SavedRun
 from triage.llm import FakeProvider, ModelUnavailableError
 from triage.prompt import Fix, Source
-from triage.service import main, triage_run
+from triage.service import describe, main, triage_run
 
 VERDICT = json.dumps(
     {"fix": "CABLE", "where": "the bench cable", "because": "the loss is high", "cited": []}
@@ -182,3 +182,41 @@ def test_the_model_is_asked_to_cite_only_the_sources_it_was_given(tmp_path: Path
     assert isinstance(properties, dict)
     assert properties["cited"]["items"]["enum"] == ["past-a", "past-b"]
     assert default is None
+
+
+def test_a_cited_past_run_brings_its_fix_to_the_verdict(tmp_path: Path) -> None:
+    """What fixed the cited run last time comes back with the verdict, word for word."""
+    sources = [Source("past-1", "loss 1.9 dB", fix_applied="Replaced the cable and recalibrated")]
+    reply = json.dumps({"fix": "CABLE", "where": "cable", "because": "same", "cited": ["past-1"]})
+    verdict = triage_run(saved_run(tmp_path), FakeProvider([reply]), FULL, sources)
+    assert [past.fix_applied for past in verdict.past_fixes] == [
+        "Replaced the cable and recalibrated"
+    ]
+
+
+def test_the_cli_states_the_category_and_what_fixed_it_last_time() -> None:
+    """The printed verdict says firmware, bench or test, and each cited run's recorded fix."""
+    verdict = Verdict(
+        Fix.CABLE,
+        "cable",
+        "loss",
+        cited=["past-1"],
+        past_fixes=(PastFix("past-1", "Replaced the cable"),),
+    )
+    out = describe(verdict)
+    assert "cause: bench" in out
+    assert "last time: Replaced the cable (past-1)" in out
+
+
+def test_the_cli_names_one_fix_once_however_many_runs_recorded_it() -> None:
+    """Two cited runs fixed the same way print as one line naming both."""
+    fix = "Corrected level_offset_db to 1.5"
+    verdict = Verdict(
+        Fix.CONFIGURATION,
+        "config",
+        "x",
+        past_fixes=(PastFix("past-1", fix), PastFix("past-2", fix)),
+    )
+    out = describe(verdict)
+    assert out.count("last time:") == 1
+    assert f"last time: {fix} (past-1, past-2)" in out
