@@ -34,16 +34,6 @@ in people's heads or in old tickets.
 - **A triage assistant.** It answers "Is this the firmware, the bench or the test, and what
   fixed it last time?", citing the past runs and notes it drew on.
 
-```mermaid
-flowchart LR
-    release[New simulator version] --> suite[Regression suite]
-    suite -->|pass| ship[Release]
-    suite -->|fail| triage[Triage assistant]
-    triage --> firmware[Firmware regression]
-    triage --> bench[Bench problem]
-    triage --> test[Test code problem]
-```
-
 Faults are injected on purpose (extra cable loss, a level offset, slow responses, a
 behaviour change in a new version), so every failure has a known cause. That lets the
 assistant's accuracy be measured rather than guessed.
@@ -71,65 +61,36 @@ against past runs that record how each was resolved. The three closest travel in
 prompt under neutral ids (`past-3fa2c1d0`, never a folder name that would give the answer
 away), and the model may cite only those ids.
 
-### Guardrails against a confident wrong answer
+### Example
 
-A wrong action costs an engineer hours; `UNKNOWN` costs a minute. Every layer below can only
-turn an answer into `UNKNOWN` or refuse it, never pick a different action.
+A real answer, from `make triage-demo` on a run where the bench configuration asked for a
+15 dB level offset instead of 1.5 dB:
 
-| Layer | What it does | Measured effect |
-|---|---|---|
-| **Fixed action list** | the model picks a key, so scoring is an exact match | no judge model needed |
-| **Reply schema** | one action from the enum; `cited` limited to the offered ids; 512-token cap | an invented citation can't be written |
-| **Strict parser** | anything unusable is counted as malformed, never read generously | none in the current run; 3 `link_down` replies before ADR 0017 |
-| **Disagreement gate** | top 3 past runs resolved different ways → `UNKNOWN`, model not asked | wrong answers 3 → 0, at a cost of 3 right ones |
-| **Checks** | `FIRMWARE` on a release the run didn't run, or on unchanged firmware; `TIMEOUT` beside an SCPI error; `ALIGNMENT` when the analyzer logged no signal | turned 6 wrong answers into `UNKNOWN`, cost none |
+```
+fix:   CONFIGURATION
+where: bench configuration
+why:   The bench configuration asks for a 15 dB level offset where 1.5 dB was meant: a misplaced decimal point, and far more than the cable's loss.
+cause: test
+cited: past-9e31db17, past-4b20146a
+last time: Corrected level_offset_db to 1.5 (past-9e31db17, past-4b20146a)
+```
 
-### Results
+The action comes from a fixed list, so it can be checked. The cause is looked up from the
+action, and "last time" is quoted from the cited past runs' records, never written by the
+model.
 
-<p align="center">
-  <img src="docs/images/triage-results.svg" width="860" alt="Faults solved out of 9: error only 3, full evidence 7, without the version line 6; with retrieval 6, with checks 6, with the disagreement gate 5 and no wrong answers; a majority vote over the same past runs, with no model, 9 with no wrong answers, and 6 with the gate; with the question's own fault held out, 4 with checks (the vote 4) and 1 with both gates (the vote 2).">
-</p>
+### How well it works
 
-Counts, not percentages: with 9 faults, "6 of 9, 3 to 8" is honest where "67%" is not.
-Every question's answer is in [`triage/results/rag.md`](triage/results/rag.md).
+- **From the run's own evidence, it names the right fix for 7 of the 9 faults.**
+- **With past runs and the safety gate (what the API runs), it solves 5 and gives no wrong
+  answers;** on the rest it says `UNKNOWN` and why. A wrong action costs an engineer hours,
+  an `UNKNOWN` a minute.
+- **Retrieval does most of the work here.** A plain majority vote over the three most similar
+  past runs, with no model, solves all 9, because every fault in this data set has happened
+  before. The model's value shows on new failures and in its explanation.
 
-### What the numbers say
-
-- **Counting the past runs' actions beats the model on this data set.** A majority vote over
-  the same top 3, with no model, solves 9 of 9 with no wrong answers, against the model's 6.
-  Behind the gate the model differs from the vote only on `link_down`: it answers
-  `UNKNOWN` where the vote says `LINK`. This is recall: every question had a past run of its
-  own fault.
-  The model's one gain is a new fault where the precedents tie (`config_decimal_error`);
-  held out, it also loses `link_flaky`, which the vote gets right, so both solve 4 of 9.
-- **Past runs help the model on one fault and mislead it on two.** The run's own evidence
-  solves 7 of 9; with the past runs, 6. They fix `config_parameter_out_of_range`, but the
-  model copies "recalibrated" from `link_down`'s past fixes into `ALIGNMENT`, and
-  `reset_leaks_offset` becomes `CONFIGURATION`. With the fault held out, 4 of 9.
-- **Stating a fact from the logs can matter.** A line saying the analyzer logged "No signal
-  reaching the analyzer" took the evidence-only answer from 5 to 7 of 9 (ADR 0017).
-- **A small model follows the odd precedent out.** Offered two past runs of its own fault
-  and one look-alike, it often copies the look-alike. That is why the gate exists.
-- **Wording matters.** "Firmware: … (unchanged)" pulled the model to `FIRMWARE`. Saying
-  "Instruments: … the same as the last passing run" solved one more fault and lost none.
-- **Four of the six solved faults are recall, not reasoning:** their runs have no size to
-  vary, so a question repeats a past run almost word for word. The report says so.
-- **Two ideas didn't pay off:** leading the evidence with the SCPI error changed no score,
-  and a similarity threshold gave up 6 right answers to prevent 3 wrong ones.
-
-### How the evaluation got more honest
-
-Each review found a way the score could flatter the assistant, and closed it.
-
-| ADR | What changed | Retrieval score after it |
-|---|---|---|
-| [0008](docs/adr/0008-triage-design.md) | fixed action list, one prompt for every scenario | 6 of 9 questions |
-| [0009](docs/adr/0009-honest-triage-evaluation.md) | neutral source ids (the folder name gave the answer), 27 questions, a held-out scenario | 18 of 27 questions |
-| [0012](docs/adr/0012-score-faults-key-labels-by-action.md) | score faults, not questions; label each run's action; **index identical runs once** (they inflated 5 → 8 of 9) | 5 of 9 faults |
-| [0013](docs/adr/0013-abstain-from-retrieval.md) | gates before the model; an ablation of the firmware line | 5 of 9 faults |
-| [0014](docs/adr/0014-api-gate-cited-ids-version-wording.md) | the disagreement gate in the API, cited ids in the schema, version wording | **6 of 9 faults** |
-| [0015](docs/adr/0015-majority-vote-baseline.md) | a majority vote over the same past runs, with no model, as a baseline | 6 of 9; the vote 9 of 9 |
-| [0017](docs/adr/0017-no-signal-line-and-alignment-check.md) | a "No signal" line in the evidence; `ALIGNMENT` without a signal becomes `UNKNOWN` | 6 of 9; without past runs 7 of 9 |
+[docs/EVALUATION.md](docs/EVALUATION.md) has the guardrails, the full results chart and what
+each experiment taught.
 
 ### Try it
 
@@ -140,7 +101,7 @@ make triage-demo RUN=triage/data/runs/questions/cable_loss-1
 ```
 
 shows one failure triaged with and without past runs, side by side. `make triage RUN=…`
-explains one run, and `make eval` scores all eight scenarios; answers are cached in
+explains one run, and `make eval` scores every scenario; answers are cached in
 `.cache/triage-answers/`, so a rerun asks only what changed.
 
 `make triage-api` serves the same pipeline on `http://127.0.0.1:8000`. From another terminal:
@@ -456,6 +417,8 @@ Actions are pinned to commit SHAs, and dependencies install from `uv.lock` exact
 
 - [Architecture](docs/ARCHITECTURE.md): how the simulators, drivers, measurement records and
   test suites fit together, and where to look in the code
+- [Evaluation](docs/EVALUATION.md): how the triage assistant is measured, its results, and
+  what each experiment taught
 - [Roadmap](docs/ROADMAP.md): what's done and what comes next
 - [Decision records](docs/adr/): why the main choices were made
 

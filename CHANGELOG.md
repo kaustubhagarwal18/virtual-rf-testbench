@@ -62,6 +62,9 @@ it, so the package version moves only with a release.
 
 ### Changed
 
+- The README's triage section is shorter: what the assistant answers, one real example, and
+  how well it works in three sentences. The guardrails, results chart, findings and ADR
+  history moved to `docs/EVALUATION.md`, and the overview's flowchart is gone.
 - `CABLE` and `LINK` are described by their symptoms: "signal present but attenuated", and
   "no signal or intermittent signal; the path is open".
 - The held-out scenario applies the checks too.
