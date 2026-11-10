@@ -9,6 +9,9 @@ it, so the package version moves only with a release.
 
 ### Added
 
+- **Guides for other people:** `docs/ADAPTING.md` (triaging your own failures, adding a
+  fault, driving real instruments), `CONTRIBUTING.md` (setup, workflow, the checks and the
+  project's rules) and GitHub issue forms for bug reports and feature requests.
 - **A more honest triage evaluation** (ADR 0009). Past runs are cited by a hash of their
   text (`past-3fa2c1d0`) instead of their folder name, which named the fault. The data set
   has three question runs per fault (27, up from 9). Scores are reported as right, `UNKNOWN`,
