@@ -29,13 +29,16 @@
   and a local `qwen2.5:3b` (ADR 0008).
 - Retrieval of the most similar resolved runs, in memory, cited by neutral ids (ADR 0009).
 - Three checks that turn a verdict the evidence contradicts into `UNKNOWN` (ADR 0012).
-- The evaluation: eight scenarios, each changing one thing, scored per fault as right,
+- The evaluation: thirteen scenarios, each changing one thing, scored per fault as right,
   `UNKNOWN`, confidently wrong and malformed, with a 95% interval over faults and retrieval
   recall (ADR 0009, ADR 0012). Labels record the action key the score is checked against.
 - Gates that answer `UNKNOWN` from the precedents alone, a firmware-line ablation, and
   the instrument error first in the evidence, each measured (ADR 0013).
 - The disagreement gate in the API, cited ids in the reply schema, and version wording
   that doesn't name firmware when it is unchanged (ADR 0014).
+- A majority-vote baseline: five scenarios answered by the precedents' most common action,
+  each the twin of a model scenario, so the report shows what the model adds beyond
+  retrieval (ADR 0015).
 - A FastAPI service (`make triage-api`): `POST /triage`, `POST /history`, `GET /health`
   (ADR 0010).
 
@@ -48,14 +51,18 @@
 
 ## Next, in order
 
-1. **The cluster.** k3s runs the same images through Helm charts, deployed by Argo CD from
+1. **Infrastructure failures as a fourth cause.** Three faults reproduced on compose, labelled
+   `infrastructure`: an instrument container OOM-killed, a service name that doesn't resolve,
+   and an image tag that doesn't exist. Each run records the containers' state, which the
+   evidence would need to tell an OOM kill from a dropped link.
+2. **The cluster.** k3s runs the same images through Helm charts, deployed by Argo CD from
    Git, with secrets from OpenBao and observability.
-2. **The tag-bump pull request.** Once a chart's values file pins the image, CI opens a pull
+3. **The tag-bump pull request.** Once a chart's values file pins the image, CI opens a pull
    request that bumps it to the tag the publish job just pushed. It waits for the chart: there
    is no file to bump yet.
-3. **Triage in CI.** When the bench job fails, a separate job (allowed to fail) triages the
+4. **Triage in CI.** When the bench job fails, a separate job (allowed to fail) triages the
    run with a local model and adds the verdict to the pull request comment.
-4. **The rest of the planned triage service.** An ingestion worker, Redis, and Postgres with
+5. **The rest of the planned triage service.** An ingestion worker, Redis, and Postgres with
    pgvector behind the existing `Retriever` interface, once the history is large enough for
    an in-memory index to matter (ADR 0010).
 

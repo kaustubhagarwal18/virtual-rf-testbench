@@ -17,32 +17,37 @@ flowchart LR
     label["label.json"] -. answer key, never shown .-> score
 ```
 
-| Scenario | Adds | Faults solved | 95% interval | Questions right | UNKNOWN | Wrong | Malformed |
+| Scenario | Changes one thing in | Faults solved | 95% interval | Questions right | UNKNOWN | Wrong | Malformed |
 |---|---|---|---|---|---|---|---|
 | error only |  | 3 of 9 | 1 to 6 | 9 of 27 | 0 | 18 | 0 |
-| full evidence | to error only | 5 of 9 | 2 to 7 | 16 of 27 | 0 | 11 | 0 |
-| full evidence, no firmware line | to full evidence | 4 of 9 | 2 to 7 | 13 of 27 | 0 | 14 | 0 |
-| full + retrieval | to full evidence | 6 of 9 | 3 to 8 | 18 of 27 | 0 | 6 | 3 |
-| full + retrieval + checks | to full + retrieval | 6 of 9 | 3 to 8 | 18 of 27 | 3 | 3 | 3 |
-| full + retrieval + checks, own fault held out | to full + retrieval + checks | 4 of 9 | 2 to 7 | 13 of 27 | 3 | 11 | 0 |
-| full + retrieval + checks + gates | to full + retrieval + checks | 5 of 9 | 2 to 7 | 15 of 27 | 9 | 0 | 3 |
-| full + retrieval + checks + gates, own fault held out | to full + retrieval + checks, own fault held out | 1 of 9 | 0 to 4 | 4 of 27 | 20 | 3 | 0 |
+| full evidence | error only | 5 of 9 | 2 to 7 | 16 of 27 | 0 | 11 | 0 |
+| full evidence, no firmware line | full evidence | 4 of 9 | 2 to 7 | 13 of 27 | 0 | 14 | 0 |
+| full + retrieval | full evidence | 6 of 9 | 3 to 8 | 18 of 27 | 0 | 6 | 3 |
+| full + retrieval + checks | full + retrieval | 6 of 9 | 3 to 8 | 18 of 27 | 3 | 3 | 3 |
+| full + retrieval + checks, own fault held out | full + retrieval + checks | 4 of 9 | 2 to 7 | 13 of 27 | 3 | 11 | 0 |
+| full + retrieval + checks + gates | full + retrieval + checks | 5 of 9 | 2 to 7 | 15 of 27 | 9 | 0 | 3 |
+| full + retrieval + checks + gates, own fault held out | full + retrieval + checks, own fault held out | 1 of 9 | 0 to 4 | 4 of 27 | 20 | 3 | 0 |
+| majority vote | full + retrieval | 9 of 9 | 6 to 9 | 27 of 27 | 0 | 0 | 0 |
+| majority vote + checks | full + retrieval + checks | 9 of 9 | 6 to 9 | 27 of 27 | 0 | 0 | 0 |
+| majority vote + checks, own fault held out | full + retrieval + checks, own fault held out | 3 of 9 | 1 to 6 | 10 of 27 | 9 | 8 | 0 |
+| majority vote + checks + gates | full + retrieval + checks + gates | 6 of 9 | 3 to 8 | 18 of 27 | 9 | 0 | 0 |
+| majority vote + checks + gates, own fault held out | full + retrieval + checks + gates, own fault held out | 1 of 9 | 0 to 4 | 4 of 27 | 20 | 3 | 0 |
 
 ## By fault
 
 Questions right, of those asked, for each fault.
 
-| Fault | Expected | error only | full evidence | full evidence, no firmware line | full + retrieval | full + retrieval + checks | full + retrieval + checks, own fault held out | full + retrieval + checks + gates | full + retrieval + checks + gates, own fault held out |
-|---|---|---|---|---|---|---|---|---|---|
-| cable_loss | CABLE | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 | 3/3 | 0/3 |
-| config_decimal_error | CONFIGURATION | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 | 0/3 |
-| config_parameter_missing | CONFIGURATION | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 |
-| config_parameter_out_of_range | CONFIGURATION | 0/3 | 0/3 | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 |
-| link_down | LINK | 0/3 | 0/3 | 0/3 | 0/3 | 0/3 | 3/3 | 0/3 | 3/3 |
-| link_flaky | LINK | 0/3 | 1/3 | 1/3 | 3/3 | 3/3 | 1/3 | 3/3 | 1/3 |
-| output_command_change | FIRMWARE | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 | 3/3 | 0/3 |
-| reset_leaks_offset | FIRMWARE | 3/3 | 3/3 | 0/3 | 0/3 | 0/3 | 0/3 | 0/3 | 0/3 |
-| slow_responses | TIMEOUT | 3/3 | 0/3 | 0/3 | 0/3 | 0/3 | 0/3 | 0/3 | 0/3 |
+| Fault | Expected | error only | full evidence | full evidence, no firmware line | full + retrieval | full + retrieval + checks | full + retrieval + checks, own fault held out | full + retrieval + checks + gates | full + retrieval + checks + gates, own fault held out | majority vote | majority vote + checks | majority vote + checks, own fault held out | majority vote + checks + gates | majority vote + checks + gates, own fault held out |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| cable_loss | CABLE | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 | 3/3 | 0/3 | 3/3 | 3/3 | 0/3 | 3/3 | 0/3 |
+| config_decimal_error | CONFIGURATION | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 | 0/3 | 3/3 | 3/3 | 0/3 | 0/3 | 0/3 |
+| config_parameter_missing | CONFIGURATION | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 |
+| config_parameter_out_of_range | CONFIGURATION | 0/3 | 0/3 | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 |
+| link_down | LINK | 0/3 | 0/3 | 0/3 | 0/3 | 0/3 | 3/3 | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| link_flaky | LINK | 0/3 | 1/3 | 1/3 | 3/3 | 3/3 | 1/3 | 3/3 | 1/3 | 3/3 | 3/3 | 1/3 | 3/3 | 1/3 |
+| output_command_change | FIRMWARE | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 | 3/3 | 0/3 | 3/3 | 3/3 | 0/3 | 3/3 | 0/3 |
+| reset_leaks_offset | FIRMWARE | 3/3 | 3/3 | 0/3 | 0/3 | 0/3 | 0/3 | 0/3 | 0/3 | 3/3 | 3/3 | 0/3 | 0/3 | 0/3 |
+| slow_responses | TIMEOUT | 3/3 | 0/3 | 0/3 | 0/3 | 0/3 | 0/3 | 0/3 | 0/3 | 3/3 | 3/3 | 0/3 | 0/3 | 0/3 |
 
 ## error only: 3 of 9 faults solved (95% interval 1 to 6); 9 of 27 questions right; 0 UNKNOWN, 18 wrong, 0 malformed
 
@@ -314,10 +319,174 @@ Confident wrong choices: LINK x6, CONFIGURATION x3, CABLE x2.
 
 Confident wrong choices: LINK x3.
 
+## majority vote: 9 of 9 faults solved (95% interval 6 to 9); 27 of 27 questions right; 0 UNKNOWN, 0 wrong, 0 malformed
+
+| Question | Expected | Chosen | | Precedent offered | Error shown → the model's answer |
+|---|---|---|---|---|---|
+| cable_loss-1 | CABLE | CABLE | ✓ | yes | `Failed: path_loss_100mhz: 1.8898817412 dB, limit 0 to 0.974341649025 dB, margin -0.91554...` -> CABLE by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CABLE |
+| cable_loss-2 | CABLE | CABLE | ✓ | yes | `Failed: path_loss_100mhz: 1.3898817412 dB, limit 0 to 0.974341649025 dB, margin -0.41554...` -> CABLE by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CABLE |
+| cable_loss-3 | CABLE | CABLE | ✓ | yes | `Failed: path_loss_100mhz: 2.8898817412 dB, limit 0 to 0.974341649025 dB, margin -1.91554...` -> CABLE by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CABLE |
+| config_decimal_error-1 | CONFIGURATION | CONFIGURATION | ✓ | yes | `AssertionError: the generator carries a level offset of 0 dB, but the bench configuration...` -> CONFIGURATION by majority vote, model not asked: 2 of the 3 closest past runs were resolved by CONFIGURATION |
+| config_decimal_error-2 | CONFIGURATION | CONFIGURATION | ✓ | yes | `AssertionError: the generator carries a level offset of 0 dB, but the bench configuration...` -> CONFIGURATION by majority vote, model not asked: 2 of the 3 closest past runs were resolved by CONFIGURATION |
+| config_decimal_error-3 | CONFIGURATION | CONFIGURATION | ✓ | yes | `AssertionError: the generator carries a level offset of 0 dB, but the bench configuration...` -> CONFIGURATION by majority vote, model not asked: 2 of the 3 closest past runs were resolved by CONFIGURATION |
+| config_parameter_missing-1 | CONFIGURATION | CONFIGURATION | ✓ | yes | `ConfigurationError: BENCH_LEVEL_OFFSET_DB is not set in the bench configuration` -> CONFIGURATION by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CONFIGURATION |
+| config_parameter_missing-2 | CONFIGURATION | CONFIGURATION | ✓ | yes | `ConfigurationError: BENCH_LEVEL_OFFSET_DB is not set in the bench configuration` -> CONFIGURATION by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CONFIGURATION |
+| config_parameter_missing-3 | CONFIGURATION | CONFIGURATION | ✓ | yes | `ConfigurationError: BENCH_LEVEL_OFFSET_DB is not set in the bench configuration` -> CONFIGURATION by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CONFIGURATION |
+| config_parameter_out_of_range-1 | CONFIGURATION | CONFIGURATION | ✓ | yes | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> CONFIGURATION by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CONFIGURATION |
+| config_parameter_out_of_range-2 | CONFIGURATION | CONFIGURATION | ✓ | yes | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> CONFIGURATION by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CONFIGURATION |
+| config_parameter_out_of_range-3 | CONFIGURATION | CONFIGURATION | ✓ | yes | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> CONFIGURATION by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CONFIGURATION |
+| link_down-1 | LINK | LINK | ✓ | yes | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
+| link_down-2 | LINK | LINK | ✓ | yes | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
+| link_down-3 | LINK | LINK | ✓ | yes | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
+| link_flaky-1 | LINK | LINK | ✓ | yes | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
+| link_flaky-2 | LINK | LINK | ✓ | yes | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
+| link_flaky-3 | LINK | LINK | ✓ | yes | `Failed: path_loss_5000mhz: 110.132770235 dB, limit 2.85410196625 to 3.85410196625 dB,...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
+| output_command_change-1 | FIRMWARE | FIRMWARE | ✓ | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE by majority vote, model not asked: 3 of the 3 closest past runs were resolved by FIRMWARE |
+| output_command_change-2 | FIRMWARE | FIRMWARE | ✓ | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE by majority vote, model not asked: 3 of the 3 closest past runs were resolved by FIRMWARE |
+| output_command_change-3 | FIRMWARE | FIRMWARE | ✓ | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE by majority vote, model not asked: 3 of the 3 closest past runs were resolved by FIRMWARE |
+| reset_leaks_offset-1 | FIRMWARE | FIRMWARE | ✓ | yes | `AssertionError: the generator carries a level offset of -2 dB, but the bench...` -> FIRMWARE by majority vote, model not asked: 2 of the 3 closest past runs were resolved by FIRMWARE |
+| reset_leaks_offset-2 | FIRMWARE | FIRMWARE | ✓ | yes | `AssertionError: the generator carries a level offset of -2 dB, but the bench...` -> FIRMWARE by majority vote, model not asked: 2 of the 3 closest past runs were resolved by FIRMWARE |
+| reset_leaks_offset-3 | FIRMWARE | FIRMWARE | ✓ | yes | `AssertionError: the generator carries a level offset of -2 dB, but the bench...` -> FIRMWARE by majority vote, model not asked: 2 of the 3 closest past runs were resolved by FIRMWARE |
+| slow_responses-1 | TIMEOUT | TIMEOUT | ✓ | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> TIMEOUT by majority vote, model not asked: 2 of the 3 closest past runs were resolved by TIMEOUT |
+| slow_responses-2 | TIMEOUT | TIMEOUT | ✓ | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> TIMEOUT by majority vote, model not asked: 2 of the 3 closest past runs were resolved by TIMEOUT |
+| slow_responses-3 | TIMEOUT | TIMEOUT | ✓ | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> TIMEOUT by majority vote, model not asked: 2 of the 3 closest past runs were resolved by TIMEOUT |
+
+## majority vote + checks: 9 of 9 faults solved (95% interval 6 to 9); 27 of 27 questions right; 0 UNKNOWN, 0 wrong, 0 malformed
+
+| Question | Expected | Chosen | | Precedent offered | Error shown → the model's answer |
+|---|---|---|---|---|---|
+| cable_loss-1 | CABLE | CABLE | ✓ | yes | `Failed: path_loss_100mhz: 1.8898817412 dB, limit 0 to 0.974341649025 dB, margin -0.91554...` -> CABLE by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CABLE |
+| cable_loss-2 | CABLE | CABLE | ✓ | yes | `Failed: path_loss_100mhz: 1.3898817412 dB, limit 0 to 0.974341649025 dB, margin -0.41554...` -> CABLE by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CABLE |
+| cable_loss-3 | CABLE | CABLE | ✓ | yes | `Failed: path_loss_100mhz: 2.8898817412 dB, limit 0 to 0.974341649025 dB, margin -1.91554...` -> CABLE by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CABLE |
+| config_decimal_error-1 | CONFIGURATION | CONFIGURATION | ✓ | yes | `AssertionError: the generator carries a level offset of 0 dB, but the bench configuration...` -> CONFIGURATION by majority vote, model not asked: 2 of the 3 closest past runs were resolved by CONFIGURATION |
+| config_decimal_error-2 | CONFIGURATION | CONFIGURATION | ✓ | yes | `AssertionError: the generator carries a level offset of 0 dB, but the bench configuration...` -> CONFIGURATION by majority vote, model not asked: 2 of the 3 closest past runs were resolved by CONFIGURATION |
+| config_decimal_error-3 | CONFIGURATION | CONFIGURATION | ✓ | yes | `AssertionError: the generator carries a level offset of 0 dB, but the bench configuration...` -> CONFIGURATION by majority vote, model not asked: 2 of the 3 closest past runs were resolved by CONFIGURATION |
+| config_parameter_missing-1 | CONFIGURATION | CONFIGURATION | ✓ | yes | `ConfigurationError: BENCH_LEVEL_OFFSET_DB is not set in the bench configuration` -> CONFIGURATION by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CONFIGURATION |
+| config_parameter_missing-2 | CONFIGURATION | CONFIGURATION | ✓ | yes | `ConfigurationError: BENCH_LEVEL_OFFSET_DB is not set in the bench configuration` -> CONFIGURATION by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CONFIGURATION |
+| config_parameter_missing-3 | CONFIGURATION | CONFIGURATION | ✓ | yes | `ConfigurationError: BENCH_LEVEL_OFFSET_DB is not set in the bench configuration` -> CONFIGURATION by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CONFIGURATION |
+| config_parameter_out_of_range-1 | CONFIGURATION | CONFIGURATION | ✓ | yes | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> CONFIGURATION by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CONFIGURATION |
+| config_parameter_out_of_range-2 | CONFIGURATION | CONFIGURATION | ✓ | yes | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> CONFIGURATION by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CONFIGURATION |
+| config_parameter_out_of_range-3 | CONFIGURATION | CONFIGURATION | ✓ | yes | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> CONFIGURATION by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CONFIGURATION |
+| link_down-1 | LINK | LINK | ✓ | yes | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
+| link_down-2 | LINK | LINK | ✓ | yes | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
+| link_down-3 | LINK | LINK | ✓ | yes | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
+| link_flaky-1 | LINK | LINK | ✓ | yes | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
+| link_flaky-2 | LINK | LINK | ✓ | yes | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
+| link_flaky-3 | LINK | LINK | ✓ | yes | `Failed: path_loss_5000mhz: 110.132770235 dB, limit 2.85410196625 to 3.85410196625 dB,...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
+| output_command_change-1 | FIRMWARE | FIRMWARE | ✓ | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE by majority vote, model not asked: 3 of the 3 closest past runs were resolved by FIRMWARE |
+| output_command_change-2 | FIRMWARE | FIRMWARE | ✓ | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE by majority vote, model not asked: 3 of the 3 closest past runs were resolved by FIRMWARE |
+| output_command_change-3 | FIRMWARE | FIRMWARE | ✓ | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE by majority vote, model not asked: 3 of the 3 closest past runs were resolved by FIRMWARE |
+| reset_leaks_offset-1 | FIRMWARE | FIRMWARE | ✓ | yes | `AssertionError: the generator carries a level offset of -2 dB, but the bench...` -> FIRMWARE by majority vote, model not asked: 2 of the 3 closest past runs were resolved by FIRMWARE |
+| reset_leaks_offset-2 | FIRMWARE | FIRMWARE | ✓ | yes | `AssertionError: the generator carries a level offset of -2 dB, but the bench...` -> FIRMWARE by majority vote, model not asked: 2 of the 3 closest past runs were resolved by FIRMWARE |
+| reset_leaks_offset-3 | FIRMWARE | FIRMWARE | ✓ | yes | `AssertionError: the generator carries a level offset of -2 dB, but the bench...` -> FIRMWARE by majority vote, model not asked: 2 of the 3 closest past runs were resolved by FIRMWARE |
+| slow_responses-1 | TIMEOUT | TIMEOUT | ✓ | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> TIMEOUT by majority vote, model not asked: 2 of the 3 closest past runs were resolved by TIMEOUT |
+| slow_responses-2 | TIMEOUT | TIMEOUT | ✓ | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> TIMEOUT by majority vote, model not asked: 2 of the 3 closest past runs were resolved by TIMEOUT |
+| slow_responses-3 | TIMEOUT | TIMEOUT | ✓ | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> TIMEOUT by majority vote, model not asked: 2 of the 3 closest past runs were resolved by TIMEOUT |
+
+## majority vote + checks, own fault held out: 3 of 9 faults solved (95% interval 1 to 6); 10 of 27 questions right; 9 UNKNOWN, 8 wrong, 0 malformed
+
+| Question | Expected | Chosen | | Precedent offered | Error shown → the model's answer |
+|---|---|---|---|---|---|
+| cable_loss-1 | CABLE | LINK | ✗ | no | `Failed: path_loss_100mhz: 1.8898817412 dB, limit 0 to 0.974341649025 dB, margin -0.91554...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
+| cable_loss-2 | CABLE | LINK | ✗ | no | `Failed: path_loss_100mhz: 1.3898817412 dB, limit 0 to 0.974341649025 dB, margin -0.41554...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
+| cable_loss-3 | CABLE | LINK | ✗ | no | `Failed: path_loss_100mhz: 2.8898817412 dB, limit 0 to 0.974341649025 dB, margin -1.91554...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
+| config_decimal_error-1 | CONFIGURATION | UNKNOWN | ? | no | `AssertionError: the generator carries a level offset of 0 dB, but the bench configuration...` -> UNKNOWN by majority vote, model not asked: 2 of the 3 closest past runs were resolved by FIRMWARE [overruled: the model chose... |
+| config_decimal_error-2 | CONFIGURATION | UNKNOWN | ? | no | `AssertionError: the generator carries a level offset of 0 dB, but the bench configuration...` -> UNKNOWN by majority vote, model not asked: 2 of the 3 closest past runs were resolved by FIRMWARE [overruled: the model chose... |
+| config_decimal_error-3 | CONFIGURATION | UNKNOWN | ? | no | `AssertionError: the generator carries a level offset of 0 dB, but the bench configuration...` -> UNKNOWN by majority vote, model not asked: 2 of the 3 closest past runs were resolved by FIRMWARE [overruled: the model chose... |
+| config_parameter_missing-1 | CONFIGURATION | CONFIGURATION | ✓ | no | `ConfigurationError: BENCH_LEVEL_OFFSET_DB is not set in the bench configuration` -> CONFIGURATION by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CONFIGURATION |
+| config_parameter_missing-2 | CONFIGURATION | CONFIGURATION | ✓ | no | `ConfigurationError: BENCH_LEVEL_OFFSET_DB is not set in the bench configuration` -> CONFIGURATION by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CONFIGURATION |
+| config_parameter_missing-3 | CONFIGURATION | CONFIGURATION | ✓ | no | `ConfigurationError: BENCH_LEVEL_OFFSET_DB is not set in the bench configuration` -> CONFIGURATION by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CONFIGURATION |
+| config_parameter_out_of_range-1 | CONFIGURATION | CONFIGURATION | ✓ | no | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> CONFIGURATION by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CONFIGURATION |
+| config_parameter_out_of_range-2 | CONFIGURATION | CONFIGURATION | ✓ | no | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> CONFIGURATION by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CONFIGURATION |
+| config_parameter_out_of_range-3 | CONFIGURATION | CONFIGURATION | ✓ | no | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> CONFIGURATION by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CONFIGURATION |
+| link_down-1 | LINK | LINK | ✓ | no | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
+| link_down-2 | LINK | LINK | ✓ | no | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
+| link_down-3 | LINK | LINK | ✓ | no | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
+| link_flaky-1 | LINK | CABLE | ✗ | no | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> CABLE by majority vote, model not asked: 2 of the 3 closest past runs were resolved by CABLE |
+| link_flaky-2 | LINK | LINK | ✓ | no | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
+| link_flaky-3 | LINK | CABLE | ✗ | no | `Failed: path_loss_5000mhz: 110.132770235 dB, limit 2.85410196625 to 3.85410196625 dB,...` -> CABLE by majority vote, model not asked: 2 of the 3 closest past runs were resolved by CABLE |
+| output_command_change-1 | FIRMWARE | UNKNOWN | ? | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> UNKNOWN by majority vote, model not asked: 2 of the 3 closest past runs were resolved by TIMEOUT [overruled: the model chose... |
+| output_command_change-2 | FIRMWARE | UNKNOWN | ? | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> UNKNOWN by majority vote, model not asked: 2 of the 3 closest past runs were resolved by TIMEOUT [overruled: the model chose... |
+| output_command_change-3 | FIRMWARE | UNKNOWN | ? | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> UNKNOWN by majority vote, model not asked: 2 of the 3 closest past runs were resolved by TIMEOUT [overruled: the model chose... |
+| reset_leaks_offset-1 | FIRMWARE | CONFIGURATION | ✗ | no | `AssertionError: the generator carries a level offset of -2 dB, but the bench...` -> CONFIGURATION by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CONFIGURATION |
+| reset_leaks_offset-2 | FIRMWARE | CONFIGURATION | ✗ | no | `AssertionError: the generator carries a level offset of -2 dB, but the bench...` -> CONFIGURATION by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CONFIGURATION |
+| reset_leaks_offset-3 | FIRMWARE | CONFIGURATION | ✗ | no | `AssertionError: the generator carries a level offset of -2 dB, but the bench...` -> CONFIGURATION by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CONFIGURATION |
+| slow_responses-1 | TIMEOUT | UNKNOWN | ? | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> UNKNOWN by majority vote, model not asked: 3 of the 3 closest past runs were resolved by FIRMWARE [overruled: the model chose... |
+| slow_responses-2 | TIMEOUT | UNKNOWN | ? | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> UNKNOWN by majority vote, model not asked: 3 of the 3 closest past runs were resolved by FIRMWARE [overruled: the model chose... |
+| slow_responses-3 | TIMEOUT | UNKNOWN | ? | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> UNKNOWN by majority vote, model not asked: 3 of the 3 closest past runs were resolved by FIRMWARE [overruled: the model chose... |
+
+Confident wrong choices: LINK x3, CONFIGURATION x3, CABLE x2.
+
+## majority vote + checks + gates: 6 of 9 faults solved (95% interval 3 to 8); 18 of 27 questions right; 9 UNKNOWN, 0 wrong, 0 malformed
+
+| Question | Expected | Chosen | | Precedent offered | Error shown → the model's answer |
+|---|---|---|---|---|---|
+| cable_loss-1 | CABLE | CABLE | ✓ | yes | `Failed: path_loss_100mhz: 1.8898817412 dB, limit 0 to 0.974341649025 dB, margin -0.91554...` -> CABLE by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CABLE |
+| cable_loss-2 | CABLE | CABLE | ✓ | yes | `Failed: path_loss_100mhz: 1.3898817412 dB, limit 0 to 0.974341649025 dB, margin -0.41554...` -> CABLE by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CABLE |
+| cable_loss-3 | CABLE | CABLE | ✓ | yes | `Failed: path_loss_100mhz: 2.8898817412 dB, limit 0 to 0.974341649025 dB, margin -1.91554...` -> CABLE by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CABLE |
+| config_decimal_error-1 | CONFIGURATION | UNKNOWN | ? | yes | `AssertionError: the generator carries a level offset of 0 dB, but the bench configuration...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (CONFIGURATION, FIRMWARE), so there is no one... |
+| config_decimal_error-2 | CONFIGURATION | UNKNOWN | ? | yes | `AssertionError: the generator carries a level offset of 0 dB, but the bench configuration...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (CONFIGURATION, FIRMWARE), so there is no one... |
+| config_decimal_error-3 | CONFIGURATION | UNKNOWN | ? | yes | `AssertionError: the generator carries a level offset of 0 dB, but the bench configuration...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (CONFIGURATION, FIRMWARE), so there is no one... |
+| config_parameter_missing-1 | CONFIGURATION | CONFIGURATION | ✓ | yes | `ConfigurationError: BENCH_LEVEL_OFFSET_DB is not set in the bench configuration` -> CONFIGURATION by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CONFIGURATION |
+| config_parameter_missing-2 | CONFIGURATION | CONFIGURATION | ✓ | yes | `ConfigurationError: BENCH_LEVEL_OFFSET_DB is not set in the bench configuration` -> CONFIGURATION by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CONFIGURATION |
+| config_parameter_missing-3 | CONFIGURATION | CONFIGURATION | ✓ | yes | `ConfigurationError: BENCH_LEVEL_OFFSET_DB is not set in the bench configuration` -> CONFIGURATION by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CONFIGURATION |
+| config_parameter_out_of_range-1 | CONFIGURATION | CONFIGURATION | ✓ | yes | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> CONFIGURATION by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CONFIGURATION |
+| config_parameter_out_of_range-2 | CONFIGURATION | CONFIGURATION | ✓ | yes | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> CONFIGURATION by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CONFIGURATION |
+| config_parameter_out_of_range-3 | CONFIGURATION | CONFIGURATION | ✓ | yes | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> CONFIGURATION by majority vote, model not asked: 3 of the 3 closest past runs were resolved by CONFIGURATION |
+| link_down-1 | LINK | LINK | ✓ | yes | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
+| link_down-2 | LINK | LINK | ✓ | yes | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
+| link_down-3 | LINK | LINK | ✓ | yes | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
+| link_flaky-1 | LINK | LINK | ✓ | yes | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
+| link_flaky-2 | LINK | LINK | ✓ | yes | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
+| link_flaky-3 | LINK | LINK | ✓ | yes | `Failed: path_loss_5000mhz: 110.132770235 dB, limit 2.85410196625 to 3.85410196625 dB,...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
+| output_command_change-1 | FIRMWARE | FIRMWARE | ✓ | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE by majority vote, model not asked: 3 of the 3 closest past runs were resolved by FIRMWARE |
+| output_command_change-2 | FIRMWARE | FIRMWARE | ✓ | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE by majority vote, model not asked: 3 of the 3 closest past runs were resolved by FIRMWARE |
+| output_command_change-3 | FIRMWARE | FIRMWARE | ✓ | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE by majority vote, model not asked: 3 of the 3 closest past runs were resolved by FIRMWARE |
+| reset_leaks_offset-1 | FIRMWARE | UNKNOWN | ? | yes | `AssertionError: the generator carries a level offset of -2 dB, but the bench...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (FIRMWARE, CONFIGURATION), so there is no one... |
+| reset_leaks_offset-2 | FIRMWARE | UNKNOWN | ? | yes | `AssertionError: the generator carries a level offset of -2 dB, but the bench...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (FIRMWARE, CONFIGURATION), so there is no one... |
+| reset_leaks_offset-3 | FIRMWARE | UNKNOWN | ? | yes | `AssertionError: the generator carries a level offset of -2 dB, but the bench...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (FIRMWARE, CONFIGURATION), so there is no one... |
+| slow_responses-1 | TIMEOUT | UNKNOWN | ? | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (TIMEOUT, FIRMWARE), so there is no one... |
+| slow_responses-2 | TIMEOUT | UNKNOWN | ? | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (TIMEOUT, FIRMWARE), so there is no one... |
+| slow_responses-3 | TIMEOUT | UNKNOWN | ? | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (TIMEOUT, FIRMWARE), so there is no one... |
+
+## majority vote + checks + gates, own fault held out: 1 of 9 faults solved (95% interval 0 to 4); 4 of 27 questions right; 20 UNKNOWN, 3 wrong, 0 malformed
+
+| Question | Expected | Chosen | | Precedent offered | Error shown → the model's answer |
+|---|---|---|---|---|---|
+| cable_loss-1 | CABLE | LINK | ✗ | no | `Failed: path_loss_100mhz: 1.8898817412 dB, limit 0 to 0.974341649025 dB, margin -0.91554...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
+| cable_loss-2 | CABLE | LINK | ✗ | no | `Failed: path_loss_100mhz: 1.3898817412 dB, limit 0 to 0.974341649025 dB, margin -0.41554...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
+| cable_loss-3 | CABLE | LINK | ✗ | no | `Failed: path_loss_100mhz: 2.8898817412 dB, limit 0 to 0.974341649025 dB, margin -1.91554...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
+| config_decimal_error-1 | CONFIGURATION | UNKNOWN | ? | no | `AssertionError: the generator carries a level offset of 0 dB, but the bench configuration...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (FIRMWARE, CONFIGURATION), so there is no one... |
+| config_decimal_error-2 | CONFIGURATION | UNKNOWN | ? | no | `AssertionError: the generator carries a level offset of 0 dB, but the bench configuration...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (FIRMWARE, CONFIGURATION), so there is no one... |
+| config_decimal_error-3 | CONFIGURATION | UNKNOWN | ? | no | `AssertionError: the generator carries a level offset of 0 dB, but the bench configuration...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (FIRMWARE, CONFIGURATION), so there is no one... |
+| config_parameter_missing-1 | CONFIGURATION | UNKNOWN | ? | no | `ConfigurationError: BENCH_LEVEL_OFFSET_DB is not set in the bench configuration` -> UNKNOWN, model not asked: the closest past run is only 0.935 similar, below 0.95, so there is no close precedent |
+| config_parameter_missing-2 | CONFIGURATION | UNKNOWN | ? | no | `ConfigurationError: BENCH_LEVEL_OFFSET_DB is not set in the bench configuration` -> UNKNOWN, model not asked: the closest past run is only 0.935 similar, below 0.95, so there is no close precedent |
+| config_parameter_missing-3 | CONFIGURATION | UNKNOWN | ? | no | `ConfigurationError: BENCH_LEVEL_OFFSET_DB is not set in the bench configuration` -> UNKNOWN, model not asked: the closest past run is only 0.935 similar, below 0.95, so there is no close precedent |
+| config_parameter_out_of_range-1 | CONFIGURATION | UNKNOWN | ? | no | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> UNKNOWN, model not asked: the closest past run is only 0.940 similar, below 0.95, so there is no close precedent |
+| config_parameter_out_of_range-2 | CONFIGURATION | UNKNOWN | ? | no | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> UNKNOWN, model not asked: the closest past run is only 0.940 similar, below 0.95, so there is no close precedent |
+| config_parameter_out_of_range-3 | CONFIGURATION | UNKNOWN | ? | no | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> UNKNOWN, model not asked: the closest past run is only 0.939 similar, below 0.95, so there is no close precedent |
+| link_down-1 | LINK | LINK | ✓ | no | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
+| link_down-2 | LINK | LINK | ✓ | no | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
+| link_down-3 | LINK | LINK | ✓ | no | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
+| link_flaky-1 | LINK | UNKNOWN | ? | no | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (LINK, CABLE), so there is no one precedent to... |
+| link_flaky-2 | LINK | LINK | ✓ | no | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
+| link_flaky-3 | LINK | UNKNOWN | ? | no | `Failed: path_loss_5000mhz: 110.132770235 dB, limit 2.85410196625 to 3.85410196625 dB,...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (LINK, CABLE), so there is no one precedent to... |
+| output_command_change-1 | FIRMWARE | UNKNOWN | ? | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (TIMEOUT, LINK), so there is no one precedent... |
+| output_command_change-2 | FIRMWARE | UNKNOWN | ? | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (TIMEOUT, LINK), so there is no one precedent... |
+| output_command_change-3 | FIRMWARE | UNKNOWN | ? | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (TIMEOUT, LINK), so there is no one precedent... |
+| reset_leaks_offset-1 | FIRMWARE | UNKNOWN | ? | no | `AssertionError: the generator carries a level offset of -2 dB, but the bench...` -> UNKNOWN, model not asked: the closest past run is only 0.945 similar, below 0.95, so there is no close precedent |
+| reset_leaks_offset-2 | FIRMWARE | UNKNOWN | ? | no | `AssertionError: the generator carries a level offset of -2 dB, but the bench...` -> UNKNOWN, model not asked: the closest past run is only 0.945 similar, below 0.95, so there is no close precedent |
+| reset_leaks_offset-3 | FIRMWARE | UNKNOWN | ? | no | `AssertionError: the generator carries a level offset of -2 dB, but the bench...` -> UNKNOWN, model not asked: the closest past run is only 0.945 similar, below 0.95, so there is no close precedent |
+| slow_responses-1 | TIMEOUT | UNKNOWN | ? | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> UNKNOWN, model not asked: the closest past run is only 0.796 similar, below 0.95, so there is no close precedent |
+| slow_responses-2 | TIMEOUT | UNKNOWN | ? | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> UNKNOWN, model not asked: the closest past run is only 0.796 similar, below 0.95, so there is no close precedent |
+| slow_responses-3 | TIMEOUT | UNKNOWN | ? | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> UNKNOWN, model not asked: the closest past run is only 0.796 similar, below 0.95, so there is no close precedent |
+
+Confident wrong choices: LINK x3.
+
 ## Findings
 
-- Best scenario: full + retrieval, 6 of 9 faults solved (95% interval 3 to 8); 18 of 27 questions right; 0 UNKNOWN, 6 wrong, 3 malformed.
-- A fault's questions split (some right, some wrong) in 4 of 72 fault-and-scenario cells; otherwise they were answered alike, so the fault, not the question, is the unit the scores count.
+- Best scenario: majority vote, 9 of 9 faults solved (95% interval 6 to 9); 27 of 27 questions right; 0 UNKNOWN, 0 wrong, 0 malformed.
+- A fault's questions split (some right, some wrong) in 6 of 117 fault-and-scenario cells; otherwise they were answered alike, so the fault, not the question, is the unit the scores count.
 - error only to full evidence raised faults solved by 2 (3 to 5 of 9); confident wrong answers went from 18 to 11 of 27.
 - full evidence to full evidence, no firmware line lowered faults solved by 1 (5 to 4 of 9); confident wrong answers went from 11 to 14 of 27.
 - full evidence to full + retrieval raised faults solved by 1 (5 to 6 of 9); confident wrong answers went from 11 to 6 of 27.
@@ -325,16 +494,28 @@ Confident wrong choices: LINK x3.
 - full + retrieval + checks to full + retrieval + checks, own fault held out lowered faults solved by 2 (6 to 4 of 9); confident wrong answers went from 3 to 11 of 27.
 - full + retrieval + checks to full + retrieval + checks + gates lowered faults solved by 1 (6 to 5 of 9); confident wrong answers went from 3 to 0 of 27.
 - full + retrieval + checks, own fault held out to full + retrieval + checks + gates, own fault held out lowered faults solved by 3 (4 to 1 of 9); confident wrong answers went from 11 to 3 of 27.
+- full + retrieval to majority vote raised faults solved by 3 (6 to 9 of 9); confident wrong answers went from 6 to 0 of 27.
+- full + retrieval + checks to majority vote + checks raised faults solved by 3 (6 to 9 of 9); confident wrong answers went from 3 to 0 of 27.
+- full + retrieval + checks, own fault held out to majority vote + checks, own fault held out lowered faults solved by 1 (4 to 3 of 9); confident wrong answers went from 11 to 8 of 27.
+- full + retrieval + checks + gates to majority vote + checks + gates raised faults solved by 1 (5 to 6 of 9); confident wrong answers went from 0 to 0 of 27.
+- full + retrieval + checks + gates, own fault held out to majority vote + checks + gates, own fault held out did not change the faults solved (1 to 1 of 9); confident wrong answers went from 3 to 3 of 27.
 - full + retrieval: retrieval offered a past run of the question's own fault for 27 of 27 questions.
 - full + retrieval + checks: retrieval offered a past run of the question's own fault for 27 of 27 questions.
 - full + retrieval + checks, own fault held out: with no past run of its own fault to go on, the model said UNKNOWN 3 times and named a wrong action 11 times, of 27.
 - full + retrieval + checks + gates: retrieval offered a past run of the question's own fault for 27 of 27 questions.
 - full + retrieval + checks + gates, own fault held out: with no past run of its own fault to go on, the model said UNKNOWN 20 times and named a wrong action 3 times, of 27.
+- majority vote: retrieval offered a past run of the question's own fault for 27 of 27 questions.
+- majority vote + checks: retrieval offered a past run of the question's own fault for 27 of 27 questions.
+- majority vote + checks, own fault held out: with no past run of its own fault to go on, the vote said UNKNOWN 9 times and named a wrong action 8 times, of 27.
+- majority vote + checks + gates: retrieval offered a past run of the question's own fault for 27 of 27 questions.
+- majority vote + checks + gates, own fault held out: with no past run of its own fault to go on, the vote said UNKNOWN 20 times and named a wrong action 3 times, of 27.
 - full + retrieval + checks + gates: the gates answered UNKNOWN without asking the model on 9 of 27 questions; without the gates, 3 of those were confident wrong answers and 3 were right.
 - full + retrieval + checks + gates, own fault held out: the gates answered UNKNOWN without asking the model on 20 of 27 questions; without the gates, 8 of those were confident wrong answers and 9 were right.
+- majority vote + checks + gates: the gates answered UNKNOWN before the vote on 9 of 27 questions; without the gates, 0 of those were confident wrong answers and 9 were right.
+- majority vote + checks + gates, own fault held out: the gates answered UNKNOWN before the vote on 20 of 27 questions; without the gates, 5 of those were confident wrong answers and 6 were right.
 - Most common confident wrong choice: FIRMWARE (30 times across the scenarios).
 - Right in every question of every scenario: none.
 
-6 faults have no size to vary (config_decimal_error, config_parameter_missing, config_parameter_out_of_range, link_down, output_command_change, reset_leaks_offset), so their questions repeat their history runs' scenario and differ only in timing and reading noise (see triage/data/README.md). Of the 6 faults full + retrieval solved, 4 are among them: with retrieval, those show the model finding a near-identical past run, not generalising to a new one.
+6 faults have no size to vary (config_decimal_error, config_parameter_missing, config_parameter_out_of_range, link_down, output_command_change, reset_leaks_offset), so their questions repeat their history runs' scenario and differ only in timing and reading noise (see triage/data/README.md). Of the 9 faults majority vote solved, 6 are among them: on those, retrieval finds a near-identical past run, which shows recall, not generalising to a new one.
 
 These are one machine's deterministic numbers (temperature 0, fixed seed); another machine's model may differ in wording and the odd verdict. A verdict whose reasoning is sound but whose action is wrong still counts as a miss.

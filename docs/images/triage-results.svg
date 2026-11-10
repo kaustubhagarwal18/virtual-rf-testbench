@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 560" width="900" height="560" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 740" width="900" height="740" role="img" aria-labelledby="title desc">
   <title id="title">Triage results: faults solved out of 9</title>
-  <desc id="desc">Faults solved out of 9, with 95% intervals, and confident wrong answers out of 27, for each scenario. Without retrieval: error only 3, full evidence 5, full evidence without the firmware line 4. With retrieval: 6, with checks 6, with checks and gates 5. With the question's own fault held out: with checks 4, with checks and gates 1.</desc>
+  <desc id="desc">Faults solved out of 9, with 95% intervals, and confident wrong answers out of 27, for each scenario. Without retrieval: error only 3, full evidence 5, full evidence without the firmware line 4. With retrieval: 6, with checks 6, with checks and gates 5. The same precedents answered by majority vote, with no model: 9, and 6 with checks and gates, with no wrong answers. With the question's own fault held out: with checks 4 (the vote 3), with checks and gates 1 (the vote the same).</desc>
   <defs>
     <linearGradient id="barBase" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#8957e5"/>
@@ -9,6 +9,10 @@
     <linearGradient id="barRag" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#2f81f7"/>
       <stop offset="1" stop-color="#8957e5"/>
+    </linearGradient>
+    <linearGradient id="barVote" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#1a7f37"/>
+      <stop offset="1" stop-color="#3fb950"/>
     </linearGradient>
     <linearGradient id="barHeld" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#d4a72c"/>
@@ -48,7 +52,7 @@
     </style>
   </defs>
 
-  <g filter="url(#shadow)"><rect x="20" y="16" width="860" height="528" rx="18" class="panel"/></g>
+  <g filter="url(#shadow)"><rect x="20" y="16" width="860" height="708" rx="18" class="panel"/></g>
 
   <text x="48" y="54" class="heading">Faults solved, out of 9</text>
   <text x="48" y="76" class="caption">A fault is solved when all three of its questions are right. The thin line is the 95% interval.</text>
@@ -114,20 +118,49 @@
 
   <line x1="48" y1="442" x2="852" y2="442" class="rule"/>
 
-  <!-- ===== Held out ===== -->
-  <text x="48" y="466" class="group">OWN FAULT HELD OUT — A FAILURE NEVER SEEN BEFORE</text>
+  <!-- ===== Majority vote ===== -->
+  <text x="48" y="466" class="group">SAME PAST RUNS, MAJORITY VOTE — NO MODEL</text>
 
-  <text x="48" y="494" class="name">Retrieval + checks</text>
+  <text x="48" y="494" class="name">Most common action of the 3</text>
   <rect x="330" y="480" width="300" height="20" rx="10" class="track"/>
-  <rect x="330" y="480" width="133.3" height="20" rx="10" fill="url(#barHeld)"/>
-  <line x1="396.7" y1="490" x2="563.3" y2="490" class="whisker"/>
-  <text x="644" y="495" class="value">4</text>
-  <text x="776" y="495" class="wrong">11</text>
+  <rect x="330" y="480" width="300" height="20" rx="10" fill="url(#barVote)"/>
+  <line x1="530" y1="490" x2="630" y2="490" class="whisker"/>
+  <text x="644" y="495" class="value">9</text>
+  <text x="776" y="495" class="wrong-zero">0</text>
+  <text x="48" y="510" class="note">recall: every question had a past run of its own fault</text>
 
-  <text x="48" y="526" class="name">+ both gates</text>
-  <rect x="330" y="512" width="300" height="20" rx="10" class="track"/>
-  <rect x="330" y="512" width="33.3" height="20" rx="10" fill="url(#barHeld)"/>
-  <line x1="330" y1="522" x2="463.3" y2="522" class="whisker"/>
-  <text x="644" y="527" class="value">1</text>
-  <text x="776" y="527" class="wrong">3</text>
+  <text x="48" y="546" class="name">+ checks + disagreement gate</text>
+  <rect x="330" y="532" width="300" height="20" rx="10" class="track"/>
+  <rect x="330" y="532" width="200" height="20" rx="10" fill="url(#barVote)"/>
+  <line x1="430" y1="542" x2="596.7" y2="542" class="whisker"/>
+  <text x="644" y="547" class="value">6</text>
+  <text x="776" y="547" class="wrong-zero">0</text>
+  <text x="48" y="562" class="note">the model's 5 differ only by 3 malformed replies</text>
+
+  <line x1="48" y1="580" x2="852" y2="580" class="rule"/>
+
+  <!-- ===== Held out ===== -->
+  <text x="48" y="604" class="group">OWN FAULT HELD OUT — A FAILURE NEVER SEEN BEFORE</text>
+
+  <text x="48" y="632" class="name">Retrieval + checks</text>
+  <rect x="330" y="618" width="300" height="20" rx="10" class="track"/>
+  <rect x="330" y="618" width="133.3" height="20" rx="10" fill="url(#barHeld)"/>
+  <line x1="396.7" y1="628" x2="563.3" y2="628" class="whisker"/>
+  <text x="644" y="633" class="value">4</text>
+  <text x="776" y="633" class="wrong">11</text>
+
+  <text x="48" y="668" class="name">Majority vote + checks</text>
+  <rect x="330" y="654" width="300" height="20" rx="10" class="track"/>
+  <rect x="330" y="654" width="100" height="20" rx="10" fill="url(#barVote)"/>
+  <line x1="363.3" y1="664" x2="530" y2="664" class="whisker"/>
+  <text x="644" y="669" class="value">3</text>
+  <text x="776" y="669" class="wrong">8</text>
+
+  <text x="48" y="704" class="name">Retrieval + both gates</text>
+  <rect x="330" y="690" width="300" height="20" rx="10" class="track"/>
+  <rect x="330" y="690" width="33.3" height="20" rx="10" fill="url(#barHeld)"/>
+  <line x1="330" y1="700" x2="463.3" y2="700" class="whisker"/>
+  <text x="644" y="705" class="value">1</text>
+  <text x="776" y="705" class="wrong">3</text>
+  <text x="684" y="705" class="note">vote: same</text>
 </svg>

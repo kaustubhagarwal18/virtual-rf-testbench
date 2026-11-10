@@ -77,6 +77,20 @@ class Verdict:
     overruled: str = ""
     gate_reason: str = ""
 
+    @classmethod
+    def gated(cls, reason: str) -> "Verdict":
+        """Return the UNKNOWN verdict a gate gives, before anything is asked.
+
+        Args:
+            reason: Why the gate found the precedents no basis for an answer.
+
+        Returns:
+            UNKNOWN, with the reason as both the explanation and the gate's reason.
+        """
+        return cls(
+            fix=Fix.UNKNOWN, where="no precedent to follow", because=reason, gate_reason=reason
+        )
+
 
 def _json_object(reply: str) -> dict[str, object]:
     """Read the JSON object out of a reply, allowing for text around it.

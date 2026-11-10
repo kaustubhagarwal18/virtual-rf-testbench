@@ -4,6 +4,7 @@ import json
 import re
 import subprocess
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -11,27 +12,13 @@ import pytest
 from tests.unit.triage.test_evidence import FAILING_TEST, write_run
 from tools.faults import CATALOGUE
 from triage.embed import FakeEmbedder
-from triage.evaluate import (
-    MALFORMED,
-    SCENARIOS,
-    Outcome,
-    Scenario,
-    ScenarioResult,
-    _report_rows,
-    evaluate,
-    expected_fix,
-    findings,
-    main,
-    render,
-    render_report,
-    repeated_faults,
-    score_line,
-    wilson_interval,
-)
+from triage.evaluate import SCENARIOS, evaluate, expected_fix, main, repeated_faults
 from triage.evidence import ERROR_ONLY, FULL, SavedRun
 from triage.llm import CachingProvider, FakeProvider, ModelUnavailableError
 from triage.prompt import Fix
+from triage.report import _report_rows, findings, render, render_report, score_line
 from triage.retrieval import InMemoryRetriever
+from triage.scores import MALFORMED, Outcome, Precedents, Scenario, ScenarioResult, wilson_interval
 
 
 def question(folder: Path, fault: str) -> Path:
@@ -249,7 +236,7 @@ def cited(fix: Fix, source_ids: list[str]) -> str:
     return json.dumps({"fix": fix.name, "where": "x", "because": "y", "cited": source_ids})
 
 
-RETRIEVAL = Scenario("full + retrieval", FULL, retrieve=True, adds_to="full evidence")
+RETRIEVAL = Scenario("full + retrieval", FULL, precedents=Precedents.ALL, adds_to="full evidence")
 
 
 def test_findings_flag_a_cited_precedent_the_model_did_not_act_on(tmp_path: Path) -> None:
@@ -288,7 +275,7 @@ def test_the_held_out_scenario_never_offers_the_questions_own_fault(tmp_path: Pa
     history_with(history / "slow_responses-1", "slow_responses")
     question(tmp_path / "q" / "cable_loss-1", "cable_loss")
     retriever = InMemoryRetriever.from_history(history, FakeEmbedder())
-    held_out = Scenario("held out", FULL, retrieve=True, hold_out=True)
+    held_out = Scenario("held out", FULL, precedents=Precedents.OWN_FAULT_HELD_OUT)
     provider = FakeProvider([verdict(Fix.UNKNOWN)])
     result = evaluate(tmp_path / "q", provider, [held_out], retriever)[0]
     assert result.outcomes[0].sources.offered_faults == ("slow_responses",)
@@ -413,7 +400,7 @@ def test_a_retrieval_scenario_without_a_retriever_is_an_error(tmp_path: Path) ->
         evaluate(
             tmp_path / "q",
             FakeProvider([verdict(Fix.CABLE)]),
-            [Scenario("full + retrieval", FULL, retrieve=True)],
+            [Scenario("full + retrieval", FULL, precedents=Precedents.ALL)],
         )
 
 
@@ -506,8 +493,10 @@ def test_the_gated_scenario_answers_disagreement_without_the_model(tmp_path: Pat
     history_resolved_by(history / "slow_responses-1", "slow_responses", "TIMEOUT")
     question(tmp_path / "q" / "cable_loss-1", "cable_loss")
     retriever = InMemoryRetriever.from_history(history, FakeEmbedder())
-    plain = Scenario("checked", FULL, retrieve=True, checked=True)
-    gated = Scenario("gated", FULL, retrieve=True, checked=True, gated=True, adds_to="checked")
+    plain = Scenario("checked", FULL, precedents=Precedents.ALL, checked=True)
+    gated = Scenario(
+        "gated", FULL, precedents=Precedents.ALL, checked=True, gated=True, adds_to="checked"
+    )
     provider = CachingProvider(FakeProvider([verdict(Fix.LINK)]))
     results = evaluate(tmp_path / "q", provider, [plain, gated], retriever)
     assert results[0].confidently_wrong == 1
@@ -574,3 +563,106 @@ def test_the_report_says_how_many_solved_faults_repeat_a_history_run(tmp_path: P
     assert "Of the 1 faults full + retrieval solved, 1 are among them" in report
     assert "no size to vary" not in render_report([plain, retrieved], "qwen2.5:3b")
     assert "no size to vary" not in render_report([plain], "qwen2.5:3b", repeated=repeated)
+
+
+VOTE_SCENARIOS = [scenario for scenario in SCENARIOS if scenario.vote]
+"""The scenarios answered by the precedents' majority vote rather than the model."""
+
+
+def test_every_vote_scenario_is_the_twin_of_a_model_scenario() -> None:
+    """A vote scenario changes one thing in the scenario it names: the vote replaces the model."""
+    by_name = {scenario.name: scenario for scenario in SCENARIOS}
+    assert VOTE_SCENARIOS
+    for scenario in VOTE_SCENARIOS:
+        twin = by_name[scenario.adds_to]
+        assert not twin.vote
+        assert scenario.retrieve
+        assert replace(scenario, name=twin.name, vote=False, adds_to=twin.adds_to) == twin
+
+
+def test_the_vote_scenario_scores_the_precedents_action_without_the_model(tmp_path: Path) -> None:
+    """Two precedents resolved by CABLE, one by LINK: CABLE is scored, and nothing is asked."""
+    history = tmp_path / "history"
+    history_resolved_by(history / "cable_loss-1", "cable_loss", "CABLE")
+    history_resolved_by(history / "cable_worn-1", "cable_worn", "CABLE")
+    history_resolved_by(history / "link_down-1", "link_down", "LINK")
+    question(tmp_path / "q" / "cable_loss-1", "cable_loss")
+    retriever = InMemoryRetriever.from_history(history, FakeEmbedder())
+    provider = FakeProvider([verdict(Fix.LINK)])
+    vote = Scenario("vote", FULL, precedents=Precedents.ALL, vote=True)
+    outcome = evaluate(tmp_path / "q", provider, [vote], retriever)[0].outcomes[0]
+    assert (outcome.right, outcome.chosen) == (True, "CABLE")
+    assert outcome.answer.startswith("CABLE by majority vote, model not asked")
+    assert sorted(outcome.sources.cited_faults) == ["cable_loss", "cable_worn"]
+    assert not provider.prompts
+
+
+def test_a_tied_vote_is_unknown_not_malformed(tmp_path: Path) -> None:
+    """Three precedents resolved three ways: the vote abstains, and that counts as UNKNOWN."""
+    history = tmp_path / "history"
+    history_resolved_by(history / "cable_loss-1", "cable_loss", "CABLE")
+    history_resolved_by(history / "link_down-1", "link_down", "LINK")
+    history_resolved_by(history / "slow_responses-1", "slow_responses", "TIMEOUT")
+    question(tmp_path / "q" / "cable_loss-1", "cable_loss")
+    retriever = InMemoryRetriever.from_history(history, FakeEmbedder())
+    vote = Scenario("vote", FULL, precedents=Precedents.ALL, vote=True)
+    result = evaluate(tmp_path / "q", FakeProvider(), [vote], retriever)[0]
+    assert (result.abstained, result.malformed, result.confidently_wrong) == (1, 0, 0)
+
+
+def test_the_cli_runs_the_vote_scenarios_with_no_prompts(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Choosing only vote scenarios asks the model nothing, so they run without Ollama."""
+    history = tmp_path / "history"
+    history_resolved_by(history / "cable_loss-1", "cable_loss", "CABLE")
+    question(tmp_path / "q" / "cable_loss-1", "cable_loss")
+    retriever = InMemoryRetriever.from_history(history, FakeEmbedder())
+    provider = CachingProvider(FakeProvider([verdict(Fix.LINK)]))
+    arguments = ["--questions", str(tmp_path / "q")]
+    for scenario in VOTE_SCENARIOS:
+        arguments += ["--scenario", scenario.name]
+    assert main(arguments, provider=provider, retriever=retriever) == 0
+    assert "asked the model 0 new prompts" in capsys.readouterr().out
+
+
+def test_every_gated_vote_scenario_has_an_ungated_neighbour() -> None:
+    """The gate finding compares a gated scenario with its ungated self, so that one exists."""
+    for scenario in VOTE_SCENARIOS:
+        if scenario.gated:
+            ungated = replace(scenario, gated=False)
+            assert any(
+                (other.precedents, other.checked, other.gated, other.vote)
+                == (ungated.precedents, ungated.checked, False, True)
+                for other in VOTE_SCENARIOS
+            ), scenario.name
+
+
+def test_the_gate_finding_compares_a_vote_with_its_ungated_vote(tmp_path: Path) -> None:
+    """A 2-to-1 vote that is wrong ungated: the gated vote's finding counts it as prevented."""
+    history = tmp_path / "history"
+    history_resolved_by(history / "link_down-1", "link_down", "LINK")
+    history_resolved_by(history / "cable_worn-1", "cable_worn", "CABLE")
+    history_resolved_by(history / "link_flaky-1", "link_flaky", "LINK")
+    question(tmp_path / "q" / "cable_loss-1", "cable_loss")
+    retriever = InMemoryRetriever.from_history(history, FakeEmbedder())
+    model_gated = Scenario("model gated", FULL, precedents=Precedents.ALL, checked=True, gated=True)
+    vote = Scenario("vote", FULL, precedents=Precedents.ALL, checked=True, vote=True)
+    vote_gated = replace(vote, name="vote gated", gated=True, adds_to="model gated")
+    results = evaluate(tmp_path / "q", FakeProvider(), [model_gated, vote, vote_gated], retriever)
+    assert results[1].confidently_wrong == 1
+    text = " ".join(findings(results))
+    assert "vote gated: the gates answered UNKNOWN before the vote on 1 of 1 questions" in text
+    assert "1 of those were confident wrong answers and 0 were right" in text
+
+
+def test_the_held_out_finding_names_the_vote_when_it_answered(tmp_path: Path) -> None:
+    """With its own fault held out, a vote's finding says the vote answered, not the model."""
+    history = tmp_path / "history"
+    history_resolved_by(history / "slow_responses-1", "slow_responses", "TIMEOUT")
+    question(tmp_path / "q" / "cable_loss-1", "cable_loss")
+    retriever = InMemoryRetriever.from_history(history, FakeEmbedder())
+    held_out = Scenario("vote held out", FULL, precedents=Precedents.OWN_FAULT_HELD_OUT, vote=True)
+    result = evaluate(tmp_path / "q", FakeProvider(), [held_out], retriever)[0]
+    text = " ".join(findings([result]))
+    assert "the vote said UNKNOWN 0 times and named a wrong action 1 times" in text

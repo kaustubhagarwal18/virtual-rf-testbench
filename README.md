@@ -87,7 +87,7 @@ turn an answer into `UNKNOWN` or refuse it, never pick a different action.
 ### Results
 
 <p align="center">
-  <img src="docs/images/triage-results.svg" width="860" alt="Faults solved out of 9: error only 3, full evidence 5, without the version line 4; with retrieval 6, with checks 6, with the disagreement gate 5 and no wrong answers; with the question's own fault held out, 4 with checks and 1 with both gates.">
+  <img src="docs/images/triage-results.svg" width="860" alt="Faults solved out of 9: error only 3, full evidence 5, without the version line 4; with retrieval 6, with checks 6, with the disagreement gate 5 and no wrong answers; a majority vote over the same past runs, with no model, 9 with no wrong answers, and 6 with the gate; with the question's own fault held out, 4 with checks (the vote 3) and 1 with both gates (the vote the same).">
 </p>
 
 Counts, not percentages: with 9 faults, "6 of 9, 3 to 8" is honest where "67%" is not.
@@ -95,6 +95,11 @@ Every question's answer is in [`triage/results/rag.md`](triage/results/rag.md).
 
 ### What the numbers say
 
+- **Counting the past runs' actions beats the model on this data set.** A majority vote over
+  the same top 3, with no model, solves 9 of 9 with no wrong answers, against the model's 6.
+  Behind the gate the model never departs from the precedents: its 5 against the vote's 6
+  is 3 malformed replies. This is recall: every question had a past run of its own fault.
+  The model's one gain is a new fault where the precedents tie (ADR 0015).
 - **Retrieval helps most when the fault has happened before:** 5 → 6 of 9, and wrong answers
   11 → 6. With the fault held out, it drops to 4 of 9, even with the checks.
 - **A small model follows the odd precedent out.** Offered two past runs of its own fault
@@ -117,6 +122,7 @@ Each review found a way the score could flatter the assistant, and closed it.
 | [0012](docs/adr/0012-score-faults-key-labels-by-action.md) | score faults, not questions; label each run's action; **index identical runs once** (they inflated 5 → 8 of 9) | 5 of 9 faults |
 | [0013](docs/adr/0013-abstain-from-retrieval.md) | gates before the model; an ablation of the firmware line | 5 of 9 faults |
 | [0014](docs/adr/0014-api-gate-cited-ids-version-wording.md) | the disagreement gate in the API, cited ids in the schema, version wording | **6 of 9 faults** |
+| [0015](docs/adr/0015-majority-vote-baseline.md) | a majority vote over the same past runs, with no model, as a baseline | 6 of 9; the vote 9 of 9 |
 
 ### Try it
 
