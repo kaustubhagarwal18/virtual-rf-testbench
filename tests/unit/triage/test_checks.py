@@ -6,10 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from tests.unit.triage.test_evidence import FAILING_TEST, write_run
+from tests.unit.triage.test_evidence import FAILING_TEST, NO_SIGNAL_LINE, write_run
 from triage.answer import Verdict
 from triage.checks import (
     DEFAULT_CHECKS,
+    AlignmentWithoutSignalCheck,
     FirmwareUnchangedCheck,
     ForeignReleaseCheck,
     TimeoutWithInstrumentErrorCheck,
@@ -146,9 +147,35 @@ def test_the_measured_miss_is_caught_by_the_default_checks(tmp_path: Path) -> No
 
 
 def test_the_service_applies_every_check() -> None:
-    """The default checks are the release, firmware and timeout checks, in that order."""
+    """The default checks are the release, firmware, timeout and alignment checks, in order."""
     assert [type(check) for check in DEFAULT_CHECKS] == [
         ForeignReleaseCheck,
         FirmwareUnchangedCheck,
         TimeoutWithInstrumentErrorCheck,
+        AlignmentWithoutSignalCheck,
     ]
+
+
+def run_with_no_signal(tmp_path: Path, warnings: int) -> SavedRun:
+    """Return a failed run whose analyzer logged no signal the given number of times."""
+    folder = write_run(tmp_path / "run", [FAILING_TEST])
+    (folder / "logs.txt").write_text(
+        "\n".join(["generator-1 | {}", *[NO_SIGNAL_LINE] * warnings]) + "\n", encoding="utf-8"
+    )
+    return SavedRun.load(folder)
+
+
+@pytest.mark.parametrize(("fix", "warnings"), list(itertools.product(list(Fix), [0, 1, 22])))
+def test_only_alignment_without_a_signal_is_overruled(
+    tmp_path: Path, fix: Fix, warnings: int
+) -> None:
+    """Every action with and without the warning: only ALIGNMENT with no signal becomes UNKNOWN."""
+    run = run_with_no_signal(tmp_path, warnings)
+    verdict = Verdict(fix, "where", "because", ["past-1"])
+    reviewed = AlignmentWithoutSignalCheck().review(run, verdict)
+    if fix is Fix.ALIGNMENT and warnings:
+        assert reviewed.fix is Fix.UNKNOWN
+        assert "no signal" in reviewed.overruled
+        assert reviewed.cited == ["past-1"]
+    else:
+        assert reviewed == verdict

@@ -28,7 +28,7 @@
 - The pipeline: evidence led by the first failure, a fixed list of actions, strict parsing
   and a local `qwen2.5:3b` (ADR 0008).
 - Retrieval of the most similar resolved runs, in memory, cited by neutral ids (ADR 0009).
-- Three checks that turn a verdict the evidence contradicts into `UNKNOWN` (ADR 0012).
+- Four checks that turn a verdict the evidence contradicts into `UNKNOWN` (ADR 0012, ADR 0017).
 - The evaluation: thirteen scenarios, each changing one thing, scored per fault as right,
   `UNKNOWN`, confidently wrong and malformed, with a 95% interval over faults and retrieval
   recall (ADR 0009, ADR 0012). Labels record the action key the score is checked against.
@@ -78,8 +78,9 @@
 - The question runs of the faults with nothing to scale (the configuration faults, the
   firmware faults and `link_down`) repeat their history runs' scenario, so they are easier
   than the sized ones. The fault, not the question, is the unit scored (ADR 0012).
-- With retrieval, the model's answers on `link_down` are unusable: it chooses `ALIGNMENT`,
-  then rambles until the 512-token cap cuts the reply off, so all three are malformed.
+- With retrieval, the model answers `ALIGNMENT` on `link_down`, copying "recalibrated" from
+  the past runs' fix; a check turns it into `UNKNOWN` (ADR 0017), so the API gives no answer
+  there, where the majority vote would say `LINK`.
 - The disagreement gate the API applies costs right answers as well as wrong ones: with a
   precedent available, wrong answers go from 3 to 0 and right answers from 18 to 15
   (ADR 0014).
