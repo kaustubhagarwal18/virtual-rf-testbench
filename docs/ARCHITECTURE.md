@@ -348,5 +348,8 @@ flowchart LR
 | [0012](adr/0012-score-faults-key-labels-by-action.md) | Score faults, not questions; name each action by its symptom; record the action key in every label; three checks |
 | [0013](adr/0013-abstain-from-retrieval.md) | Gates that abstain from retrieval alone, the instrument error first, and a firmware-line ablation |
 | [0014](adr/0014-api-gate-cited-ids-version-wording.md) | The disagreement gate in the API, cited ids in the reply schema, and version wording without "firmware" when unchanged |
+| [0015](adr/0015-majority-vote-baseline.md) | A majority vote over the same past runs, with no model, scored as a baseline |
+| [0016](adr/0016-answer-states-cause-and-past-fix.md) | The answer states the cause and quotes what fixed each cited run last time |
+| [0017](adr/0017-no-signal-line-and-alignment-check.md) | A "No signal" line in the evidence, and a check that refuses alignment without a signal |
 
 What comes next is in the [roadmap](ROADMAP.md).

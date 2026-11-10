@@ -20,18 +20,18 @@ flowchart LR
 | Scenario | Changes one thing in | Faults solved | 95% interval | Questions right | UNKNOWN | Wrong | Malformed |
 |---|---|---|---|---|---|---|---|
 | error only |  | 3 of 9 | 1 to 6 | 9 of 27 | 0 | 18 | 0 |
-| full evidence | error only | 5 of 9 | 2 to 7 | 16 of 27 | 0 | 11 | 0 |
-| full evidence, no firmware line | full evidence | 4 of 9 | 2 to 7 | 13 of 27 | 0 | 14 | 0 |
-| full + retrieval | full evidence | 6 of 9 | 3 to 8 | 18 of 27 | 0 | 6 | 3 |
-| full + retrieval + checks | full + retrieval | 6 of 9 | 3 to 8 | 18 of 27 | 3 | 3 | 3 |
-| full + retrieval + checks, own fault held out | full + retrieval + checks | 4 of 9 | 2 to 7 | 13 of 27 | 3 | 11 | 0 |
-| full + retrieval + checks + gates | full + retrieval + checks | 5 of 9 | 2 to 7 | 15 of 27 | 9 | 0 | 3 |
-| full + retrieval + checks + gates, own fault held out | full + retrieval + checks, own fault held out | 1 of 9 | 0 to 4 | 4 of 27 | 20 | 3 | 0 |
+| full evidence | error only | 7 of 9 | 4 to 8 | 21 of 27 | 0 | 6 | 0 |
+| full evidence, no firmware line | full evidence | 6 of 9 | 3 to 8 | 18 of 27 | 0 | 9 | 0 |
+| full + retrieval | full evidence | 6 of 9 | 3 to 8 | 18 of 27 | 0 | 9 | 0 |
+| full + retrieval + checks | full + retrieval | 6 of 9 | 3 to 8 | 18 of 27 | 6 | 3 | 0 |
+| full + retrieval + checks, own fault held out | full + retrieval + checks | 4 of 9 | 2 to 7 | 12 of 27 | 3 | 12 | 0 |
+| full + retrieval + checks + gates | full + retrieval + checks | 5 of 9 | 2 to 7 | 15 of 27 | 12 | 0 | 0 |
+| full + retrieval + checks + gates, own fault held out | full + retrieval + checks, own fault held out | 1 of 9 | 0 to 4 | 3 of 27 | 21 | 3 | 0 |
 | majority vote | full + retrieval | 9 of 9 | 6 to 9 | 27 of 27 | 0 | 0 | 0 |
 | majority vote + checks | full + retrieval + checks | 9 of 9 | 6 to 9 | 27 of 27 | 0 | 0 | 0 |
-| majority vote + checks, own fault held out | full + retrieval + checks, own fault held out | 3 of 9 | 1 to 6 | 10 of 27 | 9 | 8 | 0 |
+| majority vote + checks, own fault held out | full + retrieval + checks, own fault held out | 4 of 9 | 2 to 7 | 12 of 27 | 9 | 6 | 0 |
 | majority vote + checks + gates | full + retrieval + checks + gates | 6 of 9 | 3 to 8 | 18 of 27 | 9 | 0 | 0 |
-| majority vote + checks + gates, own fault held out | full + retrieval + checks + gates, own fault held out | 1 of 9 | 0 to 4 | 4 of 27 | 20 | 3 | 0 |
+| majority vote + checks + gates, own fault held out | full + retrieval + checks + gates, own fault held out | 2 of 9 | 1 to 5 | 6 of 27 | 21 | 0 | 0 |
 
 ## By fault
 
@@ -43,8 +43,8 @@ Questions right, of those asked, for each fault.
 | config_decimal_error | CONFIGURATION | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 | 0/3 | 3/3 | 3/3 | 0/3 | 0/3 | 0/3 |
 | config_parameter_missing | CONFIGURATION | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 |
 | config_parameter_out_of_range | CONFIGURATION | 0/3 | 0/3 | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 |
-| link_down | LINK | 0/3 | 0/3 | 0/3 | 0/3 | 0/3 | 3/3 | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
-| link_flaky | LINK | 0/3 | 1/3 | 1/3 | 3/3 | 3/3 | 1/3 | 3/3 | 1/3 | 3/3 | 3/3 | 1/3 | 3/3 | 1/3 |
+| link_down | LINK | 0/3 | 3/3 | 3/3 | 0/3 | 0/3 | 3/3 | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| link_flaky | LINK | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 | 3/3 | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
 | output_command_change | FIRMWARE | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 | 3/3 | 0/3 | 3/3 | 3/3 | 0/3 | 3/3 | 0/3 |
 | reset_leaks_offset | FIRMWARE | 3/3 | 3/3 | 0/3 | 0/3 | 0/3 | 0/3 | 0/3 | 0/3 | 3/3 | 3/3 | 0/3 | 0/3 | 0/3 |
 | slow_responses | TIMEOUT | 3/3 | 0/3 | 0/3 | 0/3 | 0/3 | 0/3 | 0/3 | 0/3 | 3/3 | 3/3 | 0/3 | 0/3 | 0/3 |
@@ -83,7 +83,7 @@ Questions right, of those asked, for each fault.
 
 Confident wrong choices: FIRMWARE x15, TIMEOUT x3.
 
-## full evidence: 5 of 9 faults solved (95% interval 2 to 7); 16 of 27 questions right; 0 UNKNOWN, 11 wrong, 0 malformed
+## full evidence: 7 of 9 faults solved (95% interval 4 to 8); 21 of 27 questions right; 0 UNKNOWN, 6 wrong, 0 malformed
 
 | Question | Expected | Chosen | | Error shown → the model's answer |
 |---|---|---|---|---|
@@ -99,12 +99,12 @@ Confident wrong choices: FIRMWARE x15, TIMEOUT x3.
 | config_parameter_out_of_range-1 | CONFIGURATION | FIRMWARE | ✗ | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> FIRMWARE (previous release) because The configuration error suggests a regression in the firmware of the instrument, which is the... |
 | config_parameter_out_of_range-2 | CONFIGURATION | FIRMWARE | ✗ | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> FIRMWARE (previous release) because The configuration error suggests a regression in the firmware of the instrument, which is the... |
 | config_parameter_out_of_range-3 | CONFIGURATION | FIRMWARE | ✗ | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> FIRMWARE (previous release) because The configuration error suggests a regression in the firmware of the instrument, which is the... |
-| link_down-1 | LINK | CABLE | ✗ | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> CABLE (signal generator and spectrum analyzer) because The tests failed due to path_loss values exceeding the limits, indicating... |
-| link_down-2 | LINK | CABLE | ✗ | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> CABLE (signal generator and spectrum analyzer) because The tests failed due to path_loss values exceeding the limits, indicating... |
-| link_down-3 | LINK | CABLE | ✗ | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> CABLE (cable) because The tests failed due to path_loss values exceeding the limits, indicating no signal or a severely... |
-| link_flaky-1 | LINK | CABLE | ✗ | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> CABLE (cable and connectors) because The cable and connectors may be faulty or misaligned, causing intermittent signal issues and... |
-| link_flaky-2 | LINK | CABLE | ✗ | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> CABLE (cable and connectors) because The tests failed due to no signal reaching the analyzer, indicating the cable or connectors... |
-| link_flaky-3 | LINK | LINK | ✓ | `Failed: path_loss_5000mhz: 110.132770235 dB, limit 2.85410196625 to 3.85410196625 dB,...` -> LINK (the path between the instruments) because No signal or intermittent signal issues found in instrument logs indicate the... |
+| link_down-1 | LINK | LINK | ✓ | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK (the path between the instruments) because No signal reaching the analyzer: nothing is connected |
+| link_down-2 | LINK | LINK | ✓ | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK (the path between the instruments) because No signal reaching the analyzer: nothing is connected |
+| link_down-3 | LINK | LINK | ✓ | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK (the path between the instruments) because No signal reaching the analyzer: nothing is connected |
+| link_flaky-1 | LINK | LINK | ✓ | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> LINK (the path between the instruments) because No signal reaching the analyzer: nothing is connected |
+| link_flaky-2 | LINK | LINK | ✓ | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> LINK (the path between the instruments) because No signal reaching the analyzer: nothing is connected |
+| link_flaky-3 | LINK | LINK | ✓ | `Failed: path_loss_5000mhz: 110.132770235 dB, limit 2.85410196625 to 3.85410196625 dB,...` -> LINK (the path between the instruments) because No signal reaching the analyzer: nothing is connected |
 | output_command_change-1 | FIRMWARE | FIRMWARE | ✓ | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE (instrument firmware) because The instrument error is related to the firmware version, which has changed since the last... |
 | output_command_change-2 | FIRMWARE | FIRMWARE | ✓ | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE (instrument firmware) because The instrument error is related to the firmware version, which has changed since the last... |
 | output_command_change-3 | FIRMWARE | FIRMWARE | ✓ | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE (instrument firmware) because The instrument error is related to the firmware version, which has changed since the last... |
@@ -115,9 +115,9 @@ Confident wrong choices: FIRMWARE x15, TIMEOUT x3.
 | slow_responses-2 | TIMEOUT | FIRMWARE | ✗ | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> FIRMWARE (previous release) because The test failures are due to an InstrumentTimeoutError, which could indicate a regression in... |
 | slow_responses-3 | TIMEOUT | FIRMWARE | ✗ | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> FIRMWARE (previous release) because The test failures are due to an instrument timeout error, which could indicate a firmware... |
 
-Confident wrong choices: FIRMWARE x6, CABLE x5.
+Confident wrong choices: FIRMWARE x6.
 
-## full evidence, no firmware line: 4 of 9 faults solved (95% interval 2 to 7); 13 of 27 questions right; 0 UNKNOWN, 14 wrong, 0 malformed
+## full evidence, no firmware line: 6 of 9 faults solved (95% interval 3 to 8); 18 of 27 questions right; 0 UNKNOWN, 9 wrong, 0 malformed
 
 | Question | Expected | Chosen | | Error shown → the model's answer |
 |---|---|---|---|---|
@@ -133,12 +133,12 @@ Confident wrong choices: FIRMWARE x6, CABLE x5.
 | config_parameter_out_of_range-1 | CONFIGURATION | FIRMWARE | ✗ | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> FIRMWARE (test code and its configuration) because The configuration error suggests a regression in the firmware that limits the... |
 | config_parameter_out_of_range-2 | CONFIGURATION | FIRMWARE | ✗ | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> FIRMWARE (test code and its configuration) because The configuration error suggests a regression in the firmware that limits the... |
 | config_parameter_out_of_range-3 | CONFIGURATION | FIRMWARE | ✗ | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> FIRMWARE (test code and its configuration) because The configuration error suggests a regression in the firmware that limits the... |
-| link_down-1 | LINK | CABLE | ✗ | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> CABLE (cable and connectors) because No signal or intermittent signal; the path is open, and the test... |
-| link_down-2 | LINK | CABLE | ✗ | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> CABLE (signal generator and spectrum analyzer cables) because The tests failed due to path_loss values exceeding the limits,... |
-| link_down-3 | LINK | CABLE | ✗ | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> CABLE (cable and connectors) because No signal or intermittent signal; the path is open, and the test... |
-| link_flaky-1 | LINK | CABLE | ✗ | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> CABLE (cable and connectors) because No signal or intermittent signal; the path is open, and the test failed due to path_loss... |
-| link_flaky-2 | LINK | CABLE | ✗ | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> CABLE (signal generator and spectrum analyzer cables) because The tests failed due to signal loss or attenuation, indicated by... |
-| link_flaky-3 | LINK | LINK | ✓ | `Failed: path_loss_5000mhz: 110.132770235 dB, limit 2.85410196625 to 3.85410196625 dB,...` -> LINK (Path between instruments) because Tests show no signal reaching the analyzer, indicating the path is not open. |
+| link_down-1 | LINK | LINK | ✓ | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK (the path between the instruments) because No signal reaching the analyzer: nothing is connected |
+| link_down-2 | LINK | LINK | ✓ | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK (the path between the instruments) because No signal reaching the analyzer: nothing is connected |
+| link_down-3 | LINK | LINK | ✓ | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK (the path between the instruments) because No signal reaching the analyzer: nothing is connected |
+| link_flaky-1 | LINK | LINK | ✓ | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> LINK (the path between the instruments) because No signal reaching the analyzer: nothing is connected |
+| link_flaky-2 | LINK | LINK | ✓ | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> LINK (the path between the instruments) because No signal reaching the analyzer: nothing is connected |
+| link_flaky-3 | LINK | LINK | ✓ | `Failed: path_loss_5000mhz: 110.132770235 dB, limit 2.85410196625 to 3.85410196625 dB,...` -> LINK (the path between the instruments) because No signal was detected at the analyzer, indicating that the path between the... |
 | output_command_change-1 | FIRMWARE | FIRMWARE | ✓ | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE (Instrument firmware) because The instrument error is related to 'Undefined header', which suggests a firmware... |
 | output_command_change-2 | FIRMWARE | FIRMWARE | ✓ | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE (Instrument firmware) because The instrument error is related to 'Undefined header', which suggests a firmware... |
 | output_command_change-3 | FIRMWARE | FIRMWARE | ✓ | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE (instrument firmware) because The instrument error is related to undefined header, which could indicate a firmware... |
@@ -149,9 +149,9 @@ Confident wrong choices: FIRMWARE x6, CABLE x5.
 | slow_responses-2 | TIMEOUT | FIRMWARE | ✗ | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> FIRMWARE (previous release) because The test_instruments_identify_as_the_release_under_test failed with an... |
 | slow_responses-3 | TIMEOUT | FIRMWARE | ✗ | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> FIRMWARE (previous release) because The test_instruments_identify_as_the_release_under_test failed with an... |
 
-Confident wrong choices: FIRMWARE x6, CABLE x5, CONFIGURATION x3.
+Confident wrong choices: FIRMWARE x6, CONFIGURATION x3.
 
-## full + retrieval: 6 of 9 faults solved (95% interval 3 to 8); 18 of 27 questions right; 0 UNKNOWN, 6 wrong, 3 malformed
+## full + retrieval: 6 of 9 faults solved (95% interval 3 to 8); 18 of 27 questions right; 0 UNKNOWN, 9 wrong, 0 malformed
 
 | Question | Expected | Chosen | | Precedent offered | Error shown → the model's answer |
 |---|---|---|---|---|---|
@@ -167,12 +167,12 @@ Confident wrong choices: FIRMWARE x6, CABLE x5, CONFIGURATION x3.
 | config_parameter_out_of_range-1 | CONFIGURATION | CONFIGURATION | ✓ | yes | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> CONFIGURATION (bench configuration) citing past-93f536e3 because The bench configuration asks for an 80 dB level offset, beyond... |
 | config_parameter_out_of_range-2 | CONFIGURATION | CONFIGURATION | ✓ | yes | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> CONFIGURATION (bench configuration) citing past-93f536e3 because The bench configuration asks for an 80 dB level offset, beyond... |
 | config_parameter_out_of_range-3 | CONFIGURATION | CONFIGURATION | ✓ | yes | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> CONFIGURATION (bench configuration) citing past-93f536e3 because The bench configuration asks for an 80 dB level offset, beyond... |
-| link_down-1 | LINK | malformed | ! | yes | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> unusable: no JSON object in the reply: '{ "fix" : "ALIGNMENT", "where" : "LINK", "because" : "The issue was consistently related... |
-| link_down-2 | LINK | malformed | ! | yes | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> unusable: no JSON object in the reply: '{ "fix" : "ALIGNMENT", "where" : "LINK", "because" : "The issue was consistently related... |
-| link_down-3 | LINK | malformed | ! | yes | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> unusable: no JSON object in the reply: '{ "fix" : "ALIGNMENT", "where" : "LINK", "because" : "The issue was consistently related... |
-| link_flaky-1 | LINK | LINK | ✓ | yes | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> LINK (the cable between the instruments) citing past-635b5889 because The signal disappears intermittently, indicating a loose... |
-| link_flaky-2 | LINK | LINK | ✓ | yes | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> LINK (the path between the instruments) citing past-5b5ef294, past-373d6ea7, past-305eedd7 because The tests consistently fail... |
-| link_flaky-3 | LINK | LINK | ✓ | yes | `Failed: path_loss_5000mhz: 110.132770235 dB, limit 2.85410196625 to 3.85410196625 dB,...` -> LINK (the path between the instruments) citing past-635b5889, past-305eedd7 because The signal disappears intermittently,... |
+| link_down-1 | LINK | ALIGNMENT | ✗ | yes | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> ALIGNMENT (LINK) citing past-63aa363d, past-b4c1bc18 because The issue was consistently related to a loose or disconnected... |
+| link_down-2 | LINK | ALIGNMENT | ✗ | yes | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> ALIGNMENT (LINK) citing past-63aa363d, past-b4c1bc18 because The issue was consistently related to a loose or disconnected... |
+| link_down-3 | LINK | ALIGNMENT | ✗ | yes | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> ALIGNMENT (LINK) citing past-63aa363d, past-b4c1bc18 because The issue was consistently related to a loose or disconnected... |
+| link_flaky-1 | LINK | LINK | ✓ | yes | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> LINK (the path between the instruments) citing past-a556085e, past-b4c1bc18, past-cded60cc because No signal: the analyzer logged... |
+| link_flaky-2 | LINK | LINK | ✓ | yes | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> LINK (the path between the instruments) citing past-a556085e, past-b4c1bc18, past-cded60cc because No signal: the analyzer logged... |
+| link_flaky-3 | LINK | LINK | ✓ | yes | `Failed: path_loss_5000mhz: 110.132770235 dB, limit 2.85410196625 to 3.85410196625 dB,...` -> LINK (the path between the instruments) citing past-82fd776c because No signal reaching the analyzer: nothing is connected |
 | output_command_change-1 | FIRMWARE | FIRMWARE | ✓ | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE (Firmware) citing past-2d2fc9e9, past-274ed317, past-d527666c because The regression causing the tests to fail is a... |
 | output_command_change-2 | FIRMWARE | FIRMWARE | ✓ | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE (release 0.2.0-rc1) citing past-2d2fc9e9, past-274ed317, past-d527666c because The regression is reported and fixed in... |
 | output_command_change-3 | FIRMWARE | FIRMWARE | ✓ | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE (release 0.2.0-rc1) citing past-2d2fc9e9, past-274ed317, past-d527666c because The regression is reported and fixed in... |
@@ -183,9 +183,9 @@ Confident wrong choices: FIRMWARE x6, CABLE x5, CONFIGURATION x3.
 | slow_responses-2 | TIMEOUT | FIRMWARE | ✗ | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> FIRMWARE (the previous release) citing past-d527666c because The test's instrument timeout is shorter than the generator's... |
 | slow_responses-3 | TIMEOUT | FIRMWARE | ✗ | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> FIRMWARE (the previous release) citing past-d527666c because The test's instrument timeout is shorter than the generator's... |
 
-Confident wrong choices: CONFIGURATION x3, FIRMWARE x3.
+Confident wrong choices: ALIGNMENT x3, CONFIGURATION x3, FIRMWARE x3.
 
-## full + retrieval + checks: 6 of 9 faults solved (95% interval 3 to 8); 18 of 27 questions right; 3 UNKNOWN, 3 wrong, 3 malformed
+## full + retrieval + checks: 6 of 9 faults solved (95% interval 3 to 8); 18 of 27 questions right; 6 UNKNOWN, 3 wrong, 0 malformed
 
 | Question | Expected | Chosen | | Precedent offered | Error shown → the model's answer |
 |---|---|---|---|---|---|
@@ -201,12 +201,12 @@ Confident wrong choices: CONFIGURATION x3, FIRMWARE x3.
 | config_parameter_out_of_range-1 | CONFIGURATION | CONFIGURATION | ✓ | yes | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> CONFIGURATION (bench configuration) citing past-93f536e3 because The bench configuration asks for an 80 dB level offset, beyond... |
 | config_parameter_out_of_range-2 | CONFIGURATION | CONFIGURATION | ✓ | yes | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> CONFIGURATION (bench configuration) citing past-93f536e3 because The bench configuration asks for an 80 dB level offset, beyond... |
 | config_parameter_out_of_range-3 | CONFIGURATION | CONFIGURATION | ✓ | yes | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> CONFIGURATION (bench configuration) citing past-93f536e3 because The bench configuration asks for an 80 dB level offset, beyond... |
-| link_down-1 | LINK | malformed | ! | yes | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> unusable: no JSON object in the reply: '{ "fix" : "ALIGNMENT", "where" : "LINK", "because" : "The issue was consistently related... |
-| link_down-2 | LINK | malformed | ! | yes | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> unusable: no JSON object in the reply: '{ "fix" : "ALIGNMENT", "where" : "LINK", "because" : "The issue was consistently related... |
-| link_down-3 | LINK | malformed | ! | yes | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> unusable: no JSON object in the reply: '{ "fix" : "ALIGNMENT", "where" : "LINK", "because" : "The issue was consistently related... |
-| link_flaky-1 | LINK | LINK | ✓ | yes | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> LINK (the cable between the instruments) citing past-635b5889 because The signal disappears intermittently, indicating a loose... |
-| link_flaky-2 | LINK | LINK | ✓ | yes | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> LINK (the path between the instruments) citing past-5b5ef294, past-373d6ea7, past-305eedd7 because The tests consistently fail... |
-| link_flaky-3 | LINK | LINK | ✓ | yes | `Failed: path_loss_5000mhz: 110.132770235 dB, limit 2.85410196625 to 3.85410196625 dB,...` -> LINK (the path between the instruments) citing past-635b5889, past-305eedd7 because The signal disappears intermittently,... |
+| link_down-1 | LINK | UNKNOWN | ? | yes | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> UNKNOWN (LINK) citing past-63aa363d, past-b4c1bc18 because The issue was consistently related to a loose or disconnected... |
+| link_down-2 | LINK | UNKNOWN | ? | yes | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> UNKNOWN (LINK) citing past-63aa363d, past-b4c1bc18 because The issue was consistently related to a loose or disconnected... |
+| link_down-3 | LINK | UNKNOWN | ? | yes | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> UNKNOWN (LINK) citing past-63aa363d, past-b4c1bc18 because The issue was consistently related to a loose or disconnected... |
+| link_flaky-1 | LINK | LINK | ✓ | yes | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> LINK (the path between the instruments) citing past-a556085e, past-b4c1bc18, past-cded60cc because No signal: the analyzer logged... |
+| link_flaky-2 | LINK | LINK | ✓ | yes | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> LINK (the path between the instruments) citing past-a556085e, past-b4c1bc18, past-cded60cc because No signal: the analyzer logged... |
+| link_flaky-3 | LINK | LINK | ✓ | yes | `Failed: path_loss_5000mhz: 110.132770235 dB, limit 2.85410196625 to 3.85410196625 dB,...` -> LINK (the path between the instruments) citing past-82fd776c because No signal reaching the analyzer: nothing is connected |
 | output_command_change-1 | FIRMWARE | FIRMWARE | ✓ | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE (Firmware) citing past-2d2fc9e9, past-274ed317, past-d527666c because The regression causing the tests to fail is a... |
 | output_command_change-2 | FIRMWARE | FIRMWARE | ✓ | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE (release 0.2.0-rc1) citing past-2d2fc9e9, past-274ed317, past-d527666c because The regression is reported and fixed in... |
 | output_command_change-3 | FIRMWARE | FIRMWARE | ✓ | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE (release 0.2.0-rc1) citing past-2d2fc9e9, past-274ed317, past-d527666c because The regression is reported and fixed in... |
@@ -219,13 +219,13 @@ Confident wrong choices: CONFIGURATION x3, FIRMWARE x3.
 
 Confident wrong choices: CONFIGURATION x3.
 
-## full + retrieval + checks, own fault held out: 4 of 9 faults solved (95% interval 2 to 7); 13 of 27 questions right; 3 UNKNOWN, 11 wrong, 0 malformed
+## full + retrieval + checks, own fault held out: 4 of 9 faults solved (95% interval 2 to 7); 12 of 27 questions right; 3 UNKNOWN, 12 wrong, 0 malformed
 
 | Question | Expected | Chosen | | Precedent offered | Error shown → the model's answer |
 |---|---|---|---|---|---|
-| cable_loss-1 | CABLE | LINK | ✗ | no | `Failed: path_loss_100mhz: 1.8898817412 dB, limit 0 to 0.974341649025 dB, margin -0.91554...` -> LINK (the path between the instruments) citing past-635b5889, past-5b5ef294, past-a4e8f0bb because No signal reaching the... |
-| cable_loss-2 | CABLE | LINK | ✗ | no | `Failed: path_loss_100mhz: 1.3898817412 dB, limit 0 to 0.974341649025 dB, margin -0.41554...` -> LINK (the path between the instruments) citing past-635b5889, past-5b5ef294, past-a4e8f0bb because No signal reaching the... |
-| cable_loss-3 | CABLE | LINK | ✗ | no | `Failed: path_loss_100mhz: 2.8898817412 dB, limit 0 to 0.974341649025 dB, margin -1.91554...` -> LINK (the path between the instruments) citing past-635b5889, past-5b5ef294 because No signal reaching the analyzer: nothing is... |
+| cable_loss-1 | CABLE | LINK | ✗ | no | `Failed: path_loss_100mhz: 1.8898817412 dB, limit 0 to 0.974341649025 dB, margin -0.91554...` -> LINK (the path between the instruments) citing past-82fd776c, past-a556085e, past-d3feaa99 because No signal reaching the... |
+| cable_loss-2 | CABLE | LINK | ✗ | no | `Failed: path_loss_100mhz: 1.3898817412 dB, limit 0 to 0.974341649025 dB, margin -0.41554...` -> LINK (the path between the instruments) citing past-82fd776c, past-a556085e, past-d3feaa99 because The analyzer and signal... |
+| cable_loss-3 | CABLE | LINK | ✗ | no | `Failed: path_loss_100mhz: 2.8898817412 dB, limit 0 to 0.974341649025 dB, margin -1.91554...` -> LINK (the path between the instruments) citing past-82fd776c, past-a556085e, past-d3feaa99 because The analyzer consistently logs... |
 | config_decimal_error-1 | CONFIGURATION | CONFIGURATION | ✓ | no | `AssertionError: the generator carries a level offset of 0 dB, but the bench configuration...` -> CONFIGURATION (bench configuration) citing past-bc748de3 because ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the... |
 | config_decimal_error-2 | CONFIGURATION | CONFIGURATION | ✓ | no | `AssertionError: the generator carries a level offset of 0 dB, but the bench configuration...` -> CONFIGURATION (bench configuration) citing past-bc748de3 because ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the... |
 | config_decimal_error-3 | CONFIGURATION | CONFIGURATION | ✓ | no | `AssertionError: the generator carries a level offset of 0 dB, but the bench configuration...` -> CONFIGURATION (bench configuration) citing past-bc748de3 because ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the... |
@@ -235,15 +235,15 @@ Confident wrong choices: CONFIGURATION x3.
 | config_parameter_out_of_range-1 | CONFIGURATION | CONFIGURATION | ✓ | no | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> CONFIGURATION (bench configuration) citing past-9e31db17 because The bench configuration has a misaligned level_offset_db... |
 | config_parameter_out_of_range-2 | CONFIGURATION | CONFIGURATION | ✓ | no | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> CONFIGURATION (bench configuration) citing past-9e31db17 because The bench configuration has a misaligned level_offset_db... |
 | config_parameter_out_of_range-3 | CONFIGURATION | CONFIGURATION | ✓ | no | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> CONFIGURATION (bench configuration) citing past-9e31db17 because The bench configuration has a misaligned level_offset_db... |
-| link_down-1 | LINK | LINK | ✓ | no | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK (connector) citing past-305eedd7, past-373d6ea7, past-5b5ef294 because A loose connector causes intermittent signal issues,... |
-| link_down-2 | LINK | LINK | ✓ | no | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK (connector) citing past-305eedd7, past-373d6ea7, past-5b5ef294 because A loose connector causes intermittent signal issues,... |
-| link_down-3 | LINK | LINK | ✓ | no | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK (connector) citing past-305eedd7, past-373d6ea7, past-5b5ef294 because A loose connector causes intermittent signal issues,... |
-| link_flaky-1 | LINK | CABLE | ✗ | no | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> CABLE (cable) citing past-22406f9c because Extra loss in the cable between generator and analyzer, from a damaged cable |
-| link_flaky-2 | LINK | LINK | ✓ | no | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> LINK (between the instruments) citing past-7be55217, past-a4e8f0bb because Nothing is connected between the generator and the... |
-| link_flaky-3 | LINK | CABLE | ✗ | no | `Failed: path_loss_5000mhz: 110.132770235 dB, limit 2.85410196625 to 3.85410196625 dB,...` -> CABLE (cable) citing past-22406f9c because Extra loss in the cable between generator and analyzer, from a damaged cable |
-| output_command_change-1 | FIRMWARE | LINK | ✗ | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> LINK (signal path between instruments) citing past-7a39eccf, past-61d908dc, past-5b5ef294 because No signal or intermittent... |
-| output_command_change-2 | FIRMWARE | LINK | ✗ | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> LINK (signal path between instruments) citing past-7a39eccf, past-61d908dc, past-5b5ef294 because No signal or intermittent... |
-| output_command_change-3 | FIRMWARE | LINK | ✗ | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> LINK (signal path between instruments) citing past-7a39eccf, past-61d908dc, past-5b5ef294 because No signal or intermittent... |
+| link_down-1 | LINK | LINK | ✓ | no | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK (the path between the instruments) citing past-b4c1bc18, past-cded60cc, past-a556085e because No signal or intermittent... |
+| link_down-2 | LINK | LINK | ✓ | no | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK (the path between the instruments) citing past-b4c1bc18, past-cded60cc, past-a556085e because No signal or intermittent... |
+| link_down-3 | LINK | LINK | ✓ | no | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK (the path between the instruments) citing past-b4c1bc18, past-cded60cc, past-a556085e because No signal or intermittent... |
+| link_flaky-1 | LINK | CABLE | ✗ | no | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> CABLE (CABLE_CONNECTION) citing past-d3feaa99, past-63aa363d because CABLE_NOT_CONNECTED |
+| link_flaky-2 | LINK | CABLE | ✗ | no | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> CABLE (Cable between the instruments) citing past-d3feaa99, past-63aa363d because No signal reaching the analyzer due to the... |
+| link_flaky-3 | LINK | CABLE | ✗ | no | `Failed: path_loss_5000mhz: 110.132770235 dB, limit 2.85410196625 to 3.85410196625 dB,...` -> CABLE (Cable between the instruments) citing past-d3feaa99, past-63aa363d because No signal reaching the analyzer due to the... |
+| output_command_change-1 | FIRMWARE | LINK | ✗ | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> LINK (the path between instruments) citing past-a556085e because No signal or intermittent signal; the path is open |
+| output_command_change-2 | FIRMWARE | LINK | ✗ | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> LINK (the path between instruments) citing past-a556085e because No signal or intermittent signal; the path is open |
+| output_command_change-3 | FIRMWARE | LINK | ✗ | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> LINK (the path between instruments) citing past-a556085e because No signal or intermittent signal; the path is open |
 | reset_leaks_offset-1 | FIRMWARE | CONFIGURATION | ✗ | no | `AssertionError: the generator carries a level offset of -2 dB, but the bench...` -> CONFIGURATION (bench configuration) citing past-bc748de3 because The bench configuration asks for a 15 dB level offset where 1.5... |
 | reset_leaks_offset-2 | FIRMWARE | CONFIGURATION | ✗ | no | `AssertionError: the generator carries a level offset of -2 dB, but the bench...` -> CONFIGURATION (bench configuration) citing past-bc748de3 because The bench configuration asks for a 15 dB level offset where 1.5... |
 | reset_leaks_offset-3 | FIRMWARE | CONFIGURATION | ✗ | no | `AssertionError: the generator carries a level offset of -2 dB, but the bench...` -> CONFIGURATION (bench configuration) citing past-bc748de3 because The bench configuration asks for a 15 dB level offset where 1.5... |
@@ -251,9 +251,9 @@ Confident wrong choices: CONFIGURATION x3.
 | slow_responses-2 | TIMEOUT | UNKNOWN | ? | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> UNKNOWN (analyzer 0.2.0-rc1, generator 0.2.0-rc1) citing past-2d2fc9e9, past-274ed317 because Instrument error: -113,"Undefined... |
 | slow_responses-3 | TIMEOUT | UNKNOWN | ? | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> UNKNOWN (analyzer 0.2.0-rc1, generator 0.2.0-rc1) citing past-2d2fc9e9, past-274ed317 because Instrument error: -113,"Undefined... |
 
-Confident wrong choices: LINK x6, CONFIGURATION x3, CABLE x2.
+Confident wrong choices: LINK x6, CABLE x3, CONFIGURATION x3.
 
-## full + retrieval + checks + gates: 5 of 9 faults solved (95% interval 2 to 7); 15 of 27 questions right; 9 UNKNOWN, 0 wrong, 3 malformed
+## full + retrieval + checks + gates: 5 of 9 faults solved (95% interval 2 to 7); 15 of 27 questions right; 12 UNKNOWN, 0 wrong, 0 malformed
 
 | Question | Expected | Chosen | | Precedent offered | Error shown → the model's answer |
 |---|---|---|---|---|---|
@@ -269,12 +269,12 @@ Confident wrong choices: LINK x6, CONFIGURATION x3, CABLE x2.
 | config_parameter_out_of_range-1 | CONFIGURATION | CONFIGURATION | ✓ | yes | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> CONFIGURATION (bench configuration) citing past-93f536e3 because The bench configuration asks for an 80 dB level offset, beyond... |
 | config_parameter_out_of_range-2 | CONFIGURATION | CONFIGURATION | ✓ | yes | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> CONFIGURATION (bench configuration) citing past-93f536e3 because The bench configuration asks for an 80 dB level offset, beyond... |
 | config_parameter_out_of_range-3 | CONFIGURATION | CONFIGURATION | ✓ | yes | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> CONFIGURATION (bench configuration) citing past-93f536e3 because The bench configuration asks for an 80 dB level offset, beyond... |
-| link_down-1 | LINK | malformed | ! | yes | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> unusable: no JSON object in the reply: '{ "fix" : "ALIGNMENT", "where" : "LINK", "because" : "The issue was consistently related... |
-| link_down-2 | LINK | malformed | ! | yes | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> unusable: no JSON object in the reply: '{ "fix" : "ALIGNMENT", "where" : "LINK", "because" : "The issue was consistently related... |
-| link_down-3 | LINK | malformed | ! | yes | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> unusable: no JSON object in the reply: '{ "fix" : "ALIGNMENT", "where" : "LINK", "because" : "The issue was consistently related... |
-| link_flaky-1 | LINK | LINK | ✓ | yes | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> LINK (the cable between the instruments) citing past-635b5889 because The signal disappears intermittently, indicating a loose... |
-| link_flaky-2 | LINK | LINK | ✓ | yes | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> LINK (the path between the instruments) citing past-5b5ef294, past-373d6ea7, past-305eedd7 because The tests consistently fail... |
-| link_flaky-3 | LINK | LINK | ✓ | yes | `Failed: path_loss_5000mhz: 110.132770235 dB, limit 2.85410196625 to 3.85410196625 dB,...` -> LINK (the path between the instruments) citing past-635b5889, past-305eedd7 because The signal disappears intermittently,... |
+| link_down-1 | LINK | UNKNOWN | ? | yes | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> UNKNOWN (LINK) citing past-63aa363d, past-b4c1bc18 because The issue was consistently related to a loose or disconnected... |
+| link_down-2 | LINK | UNKNOWN | ? | yes | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> UNKNOWN (LINK) citing past-63aa363d, past-b4c1bc18 because The issue was consistently related to a loose or disconnected... |
+| link_down-3 | LINK | UNKNOWN | ? | yes | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> UNKNOWN (LINK) citing past-63aa363d, past-b4c1bc18 because The issue was consistently related to a loose or disconnected... |
+| link_flaky-1 | LINK | LINK | ✓ | yes | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> LINK (the path between the instruments) citing past-a556085e, past-b4c1bc18, past-cded60cc because No signal: the analyzer logged... |
+| link_flaky-2 | LINK | LINK | ✓ | yes | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> LINK (the path between the instruments) citing past-a556085e, past-b4c1bc18, past-cded60cc because No signal: the analyzer logged... |
+| link_flaky-3 | LINK | LINK | ✓ | yes | `Failed: path_loss_5000mhz: 110.132770235 dB, limit 2.85410196625 to 3.85410196625 dB,...` -> LINK (the path between the instruments) citing past-82fd776c because No signal reaching the analyzer: nothing is connected |
 | output_command_change-1 | FIRMWARE | FIRMWARE | ✓ | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE (Firmware) citing past-2d2fc9e9, past-274ed317, past-d527666c because The regression causing the tests to fail is a... |
 | output_command_change-2 | FIRMWARE | FIRMWARE | ✓ | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE (release 0.2.0-rc1) citing past-2d2fc9e9, past-274ed317, past-d527666c because The regression is reported and fixed in... |
 | output_command_change-3 | FIRMWARE | FIRMWARE | ✓ | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE (release 0.2.0-rc1) citing past-2d2fc9e9, past-274ed317, past-d527666c because The regression is reported and fixed in... |
@@ -285,13 +285,13 @@ Confident wrong choices: LINK x6, CONFIGURATION x3, CABLE x2.
 | slow_responses-2 | TIMEOUT | UNKNOWN | ? | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (TIMEOUT, FIRMWARE), so there is no one... |
 | slow_responses-3 | TIMEOUT | UNKNOWN | ? | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (TIMEOUT, FIRMWARE), so there is no one... |
 
-## full + retrieval + checks + gates, own fault held out: 1 of 9 faults solved (95% interval 0 to 4); 4 of 27 questions right; 20 UNKNOWN, 3 wrong, 0 malformed
+## full + retrieval + checks + gates, own fault held out: 1 of 9 faults solved (95% interval 0 to 4); 3 of 27 questions right; 21 UNKNOWN, 3 wrong, 0 malformed
 
 | Question | Expected | Chosen | | Precedent offered | Error shown → the model's answer |
 |---|---|---|---|---|---|
-| cable_loss-1 | CABLE | LINK | ✗ | no | `Failed: path_loss_100mhz: 1.8898817412 dB, limit 0 to 0.974341649025 dB, margin -0.91554...` -> LINK (the path between the instruments) citing past-635b5889, past-5b5ef294, past-a4e8f0bb because No signal reaching the... |
-| cable_loss-2 | CABLE | LINK | ✗ | no | `Failed: path_loss_100mhz: 1.3898817412 dB, limit 0 to 0.974341649025 dB, margin -0.41554...` -> LINK (the path between the instruments) citing past-635b5889, past-5b5ef294, past-a4e8f0bb because No signal reaching the... |
-| cable_loss-3 | CABLE | LINK | ✗ | no | `Failed: path_loss_100mhz: 2.8898817412 dB, limit 0 to 0.974341649025 dB, margin -1.91554...` -> LINK (the path between the instruments) citing past-635b5889, past-5b5ef294 because No signal reaching the analyzer: nothing is... |
+| cable_loss-1 | CABLE | UNKNOWN | ? | no | `Failed: path_loss_100mhz: 1.8898817412 dB, limit 0 to 0.974341649025 dB, margin -0.91554...` -> UNKNOWN, model not asked: the closest past run is only 0.912 similar, below 0.95, so there is no close precedent |
+| cable_loss-2 | CABLE | UNKNOWN | ? | no | `Failed: path_loss_100mhz: 1.3898817412 dB, limit 0 to 0.974341649025 dB, margin -0.41554...` -> UNKNOWN, model not asked: the closest past run is only 0.913 similar, below 0.95, so there is no close precedent |
+| cable_loss-3 | CABLE | UNKNOWN | ? | no | `Failed: path_loss_100mhz: 2.8898817412 dB, limit 0 to 0.974341649025 dB, margin -1.91554...` -> UNKNOWN, model not asked: the closest past run is only 0.913 similar, below 0.95, so there is no close precedent |
 | config_decimal_error-1 | CONFIGURATION | UNKNOWN | ? | no | `AssertionError: the generator carries a level offset of 0 dB, but the bench configuration...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (FIRMWARE, CONFIGURATION), so there is no one... |
 | config_decimal_error-2 | CONFIGURATION | UNKNOWN | ? | no | `AssertionError: the generator carries a level offset of 0 dB, but the bench configuration...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (FIRMWARE, CONFIGURATION), so there is no one... |
 | config_decimal_error-3 | CONFIGURATION | UNKNOWN | ? | no | `AssertionError: the generator carries a level offset of 0 dB, but the bench configuration...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (FIRMWARE, CONFIGURATION), so there is no one... |
@@ -301,12 +301,12 @@ Confident wrong choices: LINK x6, CONFIGURATION x3, CABLE x2.
 | config_parameter_out_of_range-1 | CONFIGURATION | UNKNOWN | ? | no | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> UNKNOWN, model not asked: the closest past run is only 0.940 similar, below 0.95, so there is no close precedent |
 | config_parameter_out_of_range-2 | CONFIGURATION | UNKNOWN | ? | no | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> UNKNOWN, model not asked: the closest past run is only 0.940 similar, below 0.95, so there is no close precedent |
 | config_parameter_out_of_range-3 | CONFIGURATION | UNKNOWN | ? | no | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> UNKNOWN, model not asked: the closest past run is only 0.939 similar, below 0.95, so there is no close precedent |
-| link_down-1 | LINK | LINK | ✓ | no | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK (connector) citing past-305eedd7, past-373d6ea7, past-5b5ef294 because A loose connector causes intermittent signal issues,... |
-| link_down-2 | LINK | LINK | ✓ | no | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK (connector) citing past-305eedd7, past-373d6ea7, past-5b5ef294 because A loose connector causes intermittent signal issues,... |
-| link_down-3 | LINK | LINK | ✓ | no | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK (connector) citing past-305eedd7, past-373d6ea7, past-5b5ef294 because A loose connector causes intermittent signal issues,... |
-| link_flaky-1 | LINK | UNKNOWN | ? | no | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (LINK, CABLE), so there is no one precedent to... |
-| link_flaky-2 | LINK | LINK | ✓ | no | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> LINK (between the instruments) citing past-7be55217, past-a4e8f0bb because Nothing is connected between the generator and the... |
-| link_flaky-3 | LINK | UNKNOWN | ? | no | `Failed: path_loss_5000mhz: 110.132770235 dB, limit 2.85410196625 to 3.85410196625 dB,...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (LINK, CABLE), so there is no one precedent to... |
+| link_down-1 | LINK | LINK | ✓ | no | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK (the path between the instruments) citing past-b4c1bc18, past-cded60cc, past-a556085e because No signal or intermittent... |
+| link_down-2 | LINK | LINK | ✓ | no | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK (the path between the instruments) citing past-b4c1bc18, past-cded60cc, past-a556085e because No signal or intermittent... |
+| link_down-3 | LINK | LINK | ✓ | no | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK (the path between the instruments) citing past-b4c1bc18, past-cded60cc, past-a556085e because No signal or intermittent... |
+| link_flaky-1 | LINK | CABLE | ✗ | no | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> CABLE (CABLE_CONNECTION) citing past-d3feaa99, past-63aa363d because CABLE_NOT_CONNECTED |
+| link_flaky-2 | LINK | CABLE | ✗ | no | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> CABLE (Cable between the instruments) citing past-d3feaa99, past-63aa363d because No signal reaching the analyzer due to the... |
+| link_flaky-3 | LINK | CABLE | ✗ | no | `Failed: path_loss_5000mhz: 110.132770235 dB, limit 2.85410196625 to 3.85410196625 dB,...` -> CABLE (Cable between the instruments) citing past-d3feaa99, past-63aa363d because No signal reaching the analyzer due to the... |
 | output_command_change-1 | FIRMWARE | UNKNOWN | ? | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (TIMEOUT, LINK), so there is no one precedent... |
 | output_command_change-2 | FIRMWARE | UNKNOWN | ? | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (TIMEOUT, LINK), so there is no one precedent... |
 | output_command_change-3 | FIRMWARE | UNKNOWN | ? | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (TIMEOUT, LINK), so there is no one precedent... |
@@ -317,7 +317,7 @@ Confident wrong choices: LINK x6, CONFIGURATION x3, CABLE x2.
 | slow_responses-2 | TIMEOUT | UNKNOWN | ? | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> UNKNOWN, model not asked: the closest past run is only 0.796 similar, below 0.95, so there is no close precedent |
 | slow_responses-3 | TIMEOUT | UNKNOWN | ? | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> UNKNOWN, model not asked: the closest past run is only 0.796 similar, below 0.95, so there is no close precedent |
 
-Confident wrong choices: LINK x3.
+Confident wrong choices: CABLE x3.
 
 ## majority vote: 9 of 9 faults solved (95% interval 6 to 9); 27 of 27 questions right; 0 UNKNOWN, 0 wrong, 0 malformed
 
@@ -383,7 +383,7 @@ Confident wrong choices: LINK x3.
 | slow_responses-2 | TIMEOUT | TIMEOUT | ✓ | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> TIMEOUT by majority vote, model not asked: 2 of the 3 closest past runs were resolved by TIMEOUT |
 | slow_responses-3 | TIMEOUT | TIMEOUT | ✓ | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> TIMEOUT by majority vote, model not asked: 2 of the 3 closest past runs were resolved by TIMEOUT |
 
-## majority vote + checks, own fault held out: 3 of 9 faults solved (95% interval 1 to 6); 10 of 27 questions right; 9 UNKNOWN, 8 wrong, 0 malformed
+## majority vote + checks, own fault held out: 4 of 9 faults solved (95% interval 2 to 7); 12 of 27 questions right; 9 UNKNOWN, 6 wrong, 0 malformed
 
 | Question | Expected | Chosen | | Precedent offered | Error shown → the model's answer |
 |---|---|---|---|---|---|
@@ -402,9 +402,9 @@ Confident wrong choices: LINK x3.
 | link_down-1 | LINK | LINK | ✓ | no | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
 | link_down-2 | LINK | LINK | ✓ | no | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
 | link_down-3 | LINK | LINK | ✓ | no | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
-| link_flaky-1 | LINK | CABLE | ✗ | no | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> CABLE by majority vote, model not asked: 2 of the 3 closest past runs were resolved by CABLE |
+| link_flaky-1 | LINK | LINK | ✓ | no | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
 | link_flaky-2 | LINK | LINK | ✓ | no | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
-| link_flaky-3 | LINK | CABLE | ✗ | no | `Failed: path_loss_5000mhz: 110.132770235 dB, limit 2.85410196625 to 3.85410196625 dB,...` -> CABLE by majority vote, model not asked: 2 of the 3 closest past runs were resolved by CABLE |
+| link_flaky-3 | LINK | LINK | ✓ | no | `Failed: path_loss_5000mhz: 110.132770235 dB, limit 2.85410196625 to 3.85410196625 dB,...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
 | output_command_change-1 | FIRMWARE | UNKNOWN | ? | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> UNKNOWN by majority vote, model not asked: 2 of the 3 closest past runs were resolved by TIMEOUT [overruled: the model chose... |
 | output_command_change-2 | FIRMWARE | UNKNOWN | ? | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> UNKNOWN by majority vote, model not asked: 2 of the 3 closest past runs were resolved by TIMEOUT [overruled: the model chose... |
 | output_command_change-3 | FIRMWARE | UNKNOWN | ? | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> UNKNOWN by majority vote, model not asked: 2 of the 3 closest past runs were resolved by TIMEOUT [overruled: the model chose... |
@@ -415,7 +415,7 @@ Confident wrong choices: LINK x3.
 | slow_responses-2 | TIMEOUT | UNKNOWN | ? | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> UNKNOWN by majority vote, model not asked: 3 of the 3 closest past runs were resolved by FIRMWARE [overruled: the model chose... |
 | slow_responses-3 | TIMEOUT | UNKNOWN | ? | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> UNKNOWN by majority vote, model not asked: 3 of the 3 closest past runs were resolved by FIRMWARE [overruled: the model chose... |
 
-Confident wrong choices: LINK x3, CONFIGURATION x3, CABLE x2.
+Confident wrong choices: LINK x3, CONFIGURATION x3.
 
 ## majority vote + checks + gates: 6 of 9 faults solved (95% interval 3 to 8); 18 of 27 questions right; 9 UNKNOWN, 0 wrong, 0 malformed
 
@@ -449,13 +449,13 @@ Confident wrong choices: LINK x3, CONFIGURATION x3, CABLE x2.
 | slow_responses-2 | TIMEOUT | UNKNOWN | ? | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (TIMEOUT, FIRMWARE), so there is no one... |
 | slow_responses-3 | TIMEOUT | UNKNOWN | ? | yes | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (TIMEOUT, FIRMWARE), so there is no one... |
 
-## majority vote + checks + gates, own fault held out: 1 of 9 faults solved (95% interval 0 to 4); 4 of 27 questions right; 20 UNKNOWN, 3 wrong, 0 malformed
+## majority vote + checks + gates, own fault held out: 2 of 9 faults solved (95% interval 1 to 5); 6 of 27 questions right; 21 UNKNOWN, 0 wrong, 0 malformed
 
 | Question | Expected | Chosen | | Precedent offered | Error shown → the model's answer |
 |---|---|---|---|---|---|
-| cable_loss-1 | CABLE | LINK | ✗ | no | `Failed: path_loss_100mhz: 1.8898817412 dB, limit 0 to 0.974341649025 dB, margin -0.91554...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
-| cable_loss-2 | CABLE | LINK | ✗ | no | `Failed: path_loss_100mhz: 1.3898817412 dB, limit 0 to 0.974341649025 dB, margin -0.41554...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
-| cable_loss-3 | CABLE | LINK | ✗ | no | `Failed: path_loss_100mhz: 2.8898817412 dB, limit 0 to 0.974341649025 dB, margin -1.91554...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
+| cable_loss-1 | CABLE | UNKNOWN | ? | no | `Failed: path_loss_100mhz: 1.8898817412 dB, limit 0 to 0.974341649025 dB, margin -0.91554...` -> UNKNOWN, model not asked: the closest past run is only 0.912 similar, below 0.95, so there is no close precedent |
+| cable_loss-2 | CABLE | UNKNOWN | ? | no | `Failed: path_loss_100mhz: 1.3898817412 dB, limit 0 to 0.974341649025 dB, margin -0.41554...` -> UNKNOWN, model not asked: the closest past run is only 0.913 similar, below 0.95, so there is no close precedent |
+| cable_loss-3 | CABLE | UNKNOWN | ? | no | `Failed: path_loss_100mhz: 2.8898817412 dB, limit 0 to 0.974341649025 dB, margin -1.91554...` -> UNKNOWN, model not asked: the closest past run is only 0.913 similar, below 0.95, so there is no close precedent |
 | config_decimal_error-1 | CONFIGURATION | UNKNOWN | ? | no | `AssertionError: the generator carries a level offset of 0 dB, but the bench configuration...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (FIRMWARE, CONFIGURATION), so there is no one... |
 | config_decimal_error-2 | CONFIGURATION | UNKNOWN | ? | no | `AssertionError: the generator carries a level offset of 0 dB, but the bench configuration...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (FIRMWARE, CONFIGURATION), so there is no one... |
 | config_decimal_error-3 | CONFIGURATION | UNKNOWN | ? | no | `AssertionError: the generator carries a level offset of 0 dB, but the bench configuration...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (FIRMWARE, CONFIGURATION), so there is no one... |
@@ -468,9 +468,9 @@ Confident wrong choices: LINK x3, CONFIGURATION x3, CABLE x2.
 | link_down-1 | LINK | LINK | ✓ | no | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
 | link_down-2 | LINK | LINK | ✓ | no | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
 | link_down-3 | LINK | LINK | ✓ | no | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
-| link_flaky-1 | LINK | UNKNOWN | ? | no | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (LINK, CABLE), so there is no one precedent to... |
+| link_flaky-1 | LINK | LINK | ✓ | no | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
 | link_flaky-2 | LINK | LINK | ✓ | no | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
-| link_flaky-3 | LINK | UNKNOWN | ? | no | `Failed: path_loss_5000mhz: 110.132770235 dB, limit 2.85410196625 to 3.85410196625 dB,...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (LINK, CABLE), so there is no one precedent to... |
+| link_flaky-3 | LINK | LINK | ✓ | no | `Failed: path_loss_5000mhz: 110.132770235 dB, limit 2.85410196625 to 3.85410196625 dB,...` -> LINK by majority vote, model not asked: 3 of the 3 closest past runs were resolved by LINK |
 | output_command_change-1 | FIRMWARE | UNKNOWN | ? | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (TIMEOUT, LINK), so there is no one precedent... |
 | output_command_change-2 | FIRMWARE | UNKNOWN | ? | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (TIMEOUT, LINK), so there is no one precedent... |
 | output_command_change-3 | FIRMWARE | UNKNOWN | ? | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> UNKNOWN, model not asked: the closest past runs were resolved by different actions (TIMEOUT, LINK), so there is no one precedent... |
@@ -481,38 +481,39 @@ Confident wrong choices: LINK x3, CONFIGURATION x3, CABLE x2.
 | slow_responses-2 | TIMEOUT | UNKNOWN | ? | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> UNKNOWN, model not asked: the closest past run is only 0.796 similar, below 0.95, so there is no close precedent |
 | slow_responses-3 | TIMEOUT | UNKNOWN | ? | no | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> UNKNOWN, model not asked: the closest past run is only 0.796 similar, below 0.95, so there is no close precedent |
 
-Confident wrong choices: LINK x3.
-
 ## Findings
 
 - Best scenario: majority vote, 9 of 9 faults solved (95% interval 6 to 9); 27 of 27 questions right; 0 UNKNOWN, 0 wrong, 0 malformed.
-- A fault's questions split (some right, some wrong) in 6 of 117 fault-and-scenario cells; otherwise they were answered alike, so the fault, not the question, is the unit the scores count.
-- error only to full evidence raised faults solved by 2 (3 to 5 of 9); confident wrong answers went from 18 to 11 of 27.
-- full evidence to full evidence, no firmware line lowered faults solved by 1 (5 to 4 of 9); confident wrong answers went from 11 to 14 of 27.
-- full evidence to full + retrieval raised faults solved by 1 (5 to 6 of 9); confident wrong answers went from 11 to 6 of 27.
-- full + retrieval to full + retrieval + checks did not change the faults solved (6 to 6 of 9); confident wrong answers went from 6 to 3 of 27.
-- full + retrieval + checks to full + retrieval + checks, own fault held out lowered faults solved by 2 (6 to 4 of 9); confident wrong answers went from 3 to 11 of 27.
+- A fault's questions split (some right, some wrong) in 0 of 117 fault-and-scenario cells; otherwise they were answered alike, so the fault, not the question, is the unit the scores count.
+- error only to full evidence raised faults solved by 4 (3 to 7 of 9); confident wrong answers went from 18 to 6 of 27.
+- full evidence to full evidence, no firmware line lowered faults solved by 1 (7 to 6 of 9); confident wrong answers went from 6 to 9 of 27.
+- full evidence to full + retrieval lowered faults solved by 1 (7 to 6 of 9); confident wrong answers went from 6 to 9 of 27.
+- full + retrieval to full + retrieval + checks did not change the faults solved (6 to 6 of 9); confident wrong answers went from 9 to 3 of 27.
+- full + retrieval + checks to full + retrieval + checks, own fault held out lowered faults solved by 2 (6 to 4 of 9); confident wrong answers went from 3 to 12 of 27.
 - full + retrieval + checks to full + retrieval + checks + gates lowered faults solved by 1 (6 to 5 of 9); confident wrong answers went from 3 to 0 of 27.
-- full + retrieval + checks, own fault held out to full + retrieval + checks + gates, own fault held out lowered faults solved by 3 (4 to 1 of 9); confident wrong answers went from 11 to 3 of 27.
-- full + retrieval to majority vote raised faults solved by 3 (6 to 9 of 9); confident wrong answers went from 6 to 0 of 27.
+- full + retrieval + checks, own fault held out to full + retrieval + checks + gates, own fault held out lowered faults solved by 3 (4 to 1 of 9); confident wrong answers went from 12 to 3 of 27.
+- full + retrieval to majority vote raised faults solved by 3 (6 to 9 of 9); confident wrong answers went from 9 to 0 of 27.
 - full + retrieval + checks to majority vote + checks raised faults solved by 3 (6 to 9 of 9); confident wrong answers went from 3 to 0 of 27.
-- full + retrieval + checks, own fault held out to majority vote + checks, own fault held out lowered faults solved by 1 (4 to 3 of 9); confident wrong answers went from 11 to 8 of 27.
+- full + retrieval + checks, own fault held out to majority vote + checks, own fault held out did not change the faults solved (4 to 4 of 9); confident wrong answers went from 12 to 6 of 27.
 - full + retrieval + checks + gates to majority vote + checks + gates raised faults solved by 1 (5 to 6 of 9); confident wrong answers went from 0 to 0 of 27.
-- full + retrieval + checks + gates, own fault held out to majority vote + checks + gates, own fault held out did not change the faults solved (1 to 1 of 9); confident wrong answers went from 3 to 3 of 27.
+- full + retrieval + checks + gates, own fault held out to majority vote + checks + gates, own fault held out raised faults solved by 1 (1 to 2 of 9); confident wrong answers went from 3 to 0 of 27.
 - full + retrieval: retrieval offered a past run of the question's own fault for 27 of 27 questions.
+- full + retrieval: cited the matching past failure yet still chose wrong on 3 questions (link_down).
 - full + retrieval + checks: retrieval offered a past run of the question's own fault for 27 of 27 questions.
-- full + retrieval + checks, own fault held out: with no past run of its own fault to go on, the model said UNKNOWN 3 times and named a wrong action 11 times, of 27.
+- full + retrieval + checks: cited the matching past failure yet still chose wrong on 3 questions (link_down).
+- full + retrieval + checks, own fault held out: with no past run of its own fault to go on, the model said UNKNOWN 3 times and named a wrong action 12 times, of 27.
 - full + retrieval + checks + gates: retrieval offered a past run of the question's own fault for 27 of 27 questions.
-- full + retrieval + checks + gates, own fault held out: with no past run of its own fault to go on, the model said UNKNOWN 20 times and named a wrong action 3 times, of 27.
+- full + retrieval + checks + gates: cited the matching past failure yet still chose wrong on 3 questions (link_down).
+- full + retrieval + checks + gates, own fault held out: with no past run of its own fault to go on, the model said UNKNOWN 21 times and named a wrong action 3 times, of 27.
 - majority vote: retrieval offered a past run of the question's own fault for 27 of 27 questions.
 - majority vote + checks: retrieval offered a past run of the question's own fault for 27 of 27 questions.
-- majority vote + checks, own fault held out: with no past run of its own fault to go on, the vote said UNKNOWN 9 times and named a wrong action 8 times, of 27.
+- majority vote + checks, own fault held out: with no past run of its own fault to go on, the vote said UNKNOWN 9 times and named a wrong action 6 times, of 27.
 - majority vote + checks + gates: retrieval offered a past run of the question's own fault for 27 of 27 questions.
-- majority vote + checks + gates, own fault held out: with no past run of its own fault to go on, the vote said UNKNOWN 20 times and named a wrong action 3 times, of 27.
+- majority vote + checks + gates, own fault held out: with no past run of its own fault to go on, the vote said UNKNOWN 21 times and named a wrong action 0 times, of 27.
 - full + retrieval + checks + gates: the gates answered UNKNOWN without asking the model on 9 of 27 questions; without the gates, 3 of those were confident wrong answers and 3 were right.
-- full + retrieval + checks + gates, own fault held out: the gates answered UNKNOWN without asking the model on 20 of 27 questions; without the gates, 8 of those were confident wrong answers and 9 were right.
+- full + retrieval + checks + gates, own fault held out: the gates answered UNKNOWN without asking the model on 21 of 27 questions; without the gates, 9 of those were confident wrong answers and 9 were right.
 - majority vote + checks + gates: the gates answered UNKNOWN before the vote on 9 of 27 questions; without the gates, 0 of those were confident wrong answers and 9 were right.
-- majority vote + checks + gates, own fault held out: the gates answered UNKNOWN before the vote on 20 of 27 questions; without the gates, 5 of those were confident wrong answers and 6 were right.
+- majority vote + checks + gates, own fault held out: the gates answered UNKNOWN before the vote on 21 of 27 questions; without the gates, 6 of those were confident wrong answers and 6 were right.
 - Most common confident wrong choice: FIRMWARE (30 times across the scenarios).
 - Right in every question of every scenario: none.
 

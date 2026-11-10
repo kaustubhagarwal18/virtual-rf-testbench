@@ -11,6 +11,7 @@ from triage.evidence import (
     FULL,
     FULL_WITHOUT_FIRMWARE,
     LEVELS,
+    NO_SIGNAL_LOG,
     SavedRun,
     build_evidence,
     firmware_changed,
@@ -264,3 +265,35 @@ def test_the_ablation_is_evaluated_but_not_offered_to_callers() -> None:
     """A request may ask for error-only or full; only the evaluation builds the ablation."""
     assert FULL_WITHOUT_FIRMWARE not in LEVELS
     assert set(EVALUATED_LEVELS) == {*LEVELS, FULL_WITHOUT_FIRMWARE}
+
+
+NO_SIGNAL_LINE = (
+    'spectrum-analyzer-1  | {"level": "WARNING", "message": '
+    '"No signal reaching the analyzer: nothing is connected", "reading": 7}'
+)
+"""One analyzer log line saying no signal reached it, as the simulator writes it."""
+
+
+@pytest.mark.parametrize("count", [0, 1, 40])
+def test_a_missing_signal_leads_the_full_evidence(tmp_path: Path, count: int) -> None:
+    """When the analyzer logged no signal, the evidence says so first, with how often."""
+    folder = write_run(tmp_path / "run", [FAILING_TEST])
+    (folder / "logs.txt").write_text(
+        "\n".join(["generator-1 | {}", *[NO_SIGNAL_LINE] * count]) + "\n", encoding="utf-8"
+    )
+    lines = build_evidence(SavedRun.load(folder), FULL).splitlines()
+    if count == 0:
+        assert lines[0].startswith("First failure:")
+        assert not any(line.startswith("No signal:") for line in lines)
+    else:
+        times = "once" if count == 1 else f"{count} times"
+        assert lines[0] == (
+            f'No signal: the analyzer logged "No signal reaching the analyzer" {times}.'
+        )
+        assert lines[1].startswith("First failure:")
+
+
+def test_the_no_signal_note_matches_what_the_analyzer_logs() -> None:
+    """The phrase the evidence looks for is the one the analyzer writes, so they can't drift."""
+    source = Path("simulators/spectrum_analyzer/link.py").read_text(encoding="utf-8")
+    assert NO_SIGNAL_LOG in source

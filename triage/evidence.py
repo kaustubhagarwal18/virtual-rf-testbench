@@ -311,6 +311,30 @@ def firmware_note(run: SavedRun) -> str:
     return f"Firmware: {text} (changed since the last passing run)."
 
 
+NO_SIGNAL_LOG = "No signal reaching the analyzer"
+"""What the analyzer logs for a reading that saw no signal; a test checks it still does."""
+
+
+def no_signal_note(run: SavedRun) -> str:
+    """Say how often the analyzer logged that no signal reached it, if it did.
+
+    The log lines are in the evidence already, but as the last few of many. A small model
+    read a disconnected cable's 110 dB path loss as a calibration problem; this line states
+    the fact the logs record, the way instrument_error_note states an SCPI error.
+
+    Args:
+        run: The run.
+
+    Returns:
+        One line with the count, or an empty string when the analyzer never logged it.
+    """
+    count = sum(1 for line in run.logs if NO_SIGNAL_LOG in line)
+    if not count:
+        return ""
+    times = "once" if count == 1 else f"{count} times"
+    return f'No signal: the analyzer logged "{NO_SIGNAL_LOG}" {times}.'
+
+
 def notable_logs(run: SavedRun) -> list[str]:
     """Pick the instrument log lines a person would actually read.
 
@@ -364,8 +388,9 @@ def error_only_evidence(run: SavedRun) -> str:
 def full_evidence(run: SavedRun, firmware_line: bool = True) -> str:
     """Build everything the run recorded, led by the failure the rest follows from.
 
-    An SCPI error the instruments reported comes before the first failure, because the
-    first failure is often the timeout that error caused.
+    A missing signal and an SCPI error the instruments reported come before the first
+    failure, because the first failure is often what they caused: a path loss of 110 dB,
+    or a timeout.
 
     Args:
         run: The run.
@@ -380,8 +405,7 @@ def full_evidence(run: SavedRun, firmware_line: bool = True) -> str:
     # Only the reason's first line: where there are parameters they carry the same numbers
     # more precisely, and a prompt shouldn't say everything twice.
     reason = failure.detail.splitlines()[0] if failure.detail else ""
-    errors = instrument_error_note(run)
-    lines = [errors] if errors else []
+    lines = [note for note in (no_signal_note(run), instrument_error_note(run)) if note]
     lines += [
         f"First failure: {failure.where} (found in {failure.source}).",
         f"Reason: {reason}",

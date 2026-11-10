@@ -13,7 +13,7 @@ from dataclasses import replace
 from typing import Protocol
 
 from triage.answer import Verdict
-from triage.evidence import SavedRun, firmware_changed, instrument_errors
+from triage.evidence import SavedRun, firmware_changed, instrument_errors, no_signal_note
 from triage.prompt import Fix
 
 
@@ -134,10 +134,42 @@ class TimeoutWithInstrumentErrorCheck:
         )
 
 
+class AlignmentWithoutSignalCheck:
+    """Refuse a self-alignment verdict when the analyzer logged that no signal reached it.
+
+    Self-alignment corrects an instrument's own measurement error; it can't bring back a
+    signal that never arrives. With retrieval, the model chose ALIGNMENT on a disconnected
+    cable, drawn by precedents whose fix reads "reconnected the cable and recalibrated"
+    (ADR 0017).
+    """
+
+    def review(self, run: SavedRun, verdict: Verdict) -> Verdict:
+        """Overrule ALIGNMENT when the analyzer logged no signal.
+
+        Args:
+            run: The run the verdict is about.
+            verdict: The model's verdict.
+
+        Returns:
+            The verdict, or UNKNOWN with the reason it was overruled.
+        """
+        if verdict.fix is not Fix.ALIGNMENT or not no_signal_note(run):
+            return verdict
+        return replace(
+            verdict,
+            fix=Fix.UNKNOWN,
+            overruled=(
+                "the model chose ALIGNMENT, but the analyzer logged that no signal reached "
+                "it: self-alignment can't restore a missing signal"
+            ),
+        )
+
+
 DEFAULT_CHECKS: tuple[VerdictCheck, ...] = (
     ForeignReleaseCheck(),
     FirmwareUnchangedCheck(),
     TimeoutWithInstrumentErrorCheck(),
+    AlignmentWithoutSignalCheck(),
 )
 """The checks the service applies to every verdict."""
 

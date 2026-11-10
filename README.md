@@ -80,14 +80,14 @@ turn an answer into `UNKNOWN` or refuse it, never pick a different action.
 |---|---|---|
 | **Fixed action list** | the model picks a key, so scoring is an exact match | no judge model needed |
 | **Reply schema** | one action from the enum; `cited` limited to the offered ids; 512-token cap | an invented citation can't be written |
-| **Strict parser** | anything unusable is counted as malformed, never read generously | 3 of 27 with retrieval, all `link_down` |
+| **Strict parser** | anything unusable is counted as malformed, never read generously | none in the current run; 3 `link_down` replies before ADR 0017 |
 | **Disagreement gate** | top 3 past runs resolved different ways → `UNKNOWN`, model not asked | wrong answers 3 → 0, at a cost of 3 right ones |
-| **Checks** | `FIRMWARE` on a release the run didn't run, or on unchanged firmware; `TIMEOUT` beside an SCPI error | turned 3 wrong answers into `UNKNOWN`, cost none |
+| **Checks** | `FIRMWARE` on a release the run didn't run, or on unchanged firmware; `TIMEOUT` beside an SCPI error; `ALIGNMENT` when the analyzer logged no signal | turned 6 wrong answers into `UNKNOWN`, cost none |
 
 ### Results
 
 <p align="center">
-  <img src="docs/images/triage-results.svg" width="860" alt="Faults solved out of 9: error only 3, full evidence 5, without the version line 4; with retrieval 6, with checks 6, with the disagreement gate 5 and no wrong answers; a majority vote over the same past runs, with no model, 9 with no wrong answers, and 6 with the gate; with the question's own fault held out, 4 with checks (the vote 3) and 1 with both gates (the vote the same).">
+  <img src="docs/images/triage-results.svg" width="860" alt="Faults solved out of 9: error only 3, full evidence 7, without the version line 6; with retrieval 6, with checks 6, with the disagreement gate 5 and no wrong answers; a majority vote over the same past runs, with no model, 9 with no wrong answers, and 6 with the gate; with the question's own fault held out, 4 with checks (the vote 4) and 1 with both gates (the vote 2).">
 </p>
 
 Counts, not percentages: with 9 faults, "6 of 9, 3 to 8" is honest where "67%" is not.
@@ -97,11 +97,17 @@ Every question's answer is in [`triage/results/rag.md`](triage/results/rag.md).
 
 - **Counting the past runs' actions beats the model on this data set.** A majority vote over
   the same top 3, with no model, solves 9 of 9 with no wrong answers, against the model's 6.
-  Behind the gate the model never departs from the precedents: its 5 against the vote's 6
-  is 3 malformed replies. This is recall: every question had a past run of its own fault.
-  The model's one gain is a new fault where the precedents tie (ADR 0015).
-- **Retrieval helps most when the fault has happened before:** 5 → 6 of 9, and wrong answers
-  11 → 6. With the fault held out, it drops to 4 of 9, even with the checks.
+  Behind the gate the model differs from the vote only on `link_down`: it answers
+  `UNKNOWN` where the vote says `LINK`. This is recall: every question had a past run of its
+  own fault.
+  The model's one gain is a new fault where the precedents tie (`config_decimal_error`);
+  held out, it also loses `link_flaky`, which the vote gets right, so both solve 4 of 9.
+- **Past runs help the model on one fault and mislead it on two.** The run's own evidence
+  solves 7 of 9; with the past runs, 6. They fix `config_parameter_out_of_range`, but the
+  model copies "recalibrated" from `link_down`'s past fixes into `ALIGNMENT`, and
+  `reset_leaks_offset` becomes `CONFIGURATION`. With the fault held out, 4 of 9.
+- **Stating a fact from the logs can matter.** A line saying the analyzer logged "No signal
+  reaching the analyzer" took the evidence-only answer from 5 to 7 of 9 (ADR 0017).
 - **A small model follows the odd precedent out.** Offered two past runs of its own fault
   and one look-alike, it often copies the look-alike. That is why the gate exists.
 - **Wording matters.** "Firmware: … (unchanged)" pulled the model to `FIRMWARE`. Saying
@@ -123,6 +129,7 @@ Each review found a way the score could flatter the assistant, and closed it.
 | [0013](docs/adr/0013-abstain-from-retrieval.md) | gates before the model; an ablation of the firmware line | 5 of 9 faults |
 | [0014](docs/adr/0014-api-gate-cited-ids-version-wording.md) | the disagreement gate in the API, cited ids in the schema, version wording | **6 of 9 faults** |
 | [0015](docs/adr/0015-majority-vote-baseline.md) | a majority vote over the same past runs, with no model, as a baseline | 6 of 9; the vote 9 of 9 |
+| [0017](docs/adr/0017-no-signal-line-and-alignment-check.md) | a "No signal" line in the evidence; `ALIGNMENT` without a signal becomes `UNKNOWN` | 6 of 9; without past runs 7 of 9 |
 
 ### Try it
 

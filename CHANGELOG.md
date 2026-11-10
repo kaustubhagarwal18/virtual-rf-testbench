@@ -33,6 +33,10 @@ it, so the package version moves only with a release.
 - **Cited ids in the schema:** each question's reply schema lists the source ids it was
   offered, and replies are capped at 512 tokens, so a runaway reply ends as malformed
   instead of hanging until the timeout (ADR 0014).
+- **A "No signal" line and an alignment check** (ADR 0017). When the analyzer logged that no
+  signal reached it, the evidence says so first, with a count; a fourth check turns an
+  `ALIGNMENT` verdict on such a run into `UNKNOWN`. Without past runs, full evidence went
+  from 5 to 7 of 9 faults; with the gate, wrong answers stay at 0.
 - **Answers state the cause and what fixed it last time** (ADR 0016). Every verdict says
   whether its action answers the firmware, the bench or the test (`category`, looked up from
   the action), and quotes the recorded fix of each past run it cites (`past_fixes`), word
@@ -92,8 +96,9 @@ it, so the package version moves only with a release.
 
 ### Known issues
 
-- With retrieval, the model's answers on `link_down` are unusable: it chooses `ALIGNMENT`,
-  then rambles until the 512-token cap cuts the reply off, so all three are malformed.
+- With retrieval, the model answers `ALIGNMENT` on `link_down`, copying "recalibrated" from
+  the past runs' fix; a check turns it into `UNKNOWN` (ADR 0017), so the API gives no answer
+  there, where the majority vote would say `LINK`.
 - The disagreement gate the API applies costs right answers as well as wrong ones: with a
   precedent available, wrong answers go from 3 to 0 and right answers from 18 to 15
   (ADR 0014).
