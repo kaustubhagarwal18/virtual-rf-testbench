@@ -1,7 +1,9 @@
 # virtual-rf-testbench
 
-**What went wrong: the firmware, the bench or the test? A simulated RF test bench, and a
-local assistant that triages its failures.**
+### A test failed. Was it the firmware, the bench or the test?
+
+A simulated RF bench, and a local AI that names the likely culprit and quotes what fixed it
+last time.
 
 [![CI](https://github.com/kaustubhagarwal18/virtual-rf-testbench/actions/workflows/ci.yml/badge.svg)](https://github.com/kaustubhagarwal18/virtual-rf-testbench/actions/workflows/ci.yml)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
