@@ -15,8 +15,8 @@ from triage.answer import (
     VERDICT_SCHEMA,
     MalformedAnswerError,
     Verdict,
-    grouped_past_fixes,
     parse_verdict,
+    past_fix_lines,
     verdict_schema,
     with_past_fixes,
 )
@@ -84,10 +84,7 @@ def describe(verdict: Verdict) -> str:
         f"cause: {verdict.category}",
         f"cited: {', '.join(verdict.cited) or 'nothing'}",
     ]
-    lines += [
-        f"last time: {fix} ({', '.join(source_ids)})"
-        for fix, source_ids in grouped_past_fixes(verdict)
-    ]
+    lines += [f"last time: {line}" for line in past_fix_lines(verdict)]
     if verdict.overruled:
         lines.append(f"note:  {verdict.overruled}")
     return "\n".join(lines) + "\n"

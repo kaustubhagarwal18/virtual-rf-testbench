@@ -229,3 +229,16 @@ def grouped_past_fixes(verdict: Verdict) -> list[tuple[str, tuple[str, ...]]]:
     for past in verdict.past_fixes:
         groups.setdefault(past.fix_applied, []).append(past.source_id)
     return [(fix, tuple(source_ids)) for fix, source_ids in groups.items()]
+
+
+def past_fix_lines(verdict: Verdict) -> list[str]:
+    """Write each distinct past fix beside the cited runs that recorded it.
+
+    Args:
+        verdict: The verdict, with its past fixes attached.
+
+    Returns:
+        Lines such as 'Corrected level_offset_db to 1.5 (past-a, past-c)', in first-cited
+        order, so each fix can be traced to the run it came from.
+    """
+    return [f"{fix} ({', '.join(source_ids)})" for fix, source_ids in grouped_past_fixes(verdict)]

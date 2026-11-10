@@ -29,7 +29,8 @@ was in the cited runs' records, so an engineer had to look the ids up to read it
 
 - `make triage`, `make triage-demo` and the API's `POST /triage` (`category`,
   `past_fixes`) all show both. On `config_decimal_error-1`, the demo's retrieval answer now
-  reads "cause: test" and "last time: Corrected level_offset_db to 1.5".
+  reads "cause: test" and "last time: Corrected level_offset_db to 1.5 (past-9e31db17,
+  past-4b20146a)": each fix beside the cited runs that recorded it.
 - No stored answer changed: `make eval` asks 0 new prompts and `triage/results/rag.md` is
   unchanged. The score still counts the action only.
 - `make triage` offers no past runs, so it shows the cause but never a past fix.

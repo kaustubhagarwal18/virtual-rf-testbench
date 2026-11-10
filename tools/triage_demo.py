@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from triage.answer import VERDICT_SCHEMA, MalformedAnswerError, grouped_past_fixes
+from triage.answer import VERDICT_SCHEMA, MalformedAnswerError, past_fix_lines
 from triage.embed import OllamaEmbedder
 from triage.evaluate import expected_fix
 from triage.evidence import FULL, SavedRun, error_only_evidence
@@ -45,8 +45,8 @@ class Answer:
         right: Whether the chosen action is the one that resolves the fault.
         category: Firmware, bench, test or unknown, from the chosen action; empty when
             unusable.
-        last_time: What fixed the cited past runs, quoted from their records, each distinct
-            fix once.
+        last_time: What fixed the cited past runs, quoted from their records: each distinct
+            fix once, beside the ids of the runs that recorded it.
     """
 
     chosen: str
@@ -102,7 +102,7 @@ def _answer(
         cited=tuple(verdict.cited),
         right=verdict.fix is expected,
         category=verdict.category,
-        last_time=tuple(fix for fix, _ in grouped_past_fixes(verdict)),
+        last_time=tuple(past_fix_lines(verdict)),
     )
 
 
