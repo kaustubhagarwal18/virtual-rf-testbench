@@ -74,6 +74,10 @@ def test_json_logging_writes_json_lines_and_restores_the_handlers() -> None:
 RECORDS_LOGGED_WHILE_STALLED = 50
 """How many records the stalled-stream tests log: ten times the queue size they use."""
 
+BLOCKED_AFTER_S = 5.0
+"""How long logging may take before it counts as blocked. Blocking on a stalled stream would
+never end, so a generous bound tells the two apart without failing on a busy machine."""
+
 
 class StalledStream(io.StringIO):
     """A stream whose writes wait until the test releases it, like a pipe nobody reads."""
@@ -82,6 +86,7 @@ class StalledStream(io.StringIO):
         """Start stalled."""
         super().__init__()
         self.released = threading.Event()
+        self.writing = threading.Event()
 
     def write(self, text: str) -> int:
         """Wait for the release, then keep the text.
@@ -92,6 +97,7 @@ class StalledStream(io.StringIO):
         Returns:
             The number of characters written.
         """
+        self.writing.set()
         self.released.wait()
         return super().write(text)
 
@@ -99,16 +105,23 @@ class StalledStream(io.StringIO):
 def log_while_stalled(stream: StalledStream, handler: DroppingQueueHandler, count: int) -> None:
     """Log records while nothing reads the stream, checking that logging never waits.
 
+    The first record is logged alone, and the rest only once the writer thread is stuck
+    writing it. Otherwise a writer thread that starts late takes its first record after the
+    queue has filled, frees a slot mid-stall, and a second drop warning goes out: correct
+    behaviour, but a different count each run.
+
     Args:
         stream: The stalled stream.
         handler: The handler json_logging installed.
-        count: How many records to log.
+        count: How many records to log, the first included.
     """
     logger = logging.getLogger("simulators.test")
     started_s = time.monotonic()
-    for index in range(count):
+    logger.warning("Command rejected", extra={"index": 0})
+    assert stream.writing.wait(BLOCKED_AFTER_S), "the writer thread never took the first record"
+    for index in range(1, count):
         logger.warning("Command rejected", extra={"index": index})
-    assert time.monotonic() - started_s < 1.0
+    assert time.monotonic() - started_s < BLOCKED_AFTER_S
     assert handler.dropped > 0
     stream.released.set()
 

@@ -78,6 +78,11 @@ it, so the package version moves only with a release.
 
 ### Fixed
 
+- The stalled-log-stream test failed about 2 runs in 500: a writer thread that started late
+  freed a queue slot mid-stall, so two drop warnings went out where the test expected one.
+  The test now waits until the writer is stuck on its first record before logging the rest,
+  and 0 of 2000 runs failed (0 of 500 under CPU load). The logging code was correct and is
+  unchanged.
 - Retrieval indexed identical history runs once each, so a question could be offered the
   same precedent two or three times; five pairs in the data set are identical. They are
   indexed once now, and the measured retrieval score fell from 8 to 5 of 9 faults
