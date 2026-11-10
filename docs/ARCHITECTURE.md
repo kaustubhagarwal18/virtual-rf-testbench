@@ -327,7 +327,7 @@ flowchart LR
 | The HTTP API | `triage/api.py` |
 | Evaluation scenarios and running them | `triage/evaluate.py` |
 | Outcomes, scores and the 95% interval | `triage/scores.py` |
-| The report and its findings | `triage/report.py`, `triage/results/rag.md` |
+| The report and its findings | `triage/report.py`, `triage/results/rag.md`, `docs/EVALUATION.md` |
 | CI jobs, the image scan and publishing | `.github/workflows/ci.yml` |
 
 ## Decisions
