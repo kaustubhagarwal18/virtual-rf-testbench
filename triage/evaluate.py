@@ -2,12 +2,12 @@
 
 Each scenario adds one thing to a neighbour, so any change in the score is attributable to
 that one thing: the error message alone, the whole run's evidence, that evidence without its
-firmware line (an ablation), the evidence plus the past runs most like it (retrieval), the
-same with the checks on the verdict, the same again with the question's own fault held out
-of the history, and both retrieval scenarios with gates that answer UNKNOWN from the
-precedents alone. Five more replace the model with a majority vote over the same precedents
-(triage.vote), each the twin of a model scenario, to show what the model adds beyond
-retrieval.
+firmware line or without its "No signal" line (two ablations), the evidence plus the past
+runs most like it (retrieval), the same with the checks on the verdict, the same again with
+the question's own fault held out of the history, and both retrieval scenarios with gates
+that answer UNKNOWN from the precedents alone. Five more replace the model with a majority
+vote over the same precedents (triage.vote), each the twin of a model scenario, to show what
+the model adds beyond retrieval.
 
 An answer is one of four things: right, UNKNOWN (the model abstained), a confident wrong
 action, or malformed (unusable). They are counted apart, because a confident wrong action is
@@ -31,6 +31,7 @@ from triage.evidence import (
     ERROR_ONLY,
     FULL,
     FULL_WITHOUT_FIRMWARE,
+    FULL_WITHOUT_SIGNAL,
     SavedRun,
     error_only_evidence,
 )
@@ -57,6 +58,7 @@ SCENARIOS = (
     Scenario("error only", ERROR_ONLY),
     Scenario("full evidence", FULL, adds_to="error only"),
     Scenario("full evidence, no firmware line", FULL_WITHOUT_FIRMWARE, adds_to="full evidence"),
+    Scenario("full evidence, no signal line", FULL_WITHOUT_SIGNAL, adds_to="full evidence"),
     Scenario("full + retrieval", FULL, precedents=Precedents.ALL, adds_to="full evidence"),
     Scenario(
         "full + retrieval + checks",

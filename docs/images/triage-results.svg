@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 740" width="900" height="740" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 792" width="900" height="792" role="img" aria-labelledby="title desc">
   <title id="title">Triage results: faults solved out of 9</title>
-  <desc id="desc">Faults solved out of 9, with 95% intervals, and confident wrong answers out of 27, for each scenario. Without retrieval: error only 3, full evidence 7, full evidence without the firmware line 6. With retrieval: 6, with checks 6, with checks and gates 5. The same precedents answered by majority vote, with no model: 9, and 6 with checks and gates, with no wrong answers. With the question's own fault held out: with checks 4 (the vote 4), with checks and gates 1 (the vote 2, with no wrong answers).</desc>
+  <desc id="desc">Faults solved out of 9, with 95% intervals, and confident wrong answers out of 27, for each scenario. Without retrieval: error only 3, full evidence 7, full evidence without the firmware line 6, without the no-signal line 5. With retrieval: 6, with checks 6, with checks and gates 5. The same precedents answered by majority vote, with no model: 9, and 6 with checks and gates, with no wrong answers. With the question's own fault held out: with checks 4 (the vote 4), with checks and gates 1 (the vote 2, with no wrong answers).</desc>
   <defs>
     <linearGradient id="barBase" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#8957e5"/>
@@ -52,7 +52,7 @@
     </style>
   </defs>
 
-  <g filter="url(#shadow)"><rect x="20" y="16" width="860" height="708" rx="18" class="panel"/></g>
+  <g filter="url(#shadow)"><rect x="20" y="16" width="860" height="760" rx="18" class="panel"/></g>
 
   <text x="48" y="54" class="heading">Faults solved, out of 9</text>
   <text x="48" y="76" class="caption">A fault is solved when all three of its questions are right. The thin line is the 95% interval.</text>
@@ -89,78 +89,86 @@
   <text x="776" y="251" class="wrong">9</text>
   <text x="48" y="266" class="note">ablation</text>
 
-  <line x1="48" y1="284" x2="852" y2="284" class="rule"/>
+  <text x="48" y="302" class="name">Full evidence, no signal line</text>
+  <rect x="330" y="288" width="300" height="20" rx="10" class="track"/>
+  <rect x="330" y="288" width="166.7" height="20" rx="10" fill="url(#barBase)" opacity="0.55"/>
+  <line x1="396.7" y1="298" x2="563.3" y2="298" class="whisker"/>
+  <text x="644" y="303" class="value">5</text>
+  <text x="776" y="303" class="wrong">11</text>
+  <text x="48" y="318" class="note">ablation: loses link_down and link_flaky</text>
+
+  <line x1="48" y1="336" x2="852" y2="336" class="rule"/>
 
   <!-- ===== With retrieval ===== -->
-  <text x="48" y="308" class="group">WITH RETRIEVAL (RAG)</text>
+  <text x="48" y="360" class="group">WITH RETRIEVAL (RAG)</text>
 
-  <text x="48" y="336" class="name">+ top 3 past runs</text>
-  <rect x="330" y="322" width="300" height="20" rx="10" class="track"/>
-  <rect x="330" y="322" width="200" height="20" rx="10" fill="url(#barRag)"/>
-  <line x1="430" y1="332" x2="596.7" y2="332" class="whisker"/>
-  <text x="644" y="337" class="value">6</text>
-  <text x="776" y="337" class="wrong">9</text>
+  <text x="48" y="388" class="name">+ top 3 past runs</text>
+  <rect x="330" y="374" width="300" height="20" rx="10" class="track"/>
+  <rect x="330" y="374" width="200" height="20" rx="10" fill="url(#barRag)"/>
+  <line x1="430" y1="384" x2="596.7" y2="384" class="whisker"/>
+  <text x="644" y="389" class="value">6</text>
+  <text x="776" y="389" class="wrong">9</text>
 
-  <text x="48" y="372" class="name">+ checks</text>
-  <rect x="330" y="358" width="300" height="20" rx="10" class="track"/>
-  <rect x="330" y="358" width="200" height="20" rx="10" fill="url(#barRag)"/>
-  <line x1="430" y1="368" x2="596.7" y2="368" class="whisker"/>
-  <text x="644" y="373" class="value">6</text>
-  <text x="776" y="373" class="wrong">3</text>
+  <text x="48" y="424" class="name">+ checks</text>
+  <rect x="330" y="410" width="300" height="20" rx="10" class="track"/>
+  <rect x="330" y="410" width="200" height="20" rx="10" fill="url(#barRag)"/>
+  <line x1="430" y1="420" x2="596.7" y2="420" class="whisker"/>
+  <text x="644" y="425" class="value">6</text>
+  <text x="776" y="425" class="wrong">3</text>
 
-  <text x="48" y="408" class="name">+ checks + disagreement gate</text>
-  <rect x="330" y="394" width="300" height="20" rx="10" class="track"/>
-  <rect x="330" y="394" width="166.7" height="20" rx="10" fill="url(#barRag)"/>
-  <line x1="396.7" y1="404" x2="563.3" y2="404" class="whisker"/>
-  <text x="644" y="409" class="value">5</text>
-  <text x="776" y="409" class="wrong-zero">0</text>
-  <text x="48" y="424" class="note">what the API runs</text>
+  <text x="48" y="460" class="name">+ checks + disagreement gate</text>
+  <rect x="330" y="446" width="300" height="20" rx="10" class="track"/>
+  <rect x="330" y="446" width="166.7" height="20" rx="10" fill="url(#barRag)"/>
+  <line x1="396.7" y1="456" x2="563.3" y2="456" class="whisker"/>
+  <text x="644" y="461" class="value">5</text>
+  <text x="776" y="461" class="wrong-zero">0</text>
+  <text x="48" y="476" class="note">what the API runs</text>
 
-  <line x1="48" y1="442" x2="852" y2="442" class="rule"/>
+  <line x1="48" y1="494" x2="852" y2="494" class="rule"/>
 
   <!-- ===== Majority vote ===== -->
-  <text x="48" y="466" class="group">SAME PAST RUNS, MAJORITY VOTE — NO MODEL</text>
+  <text x="48" y="518" class="group">SAME PAST RUNS, MAJORITY VOTE — NO MODEL</text>
 
-  <text x="48" y="494" class="name">Most common action of the 3</text>
-  <rect x="330" y="480" width="300" height="20" rx="10" class="track"/>
-  <rect x="330" y="480" width="300" height="20" rx="10" fill="url(#barVote)"/>
-  <line x1="530" y1="490" x2="630" y2="490" class="whisker"/>
-  <text x="644" y="495" class="value">9</text>
-  <text x="776" y="495" class="wrong-zero">0</text>
-  <text x="48" y="510" class="note">recall: every question had a past run of its own fault</text>
-
-  <text x="48" y="546" class="name">+ checks + disagreement gate</text>
+  <text x="48" y="546" class="name">Most common action of the 3</text>
   <rect x="330" y="532" width="300" height="20" rx="10" class="track"/>
-  <rect x="330" y="532" width="200" height="20" rx="10" fill="url(#barVote)"/>
-  <line x1="430" y1="542" x2="596.7" y2="542" class="whisker"/>
-  <text x="644" y="547" class="value">6</text>
+  <rect x="330" y="532" width="300" height="20" rx="10" fill="url(#barVote)"/>
+  <line x1="530" y1="542" x2="630" y2="542" class="whisker"/>
+  <text x="644" y="547" class="value">9</text>
   <text x="776" y="547" class="wrong-zero">0</text>
-  <text x="48" y="562" class="note">the model's 5: it answers UNKNOWN on link_down</text>
+  <text x="48" y="562" class="note">recall: every question had a past run of its own fault</text>
 
-  <line x1="48" y1="580" x2="852" y2="580" class="rule"/>
+  <text x="48" y="598" class="name">+ checks + disagreement gate</text>
+  <rect x="330" y="584" width="300" height="20" rx="10" class="track"/>
+  <rect x="330" y="584" width="200" height="20" rx="10" fill="url(#barVote)"/>
+  <line x1="430" y1="594" x2="596.7" y2="594" class="whisker"/>
+  <text x="644" y="599" class="value">6</text>
+  <text x="776" y="599" class="wrong-zero">0</text>
+  <text x="48" y="614" class="note">the model's 5: it answers UNKNOWN on link_down</text>
+
+  <line x1="48" y1="632" x2="852" y2="632" class="rule"/>
 
   <!-- ===== Held out ===== -->
-  <text x="48" y="604" class="group">OWN FAULT HELD OUT — A FAILURE NEVER SEEN BEFORE</text>
+  <text x="48" y="656" class="group">OWN FAULT HELD OUT — A FAILURE NEVER SEEN BEFORE</text>
 
-  <text x="48" y="632" class="name">Retrieval + checks</text>
-  <rect x="330" y="618" width="300" height="20" rx="10" class="track"/>
-  <rect x="330" y="618" width="133.3" height="20" rx="10" fill="url(#barHeld)"/>
-  <line x1="396.7" y1="628" x2="563.3" y2="628" class="whisker"/>
-  <text x="644" y="633" class="value">4</text>
-  <text x="776" y="633" class="wrong">12</text>
+  <text x="48" y="684" class="name">Retrieval + checks</text>
+  <rect x="330" y="670" width="300" height="20" rx="10" class="track"/>
+  <rect x="330" y="670" width="133.3" height="20" rx="10" fill="url(#barHeld)"/>
+  <line x1="396.7" y1="680" x2="563.3" y2="680" class="whisker"/>
+  <text x="644" y="685" class="value">4</text>
+  <text x="776" y="685" class="wrong">12</text>
 
-  <text x="48" y="668" class="name">Majority vote + checks</text>
-  <rect x="330" y="654" width="300" height="20" rx="10" class="track"/>
-  <rect x="330" y="654" width="133.3" height="20" rx="10" fill="url(#barVote)"/>
-  <line x1="396.7" y1="664" x2="563.3" y2="664" class="whisker"/>
-  <text x="644" y="669" class="value">4</text>
-  <text x="776" y="669" class="wrong">6</text>
+  <text x="48" y="720" class="name">Majority vote + checks</text>
+  <rect x="330" y="706" width="300" height="20" rx="10" class="track"/>
+  <rect x="330" y="706" width="133.3" height="20" rx="10" fill="url(#barVote)"/>
+  <line x1="396.7" y1="716" x2="563.3" y2="716" class="whisker"/>
+  <text x="644" y="721" class="value">4</text>
+  <text x="776" y="721" class="wrong">6</text>
 
-  <text x="48" y="704" class="name">Retrieval + both gates</text>
-  <rect x="330" y="690" width="300" height="20" rx="10" class="track"/>
-  <rect x="330" y="690" width="33.3" height="20" rx="10" fill="url(#barHeld)"/>
-  <line x1="330" y1="700" x2="463.3" y2="700" class="whisker"/>
-  <text x="644" y="705" class="value">1</text>
-  <text x="776" y="705" class="wrong">3</text>
-  <text x="668" y="705" class="note">vote 2, 0 wrong</text>
+  <text x="48" y="756" class="name">Retrieval + both gates</text>
+  <rect x="330" y="742" width="300" height="20" rx="10" class="track"/>
+  <rect x="330" y="742" width="33.3" height="20" rx="10" fill="url(#barHeld)"/>
+  <line x1="330" y1="752" x2="463.3" y2="752" class="whisker"/>
+  <text x="644" y="757" class="value">1</text>
+  <text x="776" y="757" class="wrong">3</text>
+  <text x="668" y="757" class="note">vote 2, 0 wrong</text>
 </svg>
