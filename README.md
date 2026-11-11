@@ -167,15 +167,39 @@ job.
 
 ## Documentation
 
-| | |
-|---|---|
-| [Usage](docs/USAGE.md) | instruments, Docker bench, faults, Python drivers, HTTP API |
-| [Adapting](docs/ADAPTING.md) | triage your own failures, add a fault, drive real instruments |
-| [Evaluation](docs/EVALUATION.md) | every scenario, the guardrails, and what each experiment taught |
-| [Architecture](docs/ARCHITECTURE.md) | how the pieces fit, and where to look in the code |
-| [Roadmap](docs/ROADMAP.md) | what's done and what comes next |
-| [Decision records](docs/adr/) | why the main choices were made |
-| [Contributing](CONTRIBUTING.md) | setup, workflow, the checks and the project's rules |
+<table>
+<tr>
+<td width="33%" valign="top">
+
+<b>Use it</b><br><br>
+<a href="docs/USAGE.md"><b>Usage</b></a><br>
+<sub>Instruments, Docker bench, faults, Python drivers, HTTP API</sub><br><br>
+<a href="docs/ADAPTING.md"><b>Adapting</b></a><br>
+<sub>Triage your own failures, add a fault, drive real instruments</sub><br><br>
+
+</td>
+<td width="33%" valign="top">
+
+<b>Understand it</b><br><br>
+<a href="docs/EVALUATION.md"><b>Evaluation</b></a><br>
+<sub>Every scenario, the guardrails, and what each experiment taught</sub><br><br>
+<a href="docs/ARCHITECTURE.md"><b>Architecture</b></a><br>
+<sub>How the pieces fit, and where to look in the code</sub><br><br>
+<a href="docs/adr/"><b>Decision records</b></a><br>
+<sub>Why the main choices were made</sub><br><br>
+
+</td>
+<td width="33%" valign="top">
+
+<b>Build on it</b><br><br>
+<a href="docs/ROADMAP.md"><b>Roadmap</b></a><br>
+<sub>What's done and what comes next</sub><br><br>
+<a href="CONTRIBUTING.md"><b>Contributing</b></a><br>
+<sub>Setup, workflow, the checks and the project's rules</sub><br><br>
+
+</td>
+</tr>
+</table>
 
 ## License
 
