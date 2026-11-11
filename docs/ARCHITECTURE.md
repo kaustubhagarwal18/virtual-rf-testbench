@@ -325,6 +325,7 @@ flowchart LR
 | Checks on a verdict | `triage/checks.py` |
 | Abstaining from retrieval, and its threshold | `triage/abstain.py`, `tools/calibrate_abstention.py` |
 | The HTTP API | `triage/api.py` |
+| Triage of a failed bench run in CI, and its comment section | `tools/save_failed_run.py`, `tools/ci_triage.py`, the `triage` job in `.github/workflows/ci.yml` |
 | Evaluation scenarios and running them | `triage/evaluate.py` |
 | Outcomes, scores and the 95% interval | `triage/scores.py` |
 | The report and its findings | `triage/report.py`, `triage/results/rag.md`, `docs/EVALUATION.md` |

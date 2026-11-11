@@ -59,6 +59,8 @@ solves **5 with no wrong answers**. A majority vote over the retrieved past runs
   refuse a verdict the evidence contradicts.
 - **Local and private**: `qwen2.5:3b` and `nomic-embed-text` on Ollama; nothing leaves the
   machine.
+- **In CI**: when the bench job fails, the verdict and what fixed the cited past runs go
+  into the pull request comment.
 
 ## 2 · Data
 
