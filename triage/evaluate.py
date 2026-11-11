@@ -26,7 +26,6 @@ from pathlib import Path
 from triage.abstain import DEFAULT_GATES
 from triage.answer import VERDICT_SCHEMA, MalformedAnswerError, Verdict
 from triage.checks import DEFAULT_CHECKS
-from triage.embed import OllamaEmbedder
 from triage.evidence import (
     ERROR_ONLY,
     FULL,
@@ -45,7 +44,12 @@ from triage.llm import (
 )
 from triage.prompt import Fix, Source
 from triage.report import BASELINE_TITLE, RETRIEVAL_TITLE, render, render_report
-from triage.retrieval import DEFAULT_HISTORY, DEFAULT_TOP_K, InMemoryRetriever, Retriever
+from triage.retrieval import (
+    DEFAULT_HISTORY,
+    DEFAULT_TOP_K,
+    Retriever,
+    history_index,
+)
 from triage.scores import MALFORMED, Outcome, Precedents, Scenario, ScenarioResult, SourcesUsed
 from triage.service import triage_run
 from triage.vote import vote_run
@@ -363,9 +367,7 @@ def main(
     asked_before = provider.asked if isinstance(provider, CachingProvider) else 0
     try:
         if retriever is None and any(scenario.retrieve for scenario in scenarios):
-            retriever = InMemoryRetriever.from_history(  # pragma: no cover - needs Ollama
-                parsed.history, OllamaEmbedder()
-            )
+            retriever = history_index(parsed.history)  # pragma: no cover - needs Ollama
         results = evaluate(parsed.questions, provider, scenarios, retriever)
     except ModelUnavailableError as error:
         sys.stdout.write(f"{error}\n")

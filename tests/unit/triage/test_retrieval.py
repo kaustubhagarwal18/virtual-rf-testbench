@@ -8,10 +8,10 @@ import numpy as np
 import pytest
 
 from tests.unit.triage.test_evidence import FAILING_TEST, write_run
-from triage.embed import FakeEmbedder
+from triage.embed import FakeEmbedder, OllamaEmbedder
 from triage.evidence import SavedRun
 from triage.label import load_label
-from triage.retrieval import InMemoryRetriever, history_source, neutral_id
+from triage.retrieval import InMemoryRetriever, history_index, history_source, neutral_id
 
 
 def labelled_run(folder: Path, fault: str, cause: str, fix: str) -> Path:
@@ -176,3 +176,28 @@ def test_a_history_source_keeps_the_fix_applied_apart(tmp_path: Path) -> None:
     run = SavedRun.load(labelled_run(tmp_path / "run", "cable_loss", "worn cable", "replaced it"))
     source = history_source(run, load_label(run))
     assert source.fix_applied == "replaced it"
+
+
+def test_history_index_uses_the_embedder_given(tmp_path: Path) -> None:
+    """With an embedder injected, the history is indexed without reaching Ollama."""
+    labelled_run(tmp_path / "history" / "cable_loss-1", "cable_loss", "worn cable", "new cable")
+    retriever = history_index(tmp_path / "history", FakeEmbedder())
+    assert len(retriever.sources) == 1
+
+
+def test_history_index_defaults_to_the_ollama_embedder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Without an embedder, the local Ollama one is used; nothing is embedded in this test."""
+    used: list[object] = []
+    empty = InMemoryRetriever([], np.zeros((0, 0)), FakeEmbedder())
+
+    def record(history: Path, embedder: object) -> InMemoryRetriever:
+        """Record the embedder instead of indexing."""
+        del history
+        used.append(embedder)
+        return empty
+
+    monkeypatch.setattr(InMemoryRetriever, "from_history", record)
+    assert history_index(tmp_path) is empty
+    assert isinstance(used[0], OllamaEmbedder)
