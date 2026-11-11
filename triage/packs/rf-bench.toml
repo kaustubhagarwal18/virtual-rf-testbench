@@ -1,0 +1,48 @@
+# The RF bench domain: what its failed runs can be caused by, and what an engineer does about
+# each. triage/pack.py reads it; docs/ADAPTING.md explains how to write one for your domain.
+#
+# Each action is chosen by its key. Where two act on the same hardware (CABLE and LINK), each
+# says first which symptom it answers, so the choice turns on what the evidence shows rather
+# than on which words a fix shares. UNKNOWN is added by the core, not listed here.
+
+name = "rf-bench"
+description = """You triage failed runs of an automated RF test bench: a signal generator
+and a spectrum analyzer joined by a cable, driven over SCPI by a pytest suite. A run fails
+because of the instrument firmware under test, the bench itself (cable, connectors,
+calibration, alignment), or the test code and its configuration."""
+categories = ["firmware", "bench", "test"]
+
+[[actions]]
+key = "CABLE"
+category = "bench"
+says = "signal present but attenuated: replace the cable and recalibrate"
+
+[[actions]]
+key = "LINK"
+category = "bench"
+says = "no signal or intermittent signal; the path is open: reconnect or reseat the link between the instruments"
+
+[[actions]]
+key = "ALIGNMENT"
+category = "bench"
+says = "run the instrument's self-alignment"
+
+[[actions]]
+key = "CONFIGURATION"
+category = "test"
+says = "correct the bench configuration"
+
+[[actions]]
+key = "TIMEOUT"
+category = "test"
+says = "raise the session timeout to the instrument's response time"
+
+[[actions]]
+key = "TEST_CLEANUP"
+category = "test"
+says = "fix the test's cleanup so it restores what it changed"
+
+[[actions]]
+key = "FIRMWARE"
+category = "firmware"
+says = "report a firmware regression and pin the previous release"

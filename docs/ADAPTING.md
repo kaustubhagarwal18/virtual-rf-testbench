@@ -7,7 +7,7 @@ it yours, from least to most work. Setup is in the [README](../README.md).
 | You want to | Change | Code changes |
 |---|---|---|
 | Triage your own failures | Feed in your resolved runs as history | None |
-| Teach it a new kind of fault | The fault catalogue and the action list | A few lines, plus a re-run of `make eval` |
+| Teach it a new kind of fault | The fault catalogue and the domain pack's actions | A few lines, plus a re-run of `make eval` |
 | Drive real instruments | The drivers' identity filter and command set | Yes, and testing on the hardware |
 
 ## 1 · Triage your own failures
@@ -37,9 +37,9 @@ instruments' log lines and the setup sequence's log lines. `make bench-test` wri
 ```
 
 **What a resolved run adds.** A label saying how it was fixed: `fault` (a short name),
-`cause`, `fix`, and optionally `action`, the key from the fixed action list (`CABLE`, `LINK`,
-`ALIGNMENT`, `CONFIGURATION`, `TIMEOUT`, `TEST_CLEANUP`, `FIRMWARE`). A run that records its
-action gives the model the action itself, not only a description.
+`cause`, `fix`, and optionally `action`, a key from the domain pack's action list
+(`CABLE`, `LINK`, `ALIGNMENT`, `CONFIGURATION`, `TIMEOUT`, `TEST_CLEANUP`, `FIRMWARE`). A run
+that records its action gives the model the action itself, not only a description.
 
 **Two ways to load them:**
 
@@ -72,14 +72,18 @@ action on the fixed list.
   (switched on an instrument's admin port), a `ConfigFault` (a bench configuration value)
   or a `ReleaseFault` (a simulated firmware release). Its `Label` records the cause, the fix
   and the action.
-- **The action, if none fits:** add it to `Fix` in `triage/prompt.py` and give it a cause in
-  `_CATEGORY_BY_FIX`. A test checks every fault's category against its action's, so the two
-  can't drift apart.
+- **The action, if none fits:** add an `[[actions]]` entry to the domain pack,
+  `triage/packs/rf-bench.toml`: a key, the cause it answers (one of the pack's
+  `categories`) and what it says to do. No code changes; the pack is checked when it loads,
+  and a test checks every fault's category against its action's, so the two can't drift
+  apart.
 - **The data:** `make fault-dataset` rebuilds the history and question runs for every fault,
   then `make eval` scores the assistant on them.
 
-Adding an action changes the instructions every question is asked with, so `make eval`
-re-asks the model every question rather than reading its cache. Expect that to take a while
+Adding an action, or changing what one says, changes the instructions every question is
+asked with, so `make eval` re-asks the model every question rather than reading its cache,
+and `tests/unit/triage/test_behaviour_lock.py` fails until its hashes are recorded again with
+`UPDATE_BEHAVIOUR_LOCK=1`. Expect that to take a while
 on a laptop.
 
 ## 3 · Drive real instruments

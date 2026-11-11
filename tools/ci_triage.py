@@ -28,7 +28,7 @@ from triage.failures import (
     triage_like_the_api,
 )
 from triage.llm import DEFAULT_MODEL, LLMProvider, ModelUnavailableError, OllamaProvider
-from triage.prompt import Fix
+from triage.pack import UNKNOWN
 from triage.retrieval import DEFAULT_HISTORY, Retriever, history_index
 from triage.textfmt import clip
 
@@ -91,9 +91,9 @@ def verdict_lines(verdict: Verdict) -> list[str]:
         longer the answer; an overruled answer's past fixes go too, since they are fixes
         for the action the check refused.
     """
-    to_do = NO_SAFE_ANSWER if verdict.fix is Fix.UNKNOWN else verdict.fix.value
+    to_do = NO_SAFE_ANSWER if verdict.fix is UNKNOWN else verdict.fix.says
     lines = [
-        f"- **Answer:** **{code(verdict.fix.name)}** · cause: **{verdict.category}**",
+        f"- **Answer:** **{code(verdict.fix.key)}** · cause: **{verdict.category}**",
         f"- **What to do:** {to_do}",
     ]
     if verdict.gate_reason:

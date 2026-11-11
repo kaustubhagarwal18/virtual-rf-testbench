@@ -21,7 +21,7 @@ from triage.failures import (
     focus,
     triage_failures,
 )
-from triage.prompt import Fix
+from triage.pack import DEFAULT_PACK, Action
 
 STEP_LOG = (
     "06:55:12.000 INFO  step=1 action=verify level offset instrument=generator result=ok\n"
@@ -146,7 +146,7 @@ def test_an_unfocused_run_keeps_its_evidence_unchanged(tmp_path: Path) -> None:
 
 
 def answer_by_test(
-    answers: dict[str, Fix],
+    answers: dict[str, Action],
 ) -> tuple[list[str], Callable[[SavedRun], Verdict]]:
     """Return a record of the failed tests asked about and an answerer keyed by test name."""
     asked: list[str] = []
@@ -165,7 +165,9 @@ def test_each_failure_is_asked_once_and_the_rest_are_listed_past_the_cap(
 ) -> None:
     """Only the first few failures are triaged; the others are named, not dropped."""
     tests = [failing(f"test_{number}", "Failed: x") for number in range(4)]
-    asked, answer = answer_by_test({f"test_{number}": Fix.CABLE for number in range(4)})
+    asked, answer = answer_by_test(
+        {f"test_{number}": DEFAULT_PACK.action("CABLE") for number in range(4)}
+    )
     result = triage_failures(load(tmp_path, tests), answer, limit=3)
     assert asked == ["test_0", "test_1", "test_2"]
     assert [group.test_ids for group in result.untriaged] == [("test_3",)]
@@ -176,12 +178,18 @@ def test_each_failure_is_asked_once_and_the_rest_are_listed_past_the_cap(
 def test_every_failure_keeps_its_own_answer_even_when_two_agree(tmp_path: Path) -> None:
     """Three failures, two of them CABLE: three answers, each naming its own failure."""
     tests = [failing(name, "Failed: x") for name in ("test_a", "test_b", "test_c")]
-    _, answer = answer_by_test({"test_a": Fix.CABLE, "test_b": Fix.ALIGNMENT, "test_c": Fix.CABLE})
+    _, answer = answer_by_test(
+        {
+            "test_a": DEFAULT_PACK.action("CABLE"),
+            "test_b": DEFAULT_PACK.action("ALIGNMENT"),
+            "test_c": DEFAULT_PACK.action("CABLE"),
+        }
+    )
     result = triage_failures(load(tmp_path, tests), answer)
     assert [answered.verdict.fix for answered in result.answers if answered.verdict] == [
-        Fix.CABLE,
-        Fix.ALIGNMENT,
-        Fix.CABLE,
+        DEFAULT_PACK.action("CABLE"),
+        DEFAULT_PACK.action("ALIGNMENT"),
+        DEFAULT_PACK.action("CABLE"),
     ]
     assert [answered.group.test_ids for answered in result.answers] == [
         ("test_a",),
@@ -198,7 +206,7 @@ def test_an_unusable_answer_for_one_failure_keeps_the_others(tmp_path: Path) -> 
         """Fail on test_a and answer CABLE for anything else."""
         if str(failed_tests(run)[0]["id"]).endswith("test_a"):
             raise MalformedAnswerError("not JSON")
-        return Verdict(Fix.CABLE, "here", "why", [])
+        return Verdict(DEFAULT_PACK.action("CABLE"), "here", "why", [])
 
     result = triage_failures(load(tmp_path, tests), answer)
     assert result.answers[0].verdict is None

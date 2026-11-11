@@ -12,7 +12,8 @@ from tests.unit.triage.test_evidence import FAILING_TEST, write_run
 from tools.triage_demo import UNUSABLE, main, render, run_demo
 from triage.evidence import SavedRun
 from triage.llm import FakeProvider, LLMProvider, ModelUnavailableError
-from triage.prompt import Fix, Source
+from triage.pack import DEFAULT_PACK
+from triage.prompt import Source
 from triage.retrieval import Retriever
 
 FIRMWARE_REPLY = json.dumps(
@@ -108,7 +109,7 @@ def test_retrieval_flips_a_wrong_baseline_to_the_resolving_fix(tmp_path: Path) -
     """Without past runs the model blames firmware; with them it chooses the cable, and cites it."""
     provider = FakeProvider([FIRMWARE_REPLY, CABLE_REPLY])
     result = run_demo(cable_run(tmp_path), provider, demo_retriever())
-    assert result.expected is Fix.CABLE
+    assert result.expected is DEFAULT_PACK.action("CABLE")
     assert result.baseline.chosen == "FIRMWARE"
     assert not result.baseline.right
     assert result.retrieval.chosen == "CABLE"

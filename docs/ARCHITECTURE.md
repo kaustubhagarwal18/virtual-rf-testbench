@@ -214,7 +214,7 @@ flowchart LR
     run["Failed run<br/>results.json, logs, sequence.log"] --> ev["evidence.py<br/>first failure first"]
     hist[("History<br/>resolved runs, neutral ids")] --> ret["retrieval.py<br/>top 3 by cosine"]
     run --> ret
-    ev --> pr["prompt.py<br/>fixed list of actions"]
+    ev --> pr["prompt.py<br/>actions from the domain pack"]
     ret --> gate{"abstain.py<br/>precedents agree?"}
     gate -- yes --> pr
     gate -- no --> unk["UNKNOWN<br/>model not asked"]
@@ -325,7 +325,9 @@ flowchart LR
 | The setup sequence and its log | `tests/bench/conftest.py`, `tests/utilities/sequencer.py`, `tests/utilities/bench_config.py` |
 | The fault catalogue, `make fault` and the data set | `tools/faults.py`, `tools/fault_run.py`, `tools/bench_control.py` |
 | The evidence a run gives the model | `triage/evidence.py` |
-| The prompt and the list of actions | `triage/prompt.py` |
+| The prompt | `triage/prompt.py` |
+| The domain pack: description, causes and actions | `triage/pack.py`, `triage/packs/rf-bench.toml` |
+| The lock that proves a refactor changed no prompt, evidence, check or vote | `tests/unit/triage/test_behaviour_lock.py` |
 | How a reply is parsed, and its schema | `triage/answer.py` |
 | Retrieval and source ids | `triage/retrieval.py`, `triage/embed.py` |
 | Checks on a verdict | `triage/checks.py` |

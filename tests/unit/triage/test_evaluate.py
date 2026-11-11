@@ -15,7 +15,7 @@ from triage.embed import FakeEmbedder
 from triage.evaluate import SCENARIOS, evaluate, expected_fix, main, repeated_faults
 from triage.evidence import ERROR_ONLY, FULL, SavedRun
 from triage.llm import CachingProvider, FakeProvider, ModelUnavailableError
-from triage.prompt import Fix
+from triage.pack import DEFAULT_PACK, UNKNOWN, Action
 from triage.report import _report_rows, findings, render, render_report, score_line
 from triage.retrieval import InMemoryRetriever
 from triage.scores import (
@@ -39,17 +39,17 @@ def question(folder: Path, fault: str) -> Path:
     return run
 
 
-def verdict(fix: Fix) -> str:
+def verdict(fix: Action) -> str:
     """A well-formed reply choosing a given fix."""
-    return json.dumps({"fix": fix.name, "where": "x", "because": "y", "cited": []})
+    return json.dumps({"fix": fix.key, "where": "x", "because": "y", "cited": []})
 
 
 @pytest.mark.parametrize("name", sorted(CATALOGUE))
 def test_every_catalogue_fault_records_an_action_on_the_list(name: str) -> None:
     """A fault's action is a key the model can choose, and never UNKNOWN."""
     action = CATALOGUE[name].label.action
-    assert action in Fix.__members__
-    assert action != Fix.UNKNOWN.name
+    assert action in DEFAULT_PACK.keys
+    assert action != UNKNOWN.key
 
 
 SAVED_LABELS = sorted(Path("triage/data/runs").glob("*/*/label.json"))
@@ -74,7 +74,7 @@ def test_the_data_set_has_a_label_for_every_run() -> None:
 def test_the_expected_fix_comes_from_the_label(tmp_path: Path) -> None:
     """The label is the answer key; the fix it maps to is what the verdict is scored against."""
     run = SavedRun.load(question(tmp_path / "cable_loss", "cable_loss"))
-    assert expected_fix(run) is Fix.CABLE
+    assert expected_fix(run) is DEFAULT_PACK.action("CABLE")
 
 
 def test_a_right_answer_is_counted_and_a_wrong_one_is_tallied(tmp_path: Path) -> None:
@@ -83,7 +83,7 @@ def test_a_right_answer_is_counted_and_a_wrong_one_is_tallied(tmp_path: Path) ->
     question(questions / "cable_loss", "cable_loss")
     question(questions / "slow_responses", "slow_responses")
     # Right on cable (CABLE), wrong on slow_responses (says CABLE, should be TIMEOUT).
-    provider = FakeProvider([verdict(Fix.CABLE)])
+    provider = FakeProvider([verdict(DEFAULT_PACK.action("CABLE"))])
     results = evaluate(questions, provider, [Scenario("full evidence", FULL)])
     result = results[0]
     assert result.right == 1
@@ -107,7 +107,7 @@ def test_both_scenarios_ask_the_same_questions(tmp_path: Path) -> None:
     question(tmp_path / "q" / "cable_loss", "cable_loss")
     results = evaluate(
         tmp_path / "q",
-        FakeProvider([verdict(Fix.CABLE)]),
+        FakeProvider([verdict(DEFAULT_PACK.action("CABLE"))]),
         [Scenario("error only", ERROR_ONLY), Scenario("full evidence", FULL)],
     )
     assert [r.name for r in results] == ["error only", "full evidence"]
@@ -118,7 +118,9 @@ def test_the_report_shows_counts_not_percentages(tmp_path: Path) -> None:
     """Scores are reported as 'n of m'; the only percentage is the interval's 95% level."""
     question(tmp_path / "q" / "cable_loss", "cable_loss")
     result = evaluate(
-        tmp_path / "q", FakeProvider([verdict(Fix.LINK)]), [Scenario("full evidence", FULL)]
+        tmp_path / "q",
+        FakeProvider([verdict(DEFAULT_PACK.action("LINK"))]),
+        [Scenario("full evidence", FULL)],
     )[0]
     report = render([result], "qwen2.5:3b")
     assert "full evidence: 0 of 1 faults solved" in report
@@ -135,7 +137,7 @@ def test_the_cli_runs_the_scored_scenarios(
     assert (
         main(
             ["--questions", str(tmp_path / "q"), "--scenario", "full evidence"],
-            FakeProvider([verdict(Fix.CABLE)]),
+            FakeProvider([verdict(DEFAULT_PACK.action("CABLE"))]),
         )
         == 0
     )
@@ -151,7 +153,7 @@ def test_an_injected_provider_overrides_the_model_flag(
     assert (
         main(
             ["--questions", str(tmp_path / "q"), "--scenario", "full evidence", "--model", "huge"],
-            FakeProvider([verdict(Fix.CABLE)]),
+            FakeProvider([verdict(DEFAULT_PACK.action("CABLE"))]),
         )
         == 0
     )
@@ -184,7 +186,9 @@ def test_the_report_shows_the_error_and_the_answer(tmp_path: Path) -> None:
     """The detailed report pairs each failure the model saw with what it answered, and a diagram."""
     question(tmp_path / "q" / "cable_loss", "cable_loss")
     result = evaluate(
-        tmp_path / "q", FakeProvider([verdict(Fix.LINK)]), [Scenario("full evidence", FULL)]
+        tmp_path / "q",
+        FakeProvider([verdict(DEFAULT_PACK.action("LINK"))]),
+        [Scenario("full evidence", FULL)],
     )[0]
     report = render_report([result], "qwen2.5:3b")
     assert "mermaid" in report
@@ -206,7 +210,7 @@ def test_the_cli_writes_a_report_file(tmp_path: Path, capsys: pytest.CaptureFixt
             "--report",
             str(report),
         ],
-        FakeProvider([verdict(Fix.CABLE)]),
+        FakeProvider([verdict(DEFAULT_PACK.action("CABLE"))]),
     )
     assert report.exists()
     assert "Triage baseline" in report.read_text(encoding="utf-8")
@@ -219,7 +223,7 @@ def test_findings_are_computed_from_the_outcomes(tmp_path: Path) -> None:
     question(questions / "cable_loss", "cable_loss")
     question(questions / "slow_responses", "slow_responses")
     # error-only: both wrong (CABLE on both); full: cable right, slow wrong.
-    provider = FakeProvider([verdict(Fix.CABLE)])
+    provider = FakeProvider([verdict(DEFAULT_PACK.action("CABLE"))])
     results = evaluate(
         questions, provider, [Scenario("error only", ERROR_ONLY), Scenario("full evidence", FULL)]
     )
@@ -239,9 +243,9 @@ def history_with(folder: Path, fault: str) -> Path:
     return run
 
 
-def cited(fix: Fix, source_ids: list[str]) -> str:
+def cited(fix: Action, source_ids: list[str]) -> str:
     """A well-formed reply choosing a fix and citing the given sources."""
-    return json.dumps({"fix": fix.name, "where": "x", "because": "y", "cited": source_ids})
+    return json.dumps({"fix": fix.key, "where": "x", "because": "y", "cited": source_ids})
 
 
 RETRIEVAL = Scenario("full + retrieval", FULL, precedents=Precedents.ALL, adds_to="full evidence")
@@ -254,7 +258,10 @@ def test_findings_flag_a_cited_precedent_the_model_did_not_act_on(tmp_path: Path
     retriever = InMemoryRetriever.from_history(tmp_path / "history", FakeEmbedder())
     source_id = retriever.sources[0].source_id
     result = evaluate(
-        tmp_path / "q", FakeProvider([cited(Fix.LINK, [source_id])]), [RETRIEVAL], retriever
+        tmp_path / "q",
+        FakeProvider([cited(DEFAULT_PACK.action("LINK"), [source_id])]),
+        [RETRIEVAL],
+        retriever,
     )[0]
     assert result.outcomes[0].sources.cited == (source_id,)
     assert result.outcomes[0].sources.cited_faults == ("cable_loss",)
@@ -268,7 +275,7 @@ def test_a_retrieval_scenario_offers_sources_the_model_may_cite(tmp_path: Path) 
     question(tmp_path / "q" / "cable_loss-1", "cable_loss")
     retriever = InMemoryRetriever.from_history(tmp_path / "history", FakeEmbedder())
     source_id = retriever.sources[0].source_id
-    provider = FakeProvider([cited(Fix.CABLE, [source_id])])
+    provider = FakeProvider([cited(DEFAULT_PACK.action("CABLE"), [source_id])])
     result = evaluate(tmp_path / "q", provider, [RETRIEVAL], retriever)[0]
     assert result.right == 1
     assert result.precedent_offered == 1
@@ -284,7 +291,7 @@ def test_the_held_out_scenario_never_offers_the_questions_own_fault(tmp_path: Pa
     question(tmp_path / "q" / "cable_loss-1", "cable_loss")
     retriever = InMemoryRetriever.from_history(history, FakeEmbedder())
     held_out = Scenario("held out", FULL, precedents=Precedents.OWN_FAULT_HELD_OUT)
-    provider = FakeProvider([verdict(Fix.UNKNOWN)])
+    provider = FakeProvider([verdict(UNKNOWN)])
     result = evaluate(tmp_path / "q", provider, [held_out], retriever)[0]
     assert result.outcomes[0].sources.offered_faults == ("slow_responses",)
     assert "cable_loss cause" not in provider.prompts[0][1]
@@ -300,7 +307,7 @@ def test_the_checked_scenario_overrules_firmware_on_unchanged_firmware(tmp_path:
     (folder / "results.json").write_text(json.dumps(results), encoding="utf-8")
     results = evaluate(
         tmp_path / "q",
-        CachingProvider(FakeProvider([verdict(Fix.FIRMWARE)])),
+        CachingProvider(FakeProvider([verdict(DEFAULT_PACK.action("FIRMWARE"))])),
         [Scenario("plain", FULL), Scenario("checked", FULL, checked=True, adds_to="plain")],
     )
     plain, checked = results[0], results[1]
@@ -315,7 +322,9 @@ def test_an_outcome_is_keyed_by_the_labels_fault_not_the_folder(tmp_path: Path) 
     question(tmp_path / "q" / "run-a", "cable_loss")
     question(tmp_path / "q" / "run-b", "cable_loss")
     result = evaluate(
-        tmp_path / "q", FakeProvider([verdict(Fix.CABLE)]), [Scenario("full evidence", FULL)]
+        tmp_path / "q",
+        FakeProvider([verdict(DEFAULT_PACK.action("CABLE"))]),
+        [Scenario("full evidence", FULL)],
     )[0]
     assert [(o.question, o.fault) for o in result.outcomes] == [
         ("run-a", "cable_loss"),
@@ -372,7 +381,9 @@ def test_the_report_heading_uses_the_given_title(tmp_path: Path) -> None:
     """The report's H1 is the title it is given, so a three-scenario run is not mislabelled."""
     question(tmp_path / "q" / "cable_loss", "cable_loss")
     result = evaluate(
-        tmp_path / "q", FakeProvider([verdict(Fix.CABLE)]), [Scenario("full evidence", FULL)]
+        tmp_path / "q",
+        FakeProvider([verdict(DEFAULT_PACK.action("CABLE"))]),
+        [Scenario("full evidence", FULL)],
     )[0]
     assert render_report([result], "qwen2.5:3b", title="Custom heading").startswith(
         "# Custom heading"
@@ -393,7 +404,7 @@ def test_a_retrieval_report_is_not_titled_as_the_baseline(tmp_path: Path) -> Non
             "--report",
             str(report),
         ],
-        FakeProvider([verdict(Fix.CABLE)]),
+        FakeProvider([verdict(DEFAULT_PACK.action("CABLE"))]),
         InMemoryRetriever.from_history(tmp_path / "history", FakeEmbedder()),
     )
     heading = report.read_text(encoding="utf-8").splitlines()[0]
@@ -407,7 +418,7 @@ def test_a_retrieval_scenario_without_a_retriever_is_an_error(tmp_path: Path) ->
     with pytest.raises(ValueError, match="no retriever was given"):
         evaluate(
             tmp_path / "q",
-            FakeProvider([verdict(Fix.CABLE)]),
+            FakeProvider([verdict(DEFAULT_PACK.action("CABLE"))]),
             [Scenario("full + retrieval", FULL, precedents=Precedents.ALL)],
         )
 
@@ -418,7 +429,7 @@ def test_a_retrieval_scenario_without_a_retriever_is_an_error(tmp_path: Path) ->
 )
 def test_each_kind_of_answer_has_its_own_mark(chosen: str, mark: str) -> None:
     """Right, UNKNOWN, unusable and confidently wrong are told apart in the report."""
-    outcome = Outcome("cable_loss-1", "cable_loss", Fix.CABLE, chosen)
+    outcome = Outcome("cable_loss-1", "cable_loss", DEFAULT_PACK.action("CABLE"), chosen)
     row = _report_rows(ScenarioResult(Scenario("s", FULL), [outcome]))[2]
     assert f"| {mark} |" in row
 
@@ -439,8 +450,12 @@ def two_faults(tmp_path: Path) -> Path:
 
 def test_a_fault_is_solved_only_when_all_its_questions_are(tmp_path: Path) -> None:
     """Two of three cable questions right is a split fault, not a solved one."""
-    replies = [verdict(Fix.CABLE), verdict(Fix.LINK), verdict(Fix.CABLE)]
-    replies += [verdict(Fix.TIMEOUT)] * 2
+    replies = [
+        verdict(DEFAULT_PACK.action("CABLE")),
+        verdict(DEFAULT_PACK.action("LINK")),
+        verdict(DEFAULT_PACK.action("CABLE")),
+    ]
+    replies += [verdict(DEFAULT_PACK.action("TIMEOUT"))] * 2
     result = evaluate(two_faults(tmp_path), FakeProvider(replies), [Scenario("s", FULL)])[0]
     assert result.by_fault == {"cable_loss": (2, 3), "slow_responses": (2, 2)}
     assert (result.faults, result.faults_solved, result.faults_split) == (2, 1, 1)
@@ -452,7 +467,7 @@ def test_the_report_has_a_row_per_fault_and_a_column_per_scenario(tmp_path: Path
     """The by-fault table shows each fault's questions right in each scenario."""
     results = evaluate(
         two_faults(tmp_path),
-        FakeProvider([verdict(Fix.CABLE)]),
+        FakeProvider([verdict(DEFAULT_PACK.action("CABLE"))]),
         [Scenario("error only", ERROR_ONLY), Scenario("full evidence", FULL)],
     )
     report = render_report(results, "qwen2.5:3b")
@@ -463,8 +478,12 @@ def test_the_report_has_a_row_per_fault_and_a_column_per_scenario(tmp_path: Path
 
 def test_the_findings_count_how_often_a_faults_questions_split(tmp_path: Path) -> None:
     """The finding that justifies scoring by fault is computed, not asserted."""
-    replies = [verdict(Fix.CABLE), verdict(Fix.LINK), verdict(Fix.CABLE)]
-    replies += [verdict(Fix.TIMEOUT)] * 2
+    replies = [
+        verdict(DEFAULT_PACK.action("CABLE")),
+        verdict(DEFAULT_PACK.action("LINK")),
+        verdict(DEFAULT_PACK.action("CABLE")),
+    ]
+    replies += [verdict(DEFAULT_PACK.action("TIMEOUT"))] * 2
     result = evaluate(two_faults(tmp_path), FakeProvider(replies), [Scenario("s", FULL)])[0]
     assert "split (some right, some wrong) in 1 of 2 fault-and-scenario cells" in " ".join(
         findings([result])
@@ -476,7 +495,7 @@ def test_the_cli_says_how_many_prompts_reached_the_model(
 ) -> None:
     """A run reports how many prompts it asked; a rerun of the same prompts asks none."""
     question(tmp_path / "q" / "cable_loss-1", "cable_loss")
-    provider = CachingProvider(FakeProvider([verdict(Fix.CABLE)]))
+    provider = CachingProvider(FakeProvider([verdict(DEFAULT_PACK.action("CABLE"))]))
     arguments = ["--questions", str(tmp_path / "q"), "--scenario", "full evidence"]
     main(arguments, provider)
     first = capsys.readouterr().out
@@ -505,7 +524,7 @@ def test_the_gated_scenario_answers_disagreement_without_the_model(tmp_path: Pat
     gated = Scenario(
         "gated", FULL, precedents=Precedents.ALL, checked=True, gated=True, adds_to="checked"
     )
-    provider = CachingProvider(FakeProvider([verdict(Fix.LINK)]))
+    provider = CachingProvider(FakeProvider([verdict(DEFAULT_PACK.action("LINK"))]))
     results = evaluate(tmp_path / "q", provider, [plain, gated], retriever)
     assert results[0].confidently_wrong == 1
     outcome = results[1].outcomes[0]
@@ -560,7 +579,7 @@ def test_the_report_says_how_many_solved_faults_repeat_a_history_run(tmp_path: P
     retriever = InMemoryRetriever.from_history(tmp_path / "history", FakeEmbedder())
     results = evaluate(
         tmp_path / "q",
-        FakeProvider([verdict(Fix.LINK)]),
+        FakeProvider([verdict(DEFAULT_PACK.action("LINK"))]),
         [Scenario("full evidence", FULL), RETRIEVAL],
         retriever,
     )
@@ -596,7 +615,7 @@ def test_the_vote_scenario_scores_the_precedents_action_without_the_model(tmp_pa
     history_resolved_by(history / "link_down-1", "link_down", "LINK")
     question(tmp_path / "q" / "cable_loss-1", "cable_loss")
     retriever = InMemoryRetriever.from_history(history, FakeEmbedder())
-    provider = FakeProvider([verdict(Fix.LINK)])
+    provider = FakeProvider([verdict(DEFAULT_PACK.action("LINK"))])
     vote = Scenario("vote", FULL, precedents=Precedents.ALL, vote=True)
     outcome = evaluate(tmp_path / "q", provider, [vote], retriever)[0].outcomes[0]
     assert (outcome.right, outcome.chosen) == (True, "CABLE")
@@ -626,7 +645,7 @@ def test_the_cli_runs_the_vote_scenarios_with_no_prompts(
     history_resolved_by(history / "cable_loss-1", "cable_loss", "CABLE")
     question(tmp_path / "q" / "cable_loss-1", "cable_loss")
     retriever = InMemoryRetriever.from_history(history, FakeEmbedder())
-    provider = CachingProvider(FakeProvider([verdict(Fix.LINK)]))
+    provider = CachingProvider(FakeProvider([verdict(DEFAULT_PACK.action("LINK"))]))
     arguments = ["--questions", str(tmp_path / "q")]
     for scenario in VOTE_SCENARIOS:
         arguments += ["--scenario", scenario.name]
@@ -683,7 +702,7 @@ def outcome_citing(fault: str, cited_faults: tuple[str, ...], chosen: str = "CAB
         cited=tuple(f"past-{index}" for index in range(len(cited_faults))),
         cited_faults=cited_faults,
     )
-    return Outcome("q-1", fault, Fix.CABLE, chosen, sources=sources)
+    return Outcome("q-1", fault, DEFAULT_PACK.action("CABLE"), chosen, sources=sources)
 
 
 @pytest.mark.parametrize(
@@ -775,6 +794,9 @@ def test_a_retrieval_outcome_records_whose_fixes_were_quoted(tmp_path: Path) -> 
     retriever = InMemoryRetriever.from_history(tmp_path / "history", FakeEmbedder())
     source_id = retriever.sources[0].source_id
     result = evaluate(
-        tmp_path / "q", FakeProvider([cited(Fix.CABLE, [source_id])]), [RETRIEVAL], retriever
+        tmp_path / "q",
+        FakeProvider([cited(DEFAULT_PACK.action("CABLE"), [source_id])]),
+        [RETRIEVAL],
+        retriever,
     )[0]
     assert result.outcomes[0].sources.quoted_faults == ("cable_loss",)

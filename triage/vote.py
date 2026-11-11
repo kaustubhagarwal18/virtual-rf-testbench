@@ -16,13 +16,14 @@ from triage.abstain import SourceGate, reason_to_abstain
 from triage.answer import Verdict, with_past_fixes
 from triage.checks import VerdictCheck, apply_checks
 from triage.evidence import SavedRun
-from triage.prompt import Fix, Source
+from triage.pack import DEFAULT_PACK, UNKNOWN, Action
+from triage.prompt import Source
 
 WHERE = "what the closest past runs were fixed by"
 """What a vote says to act on: it knows the precedents' actions, not the run's hardware."""
 
 
-def _recorded_fix(source: Source) -> Fix:
+def _recorded_fix(source: Source) -> Action:
     """Return the fix a precedent's label records.
 
     Args:
@@ -34,12 +35,12 @@ def _recorded_fix(source: Source) -> Fix:
     Raises:
         KeyError: If the action isn't on the list; the message says to rebuild the data set.
     """
-    if source.action not in Fix.__members__:
+    if source.action not in DEFAULT_PACK.keys:
         raise KeyError(
             f"{source.source_id}: its label records the action {source.action!r}, which is "
             "not on the list; rebuild the data set with 'make fault-dataset'"
         )
-    return Fix[source.action]
+    return DEFAULT_PACK.action(source.action)
 
 
 def majority_vote(sources: Sequence[Source]) -> Verdict:
@@ -58,16 +59,16 @@ def majority_vote(sources: Sequence[Source]) -> Verdict:
     voters = [source for source in sources if source.action]
     if not voters:
         return Verdict(
-            fix=Fix.UNKNOWN,
+            fix=UNKNOWN,
             where=WHERE,
             because="no past run with a recorded action was found, so there is nothing to vote on",
         )
     votes = Counter(_recorded_fix(source) for source in voters)
     ranked = votes.most_common()
     if len(ranked) > 1 and ranked[0][1] == ranked[1][1]:
-        tied = ", ".join(f"{fix.name} x{count}" for fix, count in ranked)
+        tied = ", ".join(f"{fix.key} x{count}" for fix, count in ranked)
         return Verdict(
-            fix=Fix.UNKNOWN,
+            fix=UNKNOWN,
             where=WHERE,
             because=f"the closest past runs split with no majority ({tied})",
         )
@@ -75,8 +76,8 @@ def majority_vote(sources: Sequence[Source]) -> Verdict:
     return Verdict(
         fix=winner,
         where=WHERE,
-        because=f"{count} of the {len(voters)} closest past runs were resolved by {winner.name}",
-        cited=[source.source_id for source in voters if source.action == winner.name],
+        because=f"{count} of the {len(voters)} closest past runs were resolved by {winner.key}",
+        cited=[source.source_id for source in voters if source.action == winner.key],
     )
 
 

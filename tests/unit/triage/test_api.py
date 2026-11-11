@@ -25,7 +25,8 @@ from triage.api import (
 from triage.embed import FakeEmbedder
 from triage.evidence import LEVELS, SavedRun, build_evidence
 from triage.llm import FakeProvider, ModelUnavailableError
-from triage.prompt import Fix, build_prompt
+from triage.pack import DEFAULT_PACK
+from triage.prompt import build_prompt
 from triage.retrieval import InMemoryRetriever
 
 CABLE_REPLY = json.dumps({"fix": "CABLE", "where": "the cable", "because": "loss", "cited": []})
@@ -289,7 +290,7 @@ def test_the_data_set_has_every_saved_run() -> None:
 
 def test_the_api_accepts_exactly_the_action_keys_on_the_list() -> None:
     """A label's action type and the list of actions can't drift apart."""
-    assert set(get_args(ActionKey)) == set(Fix.__members__)
+    assert set(get_args(ActionKey)) == set(DEFAULT_PACK.keys)
 
 
 def test_an_added_runs_action_reaches_a_later_prompt() -> None:

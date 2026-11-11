@@ -25,7 +25,8 @@ from triage.answer import PastFix, Verdict
 from triage.evidence import SavedRun
 from triage.failures import FailureAnswer, FailureGroup, RunTriage, triage_like_the_api
 from triage.llm import FakeProvider
-from triage.prompt import Fix, Source
+from triage.pack import DEFAULT_PACK, UNKNOWN
+from triage.prompt import Source
 
 CABLE_REPLY = json.dumps(
     {
@@ -85,7 +86,7 @@ def outside_code_spans(markdown: str) -> str:
 def answered(because: str = "the loss is high", where: str = "the cable") -> Verdict:
     """Return a CABLE verdict citing one past run, with its recorded fix."""
     return Verdict(
-        Fix.CABLE,
+        DEFAULT_PACK.action("CABLE"),
         where,
         because,
         ["past-1"],
@@ -114,7 +115,7 @@ def test_a_gated_unknown_says_why_the_model_was_not_asked() -> None:
 def test_an_overruled_answer_gives_the_check_instead_of_the_model_words() -> None:
     """A verdict a check replaced says why, and hides the refused answer and its past fix."""
     verdict = Verdict(
-        Fix.UNKNOWN,
+        UNKNOWN,
         "LINK",
         "the model's refused reasoning",
         ["past-1"],
@@ -130,7 +131,7 @@ def test_an_overruled_answer_gives_the_check_instead_of_the_model_words() -> Non
 
 def test_a_model_unknown_keeps_its_own_reason() -> None:
     """When the model itself answers UNKNOWN, its reason is the answer and is shown."""
-    section = render_verdict(Verdict(Fix.UNKNOWN, "", "nothing in the run points anywhere"))
+    section = render_verdict(Verdict(UNKNOWN, "", "nothing in the run points anywhere"))
     assert "`nothing in the run points anywhere`" in section
     assert "- **Where:** (none)" in section
 
@@ -138,7 +139,9 @@ def test_a_model_unknown_keeps_its_own_reason() -> None:
 def test_past_runs_with_the_same_fix_share_one_line() -> None:
     """Three cited runs fixed the same way are listed once, with all three ids."""
     fixes = tuple(PastFix(f"past-{number}", "Replaced the cable") for number in (1, 2, 3))
-    section = render_verdict(Verdict(Fix.CABLE, "x", "y", ["past-1"], past_fixes=fixes))
+    section = render_verdict(
+        Verdict(DEFAULT_PACK.action("CABLE"), "x", "y", ["past-1"], past_fixes=fixes)
+    )
     last_time = [line for line in section.splitlines() if line.startswith("- **Last time:**")]
     assert last_time == ["- **Last time:** `Replaced the cable` (`past-1`, `past-2`, `past-3`)"]
 
@@ -148,7 +151,9 @@ def verdict_with(field: str, text: str) -> Verdict:
     if field == "gate_reason":
         return Verdict.gated(text)
     if field == "past_fix":
-        return Verdict(Fix.CABLE, "x", "y", ["p"], past_fixes=(PastFix("p", text),))
+        return Verdict(
+            DEFAULT_PACK.action("CABLE"), "x", "y", ["p"], past_fixes=(PastFix("p", text),)
+        )
     return answered(**{field: text})
 
 
@@ -176,7 +181,7 @@ def test_the_failed_run_is_triaged_as_the_api_triages_it(tmp_path: Path) -> None
     run = SavedRun.load(write_run(tmp_path / "run", [FAILING_TEST]))
     provider = FakeProvider([CABLE_REPLY])
     verdict = triage_like_the_api(run, provider, StubRetriever(*AGREEING))
-    assert verdict.fix is Fix.CABLE
+    assert verdict.fix is DEFAULT_PACK.action("CABLE")
     assert verdict.past_fixes == (
         PastFix("past-1", "Replaced the cable"),
         PastFix("past-2", "Replaced it again"),
@@ -189,7 +194,7 @@ def test_disagreeing_past_runs_answer_unknown_without_asking_the_model(tmp_path:
     run = SavedRun.load(write_run(tmp_path / "run", [FAILING_TEST]))
     provider = FakeProvider([])
     verdict = triage_like_the_api(run, provider, StubRetriever(*DISAGREEING))
-    assert verdict.fix is Fix.UNKNOWN
+    assert verdict.fix is UNKNOWN
     assert verdict.gate_reason
     assert not provider.prompts
 
@@ -239,12 +244,12 @@ def test_runs_as_a_module(tmp_path: Path) -> None:
 
 def test_an_answer_says_what_to_do_in_the_action_list_words() -> None:
     """The action's own description, fixed text from the action list, says what to do."""
-    assert f"- **What to do:** {Fix.CABLE.value}" in render_verdict(answered())
+    assert f"- **What to do:** {DEFAULT_PACK.action('CABLE').says}" in render_verdict(answered())
 
 
 @pytest.mark.parametrize(
     "verdict",
-    [Verdict.gated("disagree"), Verdict(Fix.UNKNOWN, "", "nothing points anywhere")],
+    [Verdict.gated("disagree"), Verdict(UNKNOWN, "", "nothing points anywhere")],
 )
 def test_an_unknown_says_to_look_by_hand(verdict: Verdict) -> None:
     """UNKNOWN has no action, so what to do is to look at the failure by hand."""
@@ -274,7 +279,9 @@ def test_every_failure_gets_a_numbered_block_saying_what_to_do() -> None:
     result = RunTriage(
         [
             FailureAnswer(LEVEL_GROUP, answered()),
-            FailureAnswer(other, Verdict(Fix.ALIGNMENT, "analyzer", "reads high", [])),
+            FailureAnswer(
+                other, Verdict(DEFAULT_PACK.action("ALIGNMENT"), "analyzer", "reads high", [])
+            ),
             FailureAnswer(third, answered()),
         ],
         failed_tests=4,
@@ -287,7 +294,9 @@ def test_every_failure_gets_a_numbered_block_saying_what_to_do() -> None:
     assert "#### Failure 2 of 3: `test_other: Failed`" in section
     assert "#### Failure 3 of 3: `test_third: Failed`" in section
     cable = [
-        answer for answer in result.answers if answer.verdict and answer.verdict.fix is Fix.CABLE
+        answer
+        for answer in result.answers
+        if answer.verdict and answer.verdict.fix is DEFAULT_PACK.action("CABLE")
     ]
     assert section.count("`CABLE`") == len(cable)
 

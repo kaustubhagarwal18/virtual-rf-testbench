@@ -20,7 +20,7 @@ from triage.evidence import (
     instrument_errors,
     no_signal_note,
 )
-from triage.prompt import Fix
+from triage.pack import UNKNOWN
 
 
 class VerdictCheck(Protocol):
@@ -55,11 +55,11 @@ class FirmwareUnchangedCheck:
         Returns:
             The verdict, or UNKNOWN with the reason it was overruled.
         """
-        if verdict.fix is not Fix.FIRMWARE or firmware_changed(run) is not False:
+        if verdict.fix.key != "FIRMWARE" or firmware_changed(run) is not False:
             return verdict
         return replace(
             verdict,
-            fix=Fix.UNKNOWN,
+            fix=UNKNOWN,
             overruled=(
                 "the model chose FIRMWARE, but the firmware is unchanged since the last "
                 "passing run, so a firmware regression is not what the evidence shows"
@@ -92,7 +92,7 @@ class ForeignReleaseCheck:
             The verdict, or UNKNOWN with the reason it was overruled.
         """
         versions = run.results.get("firmware_versions") or {}
-        if verdict.fix is not Fix.FIRMWARE or not versions:
+        if verdict.fix.key != "FIRMWARE" or not versions:
             return verdict
         named = RELEASE_PATTERN.findall(f"{verdict.where} {verdict.because}")
         foreign = [release for release in named if release not in versions.values()]
@@ -101,7 +101,7 @@ class ForeignReleaseCheck:
         ran = ", ".join(f"{role} {version}" for role, version in sorted(versions.items()))
         return replace(
             verdict,
-            fix=Fix.UNKNOWN,
+            fix=UNKNOWN,
             overruled=(
                 f"the model blamed release {foreign[0]}, but this run ran {ran}: the "
                 "diagnosis belongs to another run"
@@ -128,11 +128,11 @@ class TimeoutWithInstrumentErrorCheck:
             The verdict, or UNKNOWN with the reason it was overruled.
         """
         errors = instrument_errors(run)
-        if verdict.fix is not Fix.TIMEOUT or not errors:
+        if verdict.fix.key != "TIMEOUT" or not errors:
             return verdict
         return replace(
             verdict,
-            fix=Fix.UNKNOWN,
+            fix=UNKNOWN,
             overruled=(
                 f"the model chose TIMEOUT, but the instruments reported {errors[0]}: a "
                 "rejected command, not a slow instrument"
@@ -159,11 +159,11 @@ class AlignmentWithoutSignalCheck:
         Returns:
             The verdict, or UNKNOWN with the reason it was overruled.
         """
-        if verdict.fix is not Fix.ALIGNMENT or not no_signal_note(run):
+        if verdict.fix.key != "ALIGNMENT" or not no_signal_note(run):
             return verdict
         return replace(
             verdict,
-            fix=Fix.UNKNOWN,
+            fix=UNKNOWN,
             overruled=(
                 "the model chose ALIGNMENT, but the analyzer logged that no signal reached "
                 "it: self-alignment can't restore a missing signal"
@@ -190,11 +190,11 @@ class AlignmentWithoutLevelReadingCheck:
         Returns:
             The verdict, or UNKNOWN with the reason it was overruled.
         """
-        if verdict.fix is not Fix.ALIGNMENT or failed_level_reading(run):
+        if verdict.fix.key != "ALIGNMENT" or failed_level_reading(run):
             return verdict
         return replace(
             verdict,
-            fix=Fix.UNKNOWN,
+            fix=UNKNOWN,
             overruled=(
                 "the model chose ALIGNMENT, but no level or power reading is out of limits "
                 "in this failure: an alignment error shifts levels, not frequencies"

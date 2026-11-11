@@ -9,10 +9,11 @@ import json
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 
-from triage.prompt import Fix, Source, fix_category
+from triage.pack import DEFAULT_PACK, UNKNOWN, Action
+from triage.prompt import Source
 
 _VERDICT_PROPERTIES: dict[str, object] = {
-    "fix": {"type": "string", "enum": [fix.name for fix in Fix]},
+    "fix": {"type": "string", "enum": list(DEFAULT_PACK.keys)},
     "where": {"type": "string"},
     "because": {"type": "string"},
     "cited": {"type": "array", "items": {"type": "string"}},
@@ -86,7 +87,7 @@ class Verdict:
             until with_past_fixes fills it in.
     """
 
-    fix: Fix
+    fix: Action
     where: str
     because: str
     cited: list[str] = field(default_factory=list)
@@ -101,7 +102,7 @@ class Verdict:
         Returns:
             'firmware', 'bench', 'test', or 'unknown' for UNKNOWN.
         """
-        return fix_category(self.fix)
+        return self.fix.category
 
     @classmethod
     def gated(cls, reason: str) -> "Verdict":
@@ -113,9 +114,7 @@ class Verdict:
         Returns:
             UNKNOWN, with the reason as both the explanation and the gate's reason.
         """
-        return cls(
-            fix=Fix.UNKNOWN, where="no precedent to follow", because=reason, gate_reason=reason
-        )
+        return cls(fix=UNKNOWN, where="no precedent to follow", because=reason, gate_reason=reason)
 
 
 def _json_object(reply: str) -> dict[str, object]:
@@ -142,7 +141,7 @@ def _json_object(reply: str) -> dict[str, object]:
     return parsed
 
 
-def _chosen_fix(value: object) -> Fix:
+def _chosen_fix(value: object) -> Action:
     """Read the action the model chose, by key or by its text.
 
     Args:
@@ -155,12 +154,12 @@ def _chosen_fix(value: object) -> Fix:
         MalformedAnswerError: If it isn't one of the actions offered.
     """
     text = str(value).strip()
-    by_name = {fix.name.casefold(): fix for fix in Fix}
-    by_value = {fix.value.casefold(): fix for fix in Fix}
-    chosen = by_name.get(text.casefold()) or by_value.get(text.casefold())
+    by_key = {action.key.casefold(): action for action in DEFAULT_PACK.actions}
+    by_says = {action.says.casefold(): action for action in DEFAULT_PACK.actions}
+    chosen = by_key.get(text.casefold()) or by_says.get(text.casefold())
     if chosen is None:
         raise MalformedAnswerError(
-            f"{text!r} isn't one of the actions offered: {', '.join(fix.name for fix in Fix)}"
+            f"{text!r} isn't one of the actions offered: {', '.join(DEFAULT_PACK.keys)}"
         )
     return chosen
 
@@ -216,7 +215,7 @@ def with_past_fixes(verdict: Verdict, sources: Sequence[Source]) -> Verdict:
     same_action = [
         source.source_id
         for source in sources
-        if source.action == verdict.fix.name and source.source_id not in verdict.cited
+        if source.action == verdict.fix.key and source.source_id not in verdict.cited
     ]
     past_fixes = tuple(
         PastFix(source_id, fix_by_id[source_id])

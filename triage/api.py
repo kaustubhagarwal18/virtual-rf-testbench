@@ -67,7 +67,7 @@ DEFAULT_PORT = 8000
 ActionKey = Literal[
     "CABLE", "LINK", "ALIGNMENT", "CONFIGURATION", "TIMEOUT", "TEST_CLEANUP", "FIRMWARE", "UNKNOWN"
 ]
-"""The action keys a label may record: triage.prompt.Fix's names, spelled as a type."""
+"""The action keys a label may record: triage.prompt.Action's names, spelled as a type."""
 
 EvidenceLevel = Literal["full", "error-only"]
 """The evidence levels a request may ask for: triage.evidence.LEVELS, spelled as a type."""
@@ -376,8 +376,8 @@ def create_app(
                 status.HTTP_502_BAD_GATEWAY, f"the model's answer couldn't be used: {error}"
             ) from error
         return VerdictResponse(
-            fix=verdict.fix.name,
-            action=verdict.fix.value,
+            fix=verdict.fix.key,
+            action=verdict.fix.says,
             where=verdict.where,
             because=verdict.because,
             cited=verdict.cited,

@@ -18,7 +18,7 @@ from triage.llm import (
     ModelUnavailableError,
     OllamaProvider,
 )
-from triage.prompt import Fix
+from triage.pack import DEFAULT_PACK
 
 ANSWER = {"message": {"content": '{"fix": "CABLE"}'}}
 
@@ -160,7 +160,9 @@ def test_a_schema_is_sent_as_the_reply_format() -> None:
         provider = OllamaProvider(host=f"http://127.0.0.1:{port}", response_format=VERDICT_SCHEMA)
         provider.complete("instructions", "question")
     assert server.requests[0]["format"] == VERDICT_SCHEMA
-    assert server.requests[0]["format"]["properties"]["fix"]["enum"] == [fix.name for fix in Fix]
+    assert server.requests[0]["format"]["properties"]["fix"]["enum"] == [
+        fix.key for fix in DEFAULT_PACK.actions
+    ]
 
 
 def test_the_cache_asks_each_distinct_prompt_once() -> None:

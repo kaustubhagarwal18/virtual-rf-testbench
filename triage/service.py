@@ -78,7 +78,7 @@ def describe(verdict: Verdict) -> str:
         if one did.
     """
     lines = [
-        f"fix:   {verdict.fix.name} ({verdict.fix.value})",
+        f"fix:   {verdict.fix.key} ({verdict.fix.says})",
         f"where: {verdict.where}",
         f"why:   {verdict.because}",
         f"cause: {verdict.category}",

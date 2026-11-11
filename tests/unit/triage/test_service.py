@@ -13,7 +13,8 @@ from triage.answer import MalformedAnswerError, PastFix, Verdict
 from triage.checks import DEFAULT_CHECKS
 from triage.evidence import ERROR_ONLY, FULL, SavedRun
 from triage.llm import FakeProvider, ModelUnavailableError
-from triage.prompt import Fix, Source
+from triage.pack import DEFAULT_PACK, UNKNOWN
+from triage.prompt import Source
 from triage.service import describe, main, triage_run
 
 VERDICT = json.dumps(
@@ -29,7 +30,7 @@ def saved_run(tmp_path: Path) -> SavedRun:
 def test_the_chosen_action_comes_back_as_the_verdict(tmp_path: Path) -> None:
     """A well-formed reply becomes the verdict the caller acts on."""
     verdict = triage_run(saved_run(tmp_path), FakeProvider([VERDICT]))
-    assert verdict.fix is Fix.CABLE
+    assert verdict.fix is DEFAULT_PACK.action("CABLE")
     assert verdict.where == "the bench cable"
 
 
@@ -142,9 +143,9 @@ def test_the_cli_says_when_a_check_overruled_the_model(
 def test_checks_are_off_unless_asked_for(tmp_path: Path) -> None:
     """The pipeline applies no checks by default, so the evaluation can measure the model alone."""
     run = SavedRun.load(unchanged_firmware_run(tmp_path))
-    assert triage_run(run, FakeProvider([FIRMWARE_REPLY])).fix is Fix.FIRMWARE
+    assert triage_run(run, FakeProvider([FIRMWARE_REPLY])).fix is DEFAULT_PACK.action("FIRMWARE")
     checked = triage_run(run, FakeProvider([FIRMWARE_REPLY]), checks=DEFAULT_CHECKS)
-    assert checked.fix is Fix.UNKNOWN
+    assert checked.fix is UNKNOWN
 
 
 def test_a_gate_that_objects_answers_unknown_without_asking_the_model(tmp_path: Path) -> None:
@@ -152,7 +153,7 @@ def test_a_gate_that_objects_answers_unknown_without_asking_the_model(tmp_path: 
     sources = [Source("past-a", "a", "cable_loss", "CABLE"), Source("past-b", "b", "x", "LINK")]
     provider = FakeProvider([VERDICT])
     verdict = triage_run(saved_run(tmp_path), provider, FULL, sources, gates=DEFAULT_GATES)
-    assert verdict.fix is Fix.UNKNOWN
+    assert verdict.fix is UNKNOWN
     assert verdict.cited == []
     assert "different actions" in verdict.gate_reason
     assert not provider.prompts
@@ -165,7 +166,7 @@ def test_gates_that_find_no_objection_leave_the_answer_to_the_model(
     """No precedents, or close ones that agree: the model is asked as before."""
     provider = FakeProvider([VERDICT])
     verdict = triage_run(saved_run(tmp_path), provider, FULL, sources, gates=DEFAULT_GATES)
-    assert verdict.fix is Fix.CABLE
+    assert verdict.fix is DEFAULT_PACK.action("CABLE")
     assert verdict.gate_reason == ""
     assert len(provider.prompts) == 1
 
@@ -197,7 +198,7 @@ def test_a_cited_past_run_brings_its_fix_to_the_verdict(tmp_path: Path) -> None:
 def test_the_cli_states_the_category_and_what_fixed_it_last_time() -> None:
     """The printed verdict says firmware, bench or test, and each cited run's recorded fix."""
     verdict = Verdict(
-        Fix.CABLE,
+        DEFAULT_PACK.action("CABLE"),
         "cable",
         "loss",
         cited=["past-1"],
@@ -212,7 +213,7 @@ def test_the_cli_names_one_fix_once_however_many_runs_recorded_it() -> None:
     """Two cited runs fixed the same way print as one line naming both."""
     fix = "Corrected level_offset_db to 1.5"
     verdict = Verdict(
-        Fix.CONFIGURATION,
+        DEFAULT_PACK.action("CONFIGURATION"),
         "config",
         "x",
         past_fixes=(PastFix("past-1", fix), PastFix("past-2", fix)),

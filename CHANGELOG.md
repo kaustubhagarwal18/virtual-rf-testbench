@@ -9,6 +9,9 @@ it, so the package version moves only with a release.
 
 ### Added
 
+- **Domain packs** (ADR 0021): the actions, their causes and the domain's description move
+  from code to `triage/packs/rf-bench.toml`, checked on load. A behaviour lock hashes 231
+  parts of triage's behaviour and proves the move changed no prompt, evidence, check or vote.
 - **An answer for each distinct failure in CI** (ADR 0020): the failed tests are grouped by
   setup step, or by test function and kind of failure, and each of the first five groups is
   triaged on its own; the comment has one numbered block per failure, naming it, listing its

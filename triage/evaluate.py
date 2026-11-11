@@ -42,7 +42,8 @@ from triage.llm import (
     ModelUnavailableError,
     OllamaProvider,
 )
-from triage.prompt import Fix, Source
+from triage.pack import DEFAULT_PACK, Action
+from triage.prompt import Source
 from triage.report import BASELINE_TITLE, RETRIEVAL_TITLE, render, render_report
 from triage.retrieval import (
     DEFAULT_HISTORY,
@@ -140,7 +141,7 @@ SCENARIOS = (
 names its model twin: the one thing it changes is the vote answering in the model's place."""
 
 
-def expected_fix(run: SavedRun) -> Fix:
+def expected_fix(run: SavedRun) -> Action:
     """Return the fix that resolves a question run, from the action its label records.
 
     The label is read here, and only here: it is the answer key, used to score the model's
@@ -158,12 +159,12 @@ def expected_fix(run: SavedRun) -> Fix:
             message says to rebuild the data set.
     """
     action = load_label(run).get("action")
-    if not isinstance(action, str) or action not in Fix.__members__:
+    if not isinstance(action, str) or action not in DEFAULT_PACK.keys:
         raise KeyError(
             f"{run.folder.name}: the label records no known action ({action!r}); rebuild "
             "the data set with 'make fault-dataset'"
         )
-    return Fix[action]
+    return DEFAULT_PACK.action(action)
 
 
 def _sources_for(
@@ -245,7 +246,7 @@ def evaluate_question(
     if verdict.gate_reason:
         return replace(
             base,
-            chosen=verdict.fix.name,
+            chosen=verdict.fix.key,
             answer=f"UNKNOWN, model not asked: {verdict.gate_reason}",
             sources=replace(base.sources, gated=True),
         )
@@ -253,13 +254,13 @@ def evaluate_question(
     cited = f" citing {', '.join(verdict.cited)}" if verdict.cited else ""
     overruled = f" [overruled: {verdict.overruled}]" if verdict.overruled else ""
     answer = (
-        f"{verdict.fix.name} by majority vote, model not asked: {verdict.because}{overruled}"
+        f"{verdict.fix.key} by majority vote, model not asked: {verdict.because}{overruled}"
         if scenario.vote
-        else f"{verdict.fix.name} ({verdict.where}){cited} because {verdict.because}{overruled}"
+        else f"{verdict.fix.key} ({verdict.where}){cited} because {verdict.because}{overruled}"
     )
     return replace(
         base,
-        chosen=verdict.fix.name,
+        chosen=verdict.fix.key,
         answer=answer,
         sources=replace(
             base.sources,

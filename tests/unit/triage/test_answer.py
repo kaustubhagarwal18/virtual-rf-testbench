@@ -14,18 +14,19 @@ from triage.answer import (
     verdict_schema,
     with_past_fixes,
 )
-from triage.prompt import Fix, Source
+from triage.pack import DEFAULT_PACK, UNKNOWN, Action
+from triage.prompt import Source
 
 
-@pytest.mark.parametrize("fix", list(Fix), ids=lambda fix: fix.name)
-def test_an_action_named_by_its_text_is_accepted(fix: Fix) -> None:
+@pytest.mark.parametrize("fix", list(DEFAULT_PACK.actions), ids=lambda fix: fix.key)
+def test_an_action_named_by_its_text_is_accepted(fix: Action) -> None:
     """The model may answer with any action's wording, not only its key."""
-    assert parse_verdict(json.dumps({"fix": fix.value})).fix is fix
+    assert parse_verdict(json.dumps({"fix": fix.says})).fix is fix
 
 
 def test_text_around_the_json_is_tolerated() -> None:
     """A reply wrapped in prose still parses, since small models add it."""
-    assert parse_verdict('here:\n{"fix": "LINK"}\nthanks').fix is Fix.LINK
+    assert parse_verdict('here:\n{"fix": "LINK"}\nthanks').fix is DEFAULT_PACK.action("LINK")
 
 
 def test_a_reply_with_no_object_is_refused() -> None:
@@ -84,7 +85,9 @@ def test_past_fixes_are_the_cited_sources_fixes_in_citation_order() -> None:
         Source("past-c", "c"),
         Source("past-d", "d", fix_applied="never cited"),
     ]
-    verdict = Verdict(Fix.CABLE, "cable", "loss", cited=["past-b", "past-c", "past-a"])
+    verdict = Verdict(
+        DEFAULT_PACK.action("CABLE"), "cable", "loss", cited=["past-b", "past-c", "past-a"]
+    )
     attached = with_past_fixes(verdict, sources)
     assert attached.past_fixes == (
         PastFix("past-b", "reseated the connector"),
@@ -103,15 +106,17 @@ CONFIG_SOURCES = [
 
 def test_offered_runs_resolved_by_the_same_action_are_quoted_after_the_cited_ones() -> None:
     """A run the model didn't cite still shows its fix when its action is the verdict's."""
-    verdict = Verdict(Fix.CONFIGURATION, "bench configuration", "offset", cited=["past-b"])
+    verdict = Verdict(
+        DEFAULT_PACK.action("CONFIGURATION"), "bench configuration", "offset", cited=["past-b"]
+    )
     assert with_past_fixes(verdict, CONFIG_SOURCES).past_fixes == (
         PastFix("past-b", "Set level_offset_db"),
         PastFix("past-a", "Corrected level_offset_db"),
     )
 
 
-@pytest.mark.parametrize("fix", [Fix.UNKNOWN, Fix.CABLE])
-def test_only_cited_runs_are_quoted_when_no_offered_run_shares_the_action(fix: Fix) -> None:
+@pytest.mark.parametrize("fix", [UNKNOWN, DEFAULT_PACK.action("CABLE")])
+def test_only_cited_runs_are_quoted_when_no_offered_run_shares_the_action(fix: Action) -> None:
     """UNKNOWN, or an action no offered run was resolved by, quotes the cited runs alone."""
     verdict = Verdict(fix, "", "", cited=["past-c"])
     assert with_past_fixes(verdict, CONFIG_SOURCES).past_fixes == (
@@ -121,14 +126,14 @@ def test_only_cited_runs_are_quoted_when_no_offered_run_shares_the_action(fix: F
 
 def test_a_verdict_states_the_category_of_its_action() -> None:
     """The category is the action's: CABLE is the bench, UNKNOWN is unknown."""
-    assert Verdict(Fix.CABLE, "cable", "loss").category == "bench"
-    assert Verdict(Fix.UNKNOWN, "", "").category == "unknown"
+    assert Verdict(DEFAULT_PACK.action("CABLE"), "cable", "loss").category == "bench"
+    assert Verdict(UNKNOWN, "", "").category == "unknown"
 
 
 def test_identical_past_fixes_are_grouped_under_every_run_that_recorded_them() -> None:
     """Two cited runs fixed the same way read as one fix with both ids, in first-cited order."""
     verdict = Verdict(
-        Fix.CONFIGURATION,
+        DEFAULT_PACK.action("CONFIGURATION"),
         "bench configuration",
         "decimal point",
         past_fixes=(

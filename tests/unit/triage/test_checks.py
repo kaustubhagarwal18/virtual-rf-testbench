@@ -18,7 +18,7 @@ from triage.checks import (
     apply_checks,
 )
 from triage.evidence import SavedRun
-from triage.prompt import Fix
+from triage.pack import DEFAULT_PACK, UNKNOWN, Action
 
 FIRMWARE_STATES: dict[str, dict[str, str]] = {
     "unchanged": {"analyzer": "0.1.0", "generator": "0.1.0"},
@@ -38,17 +38,17 @@ def run_with_firmware(tmp_path: Path, versions: dict[str, str]) -> SavedRun:
 
 
 @pytest.mark.parametrize(
-    ("fix", "state"), list(itertools.product(list(Fix), sorted(FIRMWARE_STATES)))
+    ("fix", "state"), list(itertools.product(list(DEFAULT_PACK.actions), sorted(FIRMWARE_STATES)))
 )
 def test_only_firmware_on_unchanged_firmware_is_overruled(
-    tmp_path: Path, fix: Fix, state: str
+    tmp_path: Path, fix: Action, state: str
 ) -> None:
     """Every action against every firmware state: only FIRMWARE on unchanged becomes UNKNOWN."""
     run = run_with_firmware(tmp_path, FIRMWARE_STATES[state])
     verdict = Verdict(fix, "where", "because", ["past-1"])
     reviewed = FirmwareUnchangedCheck().review(run, verdict)
-    if fix is Fix.FIRMWARE and state == "unchanged":
-        assert reviewed.fix is Fix.UNKNOWN
+    if fix is DEFAULT_PACK.action("FIRMWARE") and state == "unchanged":
+        assert reviewed.fix is UNKNOWN
         assert "unchanged" in reviewed.overruled
         assert reviewed.cited == ["past-1"]
     else:
@@ -58,9 +58,9 @@ def test_only_firmware_on_unchanged_firmware_is_overruled(
 def test_no_checks_leave_the_verdict_alone(tmp_path: Path) -> None:
     """With no checks, a measurement of the model alone stays one."""
     run = run_with_firmware(tmp_path, FIRMWARE_STATES["unchanged"])
-    verdict = Verdict(Fix.FIRMWARE, "the generator", "levels are off")
+    verdict = Verdict(DEFAULT_PACK.action("FIRMWARE"), "the generator", "levels are off")
     assert apply_checks(run, verdict, ()) == verdict
-    assert apply_checks(run, verdict, DEFAULT_CHECKS).fix is Fix.UNKNOWN
+    assert apply_checks(run, verdict, DEFAULT_CHECKS).fix is UNKNOWN
 
 
 def run_with_errors(tmp_path: Path, errors: list[str]) -> SavedRun:
@@ -71,17 +71,21 @@ def run_with_errors(tmp_path: Path, errors: list[str]) -> SavedRun:
 
 @pytest.mark.parametrize(
     ("fix", "errors"),
-    list(itertools.product(list(Fix), [[], ['-113,"Undefined header"'], ["-222,x", "-113,y"]])),
+    list(
+        itertools.product(
+            list(DEFAULT_PACK.actions), [[], ['-113,"Undefined header"'], ["-222,x", "-113,y"]]
+        )
+    ),
 )
 def test_only_a_timeout_with_an_instrument_error_is_overruled(
-    tmp_path: Path, fix: Fix, errors: list[str]
+    tmp_path: Path, fix: Action, errors: list[str]
 ) -> None:
     """Every action with and without errors: only TIMEOUT beside an SCPI error becomes UNKNOWN."""
     run = run_with_errors(tmp_path, errors)
     verdict = Verdict(fix, "where", "because", ["past-1"])
     reviewed = TimeoutWithInstrumentErrorCheck().review(run, verdict)
-    if fix is Fix.TIMEOUT and errors:
-        assert reviewed.fix is Fix.UNKNOWN
+    if fix is DEFAULT_PACK.action("TIMEOUT") and errors:
+        assert reviewed.fix is UNKNOWN
         assert errors[0] in reviewed.overruled
         assert reviewed.cited == ["past-1"]
     else:
@@ -97,7 +101,7 @@ def test_an_error_in_a_passing_test_doesnt_count(tmp_path: Path) -> None:
         "instrument_errors": ["-113,x"],
     }
     run = SavedRun.load(write_run(tmp_path / "run", [passing, FAILING_TEST]))
-    verdict = Verdict(Fix.TIMEOUT, "session", "slow")
+    verdict = Verdict(DEFAULT_PACK.action("TIMEOUT"), "session", "slow")
     assert TimeoutWithInstrumentErrorCheck().review(run, verdict) == verdict
 
 
@@ -113,10 +117,14 @@ RELEASE_MENTIONS: dict[str, tuple[str, str]] = {
 
 @pytest.mark.parametrize(
     ("fix", "state", "mention"),
-    list(itertools.product(list(Fix), sorted(FIRMWARE_STATES), sorted(RELEASE_MENTIONS))),
+    list(
+        itertools.product(
+            list(DEFAULT_PACK.actions), sorted(FIRMWARE_STATES), sorted(RELEASE_MENTIONS)
+        )
+    ),
 )
 def test_only_firmware_naming_a_release_the_run_didnt_run_is_overruled(
-    tmp_path: Path, fix: Fix, state: str, mention: str
+    tmp_path: Path, fix: Action, state: str, mention: str
 ) -> None:
     """Every action, firmware state and mention: only FIRMWARE naming a foreign release flips."""
     versions = FIRMWARE_STATES[state]
@@ -126,8 +134,8 @@ def test_only_firmware_naming_a_release_the_run_didnt_run_is_overruled(
     reviewed = ForeignReleaseCheck().review(run, verdict)
     named = [word.rstrip(".") for word in f"{where} {because}".split() if word[0].isdigit()]
     foreign = bool(versions) and any(release not in versions.values() for release in named)
-    if fix is Fix.FIRMWARE and foreign:
-        assert reviewed.fix is Fix.UNKNOWN
+    if fix is DEFAULT_PACK.action("FIRMWARE") and foreign:
+        assert reviewed.fix is UNKNOWN
         assert named[0] in reviewed.overruled
         assert reviewed.cited == ["past-1"]
     else:
@@ -138,12 +146,12 @@ def test_the_measured_miss_is_caught_by_the_default_checks(tmp_path: Path) -> No
     """A run on 0.1.0 blamed on a precedent's 0.2.0-rc2 becomes UNKNOWN, naming the release."""
     run = run_with_firmware(tmp_path, FIRMWARE_STATES["unchanged"])
     verdict = Verdict(
-        Fix.FIRMWARE,
+        DEFAULT_PACK.action("FIRMWARE"),
         "generator 0.2.0-rc2",
         "The regression is due to the release 0.2.0-rc2 not clearing the level offset",
     )
     reviewed = apply_checks(run, verdict, DEFAULT_CHECKS)
-    assert reviewed.fix is Fix.UNKNOWN
+    assert reviewed.fix is UNKNOWN
     assert "0.2.0-rc2" in reviewed.overruled
 
 
@@ -167,16 +175,18 @@ def run_with_no_signal(tmp_path: Path, warnings: int) -> SavedRun:
     return SavedRun.load(folder)
 
 
-@pytest.mark.parametrize(("fix", "warnings"), list(itertools.product(list(Fix), [0, 1, 22])))
+@pytest.mark.parametrize(
+    ("fix", "warnings"), list(itertools.product(list(DEFAULT_PACK.actions), [0, 1, 22]))
+)
 def test_only_alignment_without_a_signal_is_overruled(
-    tmp_path: Path, fix: Fix, warnings: int
+    tmp_path: Path, fix: Action, warnings: int
 ) -> None:
     """Every action with and without the warning: only ALIGNMENT with no signal becomes UNKNOWN."""
     run = run_with_no_signal(tmp_path, warnings)
     verdict = Verdict(fix, "where", "because", ["past-1"])
     reviewed = AlignmentWithoutSignalCheck().review(run, verdict)
-    if fix is Fix.ALIGNMENT and warnings:
-        assert reviewed.fix is Fix.UNKNOWN
+    if fix is DEFAULT_PACK.action("ALIGNMENT") and warnings:
+        assert reviewed.fix is UNKNOWN
         assert "no signal" in reviewed.overruled
         assert reviewed.cited == ["past-1"]
     else:
@@ -205,16 +215,18 @@ def run_with_failed_units(tmp_path: Path, units: tuple[str, ...]) -> SavedRun:
     return SavedRun.load(write_run(tmp_path / "run", [test]))
 
 
-@pytest.mark.parametrize(("fix", "case"), list(itertools.product(list(Fix), sorted(FAILED_UNITS))))
+@pytest.mark.parametrize(
+    ("fix", "case"), list(itertools.product(list(DEFAULT_PACK.actions), sorted(FAILED_UNITS)))
+)
 def test_only_alignment_without_a_failed_level_reading_is_overruled(
-    tmp_path: Path, fix: Fix, case: str
+    tmp_path: Path, fix: Action, case: str
 ) -> None:
     """Alignment shifts levels, not frequencies: ALIGNMENT without a failed level is refused."""
     run = run_with_failed_units(tmp_path, FAILED_UNITS[case])
     verdict = Verdict(fix, "analyzer", "because", ["past-1"])
     reviewed = AlignmentWithoutLevelReadingCheck().review(run, verdict)
-    if fix is Fix.ALIGNMENT and case not in LEVEL_CASES:
-        assert reviewed.fix is Fix.UNKNOWN
+    if fix is DEFAULT_PACK.action("ALIGNMENT") and case not in LEVEL_CASES:
+        assert reviewed.fix is UNKNOWN
         assert "no level or power reading" in reviewed.overruled
     else:
         assert reviewed == verdict

@@ -59,6 +59,11 @@
 
 ## Next, in order
 
+0. **A domain-free core**, so the pipeline serves any domain where failures recur (wafer
+   test, payments, device fleets), with the RF bench as one pack. Done: the actions, causes
+   and description in a pack file, behind a behaviour lock (ADR 0021). Next: the facts and
+   checks as rules in the pack; then a generic case schema, with this repository's results
+   format as one adapter; then a second pack from another domain to prove it.
 1. **Triage unit and integration failures, not only bench failures.** CI triages only a
    failed bench run: when a pull request breaks a unit or integration test, the comment lists
    the failure but doesn't explain it. These failures have no measurements, instrument logs

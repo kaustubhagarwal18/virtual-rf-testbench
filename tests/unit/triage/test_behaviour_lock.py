@@ -22,7 +22,8 @@ from triage.answer import VERDICT_SCHEMA, Verdict, parse_verdict, verdict_schema
 from triage.checks import DEFAULT_CHECKS, apply_checks
 from triage.evidence import EVALUATED_LEVELS, SavedRun, build_evidence
 from triage.label import load_label
-from triage.prompt import SYSTEM_PROMPT, Fix, build_prompt, fix_category
+from triage.pack import DEFAULT_PACK, Action
+from triage.prompt import SYSTEM_PROMPT, build_prompt
 from triage.retrieval import history_source
 from triage.vote import vote_run
 
@@ -33,17 +34,17 @@ UPDATE_VARIABLE = "UPDATE_BEHAVIOUR_LOCK"
 
 def action_keys() -> list[str]:
     """Return every action's key, UNKNOWN included, in the order the prompt lists them."""
-    return [fix.name for fix in Fix]
+    return [fix.key for fix in DEFAULT_PACK.actions]
 
 
-def action(key: str) -> Fix:
+def action(key: str) -> Action:
     """Return the action with this key."""
-    return Fix[key]
+    return DEFAULT_PACK.action(key)
 
 
 def action_text(key: str) -> str:
     """Return what the action with this key says to do."""
-    return action(key).value
+    return action(key).says
 
 
 def digest(value: object) -> str:
@@ -60,7 +61,7 @@ def runs(kind: str) -> list[SavedRun]:
 def reviewed(verdict: Verdict) -> dict[str, object]:
     """Describe a reviewed verdict by the fields a reader or the scorer sees."""
     return {
-        "fix": verdict.fix.name,
+        "fix": verdict.fix.key,
         "category": verdict.category,
         "overruled": verdict.overruled,
         "gate_reason": verdict.gate_reason,
@@ -80,7 +81,7 @@ def fingerprint() -> dict[str, str]:
     parts: dict[str, object] = {
         "system prompt": SYSTEM_PROMPT,
         "answer schema": [VERDICT_SCHEMA, verdict_schema(["past-1", "past-2"])],
-        "actions": [[key, action_text(key), fix_category(action(key))] for key in action_keys()],
+        "actions": [[key, action_text(key), action(key).category] for key in action_keys()],
         "parsing": [
             reviewed(parse_verdict(json.dumps({"fix": reply, "where": "w", "because": "b"})))
             for key in action_keys()

@@ -19,7 +19,8 @@ from triage.evaluate import expected_fix
 from triage.evidence import FULL, SavedRun, error_only_evidence
 from triage.label import load_label
 from triage.llm import DEFAULT_MODEL, LLMProvider, ModelUnavailableError, OllamaProvider
-from triage.prompt import Fix, Source
+from triage.pack import Action
+from triage.prompt import Source
 from triage.retrieval import DEFAULT_HISTORY, DEFAULT_TOP_K, Retriever, history_index
 from triage.service import triage_run
 from triage.textfmt import clip
@@ -70,14 +71,14 @@ class DemoResult:
     """
 
     fault: str
-    expected: Fix
+    expected: Action
     error: str
     baseline: Answer
     retrieval: Answer
 
 
 def _answer(
-    run: SavedRun, provider: LLMProvider, expected: Fix, sources: Sequence[Source]
+    run: SavedRun, provider: LLMProvider, expected: Action, sources: Sequence[Source]
 ) -> Answer:
     """Triage one run once, turning an unusable reply into a result instead of an error.
 
@@ -95,7 +96,7 @@ def _answer(
     except MalformedAnswerError as unusable:
         return Answer(UNUSABLE, "", str(unusable), (), right=False)
     return Answer(
-        chosen=verdict.fix.name,
+        chosen=verdict.fix.key,
         where=verdict.where,
         because=verdict.because,
         cited=tuple(verdict.cited),
@@ -128,7 +129,7 @@ def run_demo(
     return DemoResult(str(load_label(run)["fault"]), expected, error, baseline, retrieval)
 
 
-def _answer_lines(title: str, answer: Answer, expected: Fix) -> list[str]:
+def _answer_lines(title: str, answer: Answer, expected: Action) -> list[str]:
     """Format one answer as a titled block.
 
     Args:
@@ -141,7 +142,7 @@ def _answer_lines(title: str, answer: Answer, expected: Fix) -> list[str]:
     """
     mark = "RIGHT" if answer.right else "wrong"
     cited = ", ".join(answer.cited) if answer.cited else "nothing"
-    expected_note = "" if answer.right else f" (resolving fix: {expected.name})"
+    expected_note = "" if answer.right else f" (resolving fix: {expected.key})"
     return [
         f"{title}:",
         f"  fix:   {answer.chosen}  [{mark}]{expected_note}",
@@ -163,7 +164,7 @@ def render(result: DemoResult) -> str:
         The report.
     """
     lines = [
-        f"Run: {result.fault}  (resolving fix: {result.expected.name} — {result.expected.value})",
+        f"Run: {result.fault}  (resolving fix: {result.expected.key} — {result.expected.says})",
         f"Error shown to the model: {clip(result.error, 120)}",
         "",
         *_answer_lines("Without retrieval (evidence alone)", result.baseline, result.expected),
