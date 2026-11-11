@@ -93,8 +93,9 @@
   no test. In CI, a run with two unrelated faults (release `0.2.0-rc3`, frequency 4 ppm
   high, plus a 3 dB alignment error) had its frequency failures answered `ALIGNMENT`, pulled
   by the analyzer's alignment warning, and one answered `UNKNOWN` by the gate; none got
-  `FIRMWARE`. A check now refuses `ALIGNMENT` without a failed level reading: on the same
-  faults, one frequency failure is now `FIRMWARE` and two are `UNKNOWN` (ADR 0020).
+  `FIRMWARE`. A check now refuses `ALIGNMENT` without a failed level reading: in two more
+  runs of the same faults, 2 of 4 failures were right and 2 `UNKNOWN`, but which two
+  changed from run to run (ADR 0020).
 - Every command in a compound line needs its full path: `CALC:MARK:X?;Y?`, which real
   instruments accept, gives -113 for `Y?`. The drivers always send full paths.
 - RsInstrument leaves a socket open when a connection is refused, so Python reports a

@@ -51,11 +51,14 @@ one model prompt, which takes 20 to 60 s on a CPU runner.
 
 ## Consequences
 
-- In CI, with both faults again (run 43006883624), the 8 failed tests formed 4 failures:
-  path loss answered `ALIGNMENT` and the first frequency failure `FIRMWARE`, both right and
-  both quoting their own fault's past fix. The model answered `ALIGNMENT` on the other two
-  frequency failures, and the new check turned both into `UNKNOWN`. The README shows the
-  comment.
+- In CI, with both faults again, the 8 failed tests formed 4 failures in two runs, with
+  2 right answers, 2 `UNKNOWN` and none wrong each time. Run 43006883624: path loss
+  `ALIGNMENT` and one frequency failure `FIRMWARE`, both quoting their own fault's past
+  fix; the model chose `ALIGNMENT` on the other two, and the new check refused both. Run
+  43008404971: path loss `UNKNOWN`, its closest past runs being an alignment and a cable
+  loss; two frequency failures `FIRMWARE`; one `ALIGNMENT` refused by the check. Which past
+  runs are closest moves with each run's readings, so the same faults can get different
+  answers. The README shows the second run's comment.
 
 - The HTTP API still returns one verdict, for the first failure. A per-failure answer there
   is planned.
