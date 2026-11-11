@@ -151,12 +151,15 @@ def test_a_problem_is_one_line_under_the_heading() -> None:
 
 
 def test_the_failed_run_is_triaged_as_the_api_triages_it(tmp_path: Path) -> None:
-    """Agreeing past runs reach the model, and its answer quotes their recorded fixes."""
+    """Agreeing past runs reach the model; both share its action, so both are quoted."""
     run = SavedRun.load(write_run(tmp_path / "run", [FAILING_TEST]))
     provider = FakeProvider([CABLE_REPLY])
     verdict = triage_failed_run(run, provider, StubRetriever(*AGREEING))
     assert verdict.fix is Fix.CABLE
-    assert verdict.past_fixes == (PastFix("past-1", "Replaced the cable"),)
+    assert verdict.past_fixes == (
+        PastFix("past-1", "Replaced the cable"),
+        PastFix("past-2", "Replaced it again"),
+    )
     assert len(provider.prompts) == 1
 
 
@@ -211,3 +214,17 @@ def test_runs_as_a_module(tmp_path: Path) -> None:
     )
     assert completed.returncode == 1
     assert "No verdict" in out.read_text(encoding="utf-8")
+
+
+def test_an_answer_says_what_to_do_in_the_action_list_words() -> None:
+    """The action's own description, fixed text from the action list, says what to do."""
+    assert f"- **What to do:** {Fix.CABLE.value}" in render_verdict(answered())
+
+
+@pytest.mark.parametrize(
+    "verdict",
+    [Verdict.gated("disagree"), Verdict(Fix.UNKNOWN, "", "nothing points anywhere")],
+)
+def test_an_unknown_has_nothing_to_do(verdict: Verdict) -> None:
+    """UNKNOWN is no action, so there is no 'What to do' line."""
+    assert "What to do" not in render_verdict(verdict)

@@ -18,7 +18,15 @@ from triage.llm import CachingProvider, FakeProvider, ModelUnavailableError
 from triage.prompt import Fix
 from triage.report import _report_rows, findings, render, render_report, score_line
 from triage.retrieval import InMemoryRetriever
-from triage.scores import MALFORMED, Outcome, Precedents, Scenario, ScenarioResult, wilson_interval
+from triage.scores import (
+    MALFORMED,
+    Outcome,
+    Precedents,
+    Scenario,
+    ScenarioResult,
+    SourcesUsed,
+    wilson_interval,
+)
 
 
 def question(folder: Path, fault: str) -> Path:
@@ -58,9 +66,9 @@ def test_every_saved_label_records_its_faults_action(path: Path) -> None:
 
 
 def test_the_data_set_has_a_label_for_every_run() -> None:
-    """The label test above covers all 54 runs, not an empty list."""
-    expected_labels = 54
-    assert len(SAVED_LABELS) == expected_labels
+    """Every catalogue fault has its six runs, three history and three question, each labelled."""
+    runs_per_fault = 6
+    assert len(SAVED_LABELS) == runs_per_fault * len(CATALOGUE)
 
 
 def test_the_expected_fix_comes_from_the_label(tmp_path: Path) -> None:
@@ -666,3 +674,107 @@ def test_the_held_out_finding_names_the_vote_when_it_answered(tmp_path: Path) ->
     result = evaluate(tmp_path / "q", FakeProvider(), [held_out], retriever)[0]
     text = " ".join(findings([result]))
     assert "the vote said UNKNOWN 0 times and named a wrong action 1 times" in text
+
+
+def outcome_citing(fault: str, cited_faults: tuple[str, ...], chosen: str = "CABLE") -> Outcome:
+    """Return a CABLE question's outcome that cited past runs of the given faults."""
+    sources = SourcesUsed(
+        offered_faults=cited_faults,
+        cited=tuple(f"past-{index}" for index in range(len(cited_faults))),
+        cited_faults=cited_faults,
+    )
+    return Outcome("q-1", fault, Fix.CABLE, chosen, sources=sources)
+
+
+@pytest.mark.parametrize(
+    ("cited_faults", "own"),
+    [
+        ((), False),
+        (("cable_loss",), True),
+        (("cable_loss", "cable_loss"), True),
+        (("link_down",), False),
+        (("cable_loss", "link_down"), False),
+        (("link_down", "cable_loss"), False),
+    ],
+)
+def test_an_outcome_cites_its_own_fault_only_when_every_citation_is(
+    cited_faults: tuple[str, ...], own: bool
+) -> None:
+    """The quoted past fix is this fault's only when every cited run has the question's fault."""
+    assert outcome_citing("cable_loss", cited_faults).cites_own_fault is own
+
+
+def test_right_answers_are_split_by_whose_past_runs_they_cite() -> None:
+    """A scenario counts right answers citing their own fault, another fault, or nothing."""
+    result = ScenarioResult(
+        RETRIEVAL,
+        [
+            outcome_citing("cable_loss", ("cable_loss",)),
+            outcome_citing("cable_loss", ("link_down",)),
+            outcome_citing("cable_loss", ("cable_loss", "link_down")),
+            outcome_citing("cable_loss", ()),
+            outcome_citing("cable_loss", ("cable_loss",), chosen="LINK"),
+        ],
+    )
+    counts = (
+        result.right_citing_own_fault,
+        result.right_citing_another_fault,
+        result.right_citing_nothing,
+    )
+    assert counts == (1, 2, 1)
+
+
+def test_the_summary_shows_whose_past_runs_right_answers_cite() -> None:
+    """Retrieval scenarios show own / another / none; the others show n/a."""
+    report = render_report(
+        [
+            ScenarioResult(RETRIEVAL, [outcome_citing("cable_loss", ("link_down",))]),
+            ScenarioResult(Scenario("full evidence", FULL), [outcome_citing("cable_loss", ())]),
+        ],
+        "m",
+    )
+    rows = [line for line in report.splitlines() if line.startswith("| full") and "of" in line]
+    assert rows[0].endswith("| 0 / 1 / 0 | 0 of 1 |")
+    assert rows[1].endswith("| n/a | n/a |")
+
+
+@pytest.mark.parametrize(
+    ("quoted_faults", "quotes_own"),
+    [((), False), (("link_down",), False), (("link_down", "cable_loss"), True)],
+)
+def test_an_outcome_quotes_its_own_fault_when_any_quoted_fix_is_its(
+    quoted_faults: tuple[str, ...], quotes_own: bool
+) -> None:
+    """The comment helps when one quoted fix is the fault's own, whoever was cited."""
+    outcome = replace(
+        outcome_citing("cable_loss", ()),
+        sources=SourcesUsed(quoted_faults=quoted_faults),
+    )
+    assert outcome.quotes_own_fault is quotes_own
+
+
+def test_the_summary_counts_right_answers_quoting_their_own_faults_fix() -> None:
+    """The last column counts right answers whose quoted fixes include their own fault's."""
+    own = replace(
+        outcome_citing("cable_loss", ("link_down",)),
+        sources=SourcesUsed(
+            cited=("past-0",),
+            cited_faults=("link_down",),
+            quoted_faults=("link_down", "cable_loss"),
+        ),
+    )
+    report = render_report([ScenarioResult(RETRIEVAL, [own])], "m")
+    row = next(line for line in report.splitlines() if line.startswith("| full + retrieval"))
+    assert row.endswith("| 0 / 1 / 0 | 1 of 1 |")
+
+
+def test_a_retrieval_outcome_records_whose_fixes_were_quoted(tmp_path: Path) -> None:
+    """Evaluating a question records the fault of every past run whose fix the answer quotes."""
+    history_with(tmp_path / "history" / "cable_loss-1", "cable_loss")
+    question(tmp_path / "q" / "cable_loss-1", "cable_loss")
+    retriever = InMemoryRetriever.from_history(tmp_path / "history", FakeEmbedder())
+    source_id = retriever.sources[0].source_id
+    result = evaluate(
+        tmp_path / "q", FakeProvider([cited(Fix.CABLE, [source_id])]), [RETRIEVAL], retriever
+    )[0]
+    assert result.outcomes[0].sources.quoted_faults == ("cable_loss",)

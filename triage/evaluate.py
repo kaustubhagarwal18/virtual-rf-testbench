@@ -265,6 +265,7 @@ def evaluate_question(
             base.sources,
             cited=tuple(verdict.cited),
             cited_faults=tuple(fault_by_id[source_id] for source_id in verdict.cited),
+            quoted_faults=tuple(fault_by_id[past.source_id] for past in verdict.past_fixes),
         ),
     )
 

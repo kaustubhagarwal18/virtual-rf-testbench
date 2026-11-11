@@ -15,10 +15,11 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from triage.abstain import SERVICE_GATES
-from triage.answer import VERDICT_SCHEMA, MalformedAnswerError, PastFix, Verdict
+from triage.answer import VERDICT_SCHEMA, MalformedAnswerError, Verdict, grouped_past_fixes
 from triage.checks import DEFAULT_CHECKS
 from triage.evidence import FULL, SavedRun
 from triage.llm import DEFAULT_MODEL, LLMProvider, ModelUnavailableError, OllamaProvider
+from triage.prompt import Fix
 from triage.retrieval import DEFAULT_HISTORY, DEFAULT_TOP_K, Retriever, history_index
 from triage.service import triage_run
 from triage.textfmt import clip
@@ -79,30 +80,17 @@ def render_verdict(verdict: Verdict) -> str:
     elif verdict.overruled:
         lines.append(f"- **Overruled by a check:** {code(verdict.overruled)}")
     else:
+        if verdict.fix is not Fix.UNKNOWN:
+            lines.append(f"- **What to do:** {verdict.fix.value}")
         lines.append(f"- **Why:** {code(verdict.because)}")
         lines.append(f"- **Where:** {code(verdict.where)}")
         lines.append(f"- **Cited:** {codes(verdict.cited)}")
     lines += [
         f"- **Last time:** {code(fix_applied)} ({codes(source_ids)})"
-        for fix_applied, source_ids in _group_past_fixes(verdict.past_fixes).items()
+        for fix_applied, source_ids in grouped_past_fixes(verdict)
     ]
     lines += ["", FOOTER]
     return "\n".join(lines) + "\n"
-
-
-def _group_past_fixes(past_fixes: Sequence[PastFix]) -> dict[str, list[str]]:
-    """Group the cited past runs by their recorded fix, so one fix is listed once.
-
-    Args:
-        past_fixes: Each cited run's recorded fix, in citation order.
-
-    Returns:
-        Each distinct fix, in first-cited order, with the ids of the runs it fixed.
-    """
-    grouped: dict[str, list[str]] = {}
-    for past in past_fixes:
-        grouped.setdefault(past.fix_applied, []).append(past.source_id)
-    return grouped
 
 
 def render_problem(reason: str) -> str:

@@ -81,8 +81,9 @@ class Verdict:
         overruled: Why a check replaced the model's choice, or empty when none did.
         gate_reason: Why UNKNOWN was answered from the precedents alone, without asking the
             model; empty when the model was asked.
-        past_fixes: What fixed each cited past run, quoted from its record, never written by
-            the model; empty until with_past_fixes fills it in.
+        past_fixes: What fixed each cited past run, then each other offered run resolved by
+            the same action, quoted from its record, never written by the model; empty
+            until with_past_fixes fills it in.
     """
 
     fix: Fix
@@ -195,35 +196,44 @@ def parse_verdict(reply: str, source_ids: Sequence[str] = ()) -> Verdict:
 
 
 def with_past_fixes(verdict: Verdict, sources: Sequence[Source]) -> Verdict:
-    """Attach what fixed each cited past run, quoted from the sources it was offered.
+    """Attach what fixed the past runs behind the verdict, quoted from their records.
 
-    The quote comes from the record, not the model, so it can't be misremembered. A cited
-    source whose fix wasn't recorded is left out rather than shown as blank.
+    First each cited run, in citation order; then every other offered run whose recorded
+    action is the verdict's, most similar first. A small model often cites a look-alike run
+    of a neighbouring fault with the same action, so its own fault's runs, offered but not
+    cited, would otherwise go unquoted. The quote comes from the record, not the model, so
+    it can't be misremembered. A source whose fix wasn't recorded is left out rather than
+    shown as blank.
 
     Args:
         verdict: The verdict, whose citations are already checked against the sources.
-        sources: The sources offered for this run.
+        sources: The sources offered for this run, most similar first.
 
     Returns:
-        The verdict with past_fixes in the order the sources were cited.
+        The verdict with past_fixes attached.
     """
     fix_by_id = {source.source_id: source.fix_applied for source in sources}
+    same_action = [
+        source.source_id
+        for source in sources
+        if source.action == verdict.fix.name and source.source_id not in verdict.cited
+    ]
     past_fixes = tuple(
         PastFix(source_id, fix_by_id[source_id])
-        for source_id in verdict.cited
+        for source_id in [*verdict.cited, *same_action]
         if fix_by_id.get(source_id)
     )
     return replace(verdict, past_fixes=past_fixes)
 
 
 def grouped_past_fixes(verdict: Verdict) -> list[tuple[str, tuple[str, ...]]]:
-    """Group the cited runs' fixes by their text, so one fix recorded twice reads once.
+    """Group the quoted runs' fixes by their text, so one fix recorded twice reads once.
 
     Args:
         verdict: The verdict, with its past fixes attached.
 
     Returns:
-        Each distinct fix with the ids of the runs that recorded it, in first-cited order.
+        Each distinct fix with the ids of the runs that recorded it, in first-quoted order.
     """
     groups: dict[str, list[str]] = {}
     for past in verdict.past_fixes:
@@ -232,13 +242,13 @@ def grouped_past_fixes(verdict: Verdict) -> list[tuple[str, tuple[str, ...]]]:
 
 
 def past_fix_lines(verdict: Verdict) -> list[str]:
-    """Write each distinct past fix beside the cited runs that recorded it.
+    """Write each distinct past fix beside the quoted runs that recorded it.
 
     Args:
         verdict: The verdict, with its past fixes attached.
 
     Returns:
-        Lines such as 'Corrected level_offset_db to 1.5 (past-a, past-c)', in first-cited
+        Lines such as 'Corrected level_offset_db to 1.5 (past-a, past-c)', in first-quoted
         order, so each fix can be traced to the run it came from.
     """
     return [f"{fix} ({', '.join(source_ids)})" for fix, source_ids in grouped_past_fixes(verdict)]

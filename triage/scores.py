@@ -83,6 +83,8 @@ class SourcesUsed:
             empty when the scenario doesn't retrieve.
         cited: The source ids the model cited; empty when it cited none or was unusable.
         cited_faults: The labelled fault of each cited source, in the same order.
+        quoted_faults: The labelled fault of each past run whose recorded fix the answer
+            quotes, cited or not, in the order quoted.
         gated: Whether a gate found the offered sources no basis for an answer, so UNKNOWN
             was given and the model wasn't asked.
     """
@@ -90,6 +92,7 @@ class SourcesUsed:
     offered_faults: tuple[str, ...] = ()
     cited: tuple[str, ...] = ()
     cited_faults: tuple[str, ...] = ()
+    quoted_faults: tuple[str, ...] = ()
     gated: bool = False
 
 
@@ -150,6 +153,28 @@ class Outcome:
             True if one of the offered sources has the question's fault.
         """
         return self.fault in self.sources.offered_faults
+
+    @property
+    def cites_own_fault(self) -> bool:
+        """Whether every past run it cited has the question's own fault.
+
+        Only then is the "last time" fix it quotes one that resolved this fault.
+
+        Returns:
+            True when it cited at least one run and all of them are of its fault.
+        """
+        cited_faults = self.sources.cited_faults
+        return bool(cited_faults) and all(fault == self.fault for fault in cited_faults)
+
+    @property
+    def quotes_own_fault(self) -> bool:
+        """Whether one of the fixes the answer quotes is from a past run of its own fault.
+
+        Returns:
+            True when a quoted fix is the fault's own, so the "last time" a reader sees
+            includes what actually resolved this fault.
+        """
+        return self.fault in self.sources.quoted_faults
 
 
 @dataclass
@@ -226,6 +251,46 @@ class ScenarioResult:
             The count; zero for a scenario that doesn't retrieve.
         """
         return sum(1 for outcome in self.outcomes if outcome.precedent_offered)
+
+    @property
+    def right_citing_own_fault(self) -> int:
+        """How many right answers cited only past runs of their own fault.
+
+        Returns:
+            The count.
+        """
+        return sum(1 for outcome in self.outcomes if outcome.right and outcome.cites_own_fault)
+
+    @property
+    def right_citing_another_fault(self) -> int:
+        """How many right answers cited a past run of another fault, so quote its fix.
+
+        Returns:
+            The count.
+        """
+        return sum(
+            1
+            for outcome in self.outcomes
+            if outcome.right and outcome.sources.cited_faults and not outcome.cites_own_fault
+        )
+
+    @property
+    def right_citing_nothing(self) -> int:
+        """How many right answers cited no past run.
+
+        Returns:
+            The count.
+        """
+        return sum(1 for outcome in self.outcomes if outcome.right and not outcome.sources.cited)
+
+    @property
+    def right_quoting_own_fault(self) -> int:
+        """How many right answers quote at least one fix of their own fault.
+
+        Returns:
+            The count.
+        """
+        return sum(1 for outcome in self.outcomes if outcome.right and outcome.quotes_own_fault)
 
     @property
     def by_fault(self) -> dict[str, tuple[int, int]]:

@@ -12,6 +12,7 @@ from fastapi import status
 from fastapi.testclient import TestClient
 
 from tests.unit.triage.test_evidence import FAILING_TEST, write_run
+from tools.faults import CATALOGUE
 from triage.abstain import SERVICE_GATES, PrecedentsDisagree
 from triage.api import (
     MAX_LINE_LENGTH,
@@ -281,9 +282,9 @@ def test_a_real_run_posted_gives_the_model_what_the_saved_run_does(folder: Path)
 
 
 def test_the_data_set_has_every_saved_run() -> None:
-    """The real-run test above covers all 54 runs, not an empty list."""
-    expected_runs = 54
-    assert len(SAVED_RUNS) == expected_runs
+    """The real-run test above covers six runs for every catalogue fault, not an empty list."""
+    runs_per_fault = 6
+    assert len(SAVED_RUNS) == runs_per_fault * len(CATALOGUE)
 
 
 def test_the_api_accepts_exactly_the_action_keys_on_the_list() -> None:

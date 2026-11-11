@@ -7,7 +7,14 @@ report can be rewritten from the same results without changing a number.
 from collections.abc import Sequence
 from dataclasses import replace
 
-from triage.scores import MALFORMED, Outcome, Scenario, ScenarioResult, wilson_interval
+from triage.scores import (
+    MALFORMED,
+    Outcome,
+    Precedents,
+    Scenario,
+    ScenarioResult,
+    wilson_interval,
+)
 from triage.textfmt import clip
 
 BASELINE_TITLE = "Triage baseline (no retrieval)"
@@ -148,8 +155,9 @@ def _summary_table(results: Sequence[ScenarioResult]) -> list[str]:
     """
     lines = [
         "| Scenario | Changes one thing in | Faults solved | 95% interval | Questions right "
-        "| UNKNOWN | Wrong | Malformed |",
-        "|---|---|---|---|---|---|---|---|",
+        "| UNKNOWN | Wrong | Malformed | Right, citing own / another fault / none "
+        "| Right, quoting its own fault's fix |",
+        "|---|---|---|---|---|---|---|---|---|---|",
     ]
     for result in results:
         low, high = wilson_interval(result.faults_solved, result.faults)
@@ -157,9 +165,41 @@ def _summary_table(results: Sequence[ScenarioResult]) -> list[str]:
             f"| {result.name} | {result.scenario.adds_to} "
             f"| {result.faults_solved} of {result.faults} | {low:.0f} to {high:.0f} "
             f"| {result.right} of {result.total} | {result.abstained} "
-            f"| {result.confidently_wrong} | {result.malformed} |"
+            f"| {result.confidently_wrong} | {result.malformed} | {_citations(result)} "
+            f"| {_quoted(result)} |"
         )
     return lines
+
+
+def _quoted(result: ScenarioResult) -> str:
+    """Count the right answers whose quoted fixes include their own fault's.
+
+    Args:
+        result: The scenario result.
+
+    Returns:
+        'N of M right', or 'n/a' for a scenario that offers no past runs.
+    """
+    if result.scenario.precedents is Precedents.NONE:
+        return "n/a"
+    return f"{result.right_quoting_own_fault} of {result.right}"
+
+
+def _citations(result: ScenarioResult) -> str:
+    """Split a scenario's right answers by whose past runs they cite.
+
+    Args:
+        result: The scenario result.
+
+    Returns:
+        'own / another / none', or 'n/a' for a scenario that offers no past runs.
+    """
+    if result.scenario.precedents is Precedents.NONE:
+        return "n/a"
+    return (
+        f"{result.right_citing_own_fault} / {result.right_citing_another_fault} "
+        f"/ {result.right_citing_nothing}"
+    )
 
 
 def _fault_table(results: Sequence[ScenarioResult]) -> list[str]:
