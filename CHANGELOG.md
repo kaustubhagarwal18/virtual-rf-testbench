@@ -65,6 +65,10 @@ it, so the package version moves only with a release.
 
 ### Changed
 
+- The README reads like a short paper: an abstract, four figures (two new: a system overview
+  and the fault catalogue, both with dark-mode styles), one results table, findings,
+  limitations and the commands to reproduce. The hands-on guide moved to `docs/USAGE.md`,
+  and the full command and CI tables to `docs/DEVELOPMENT.md`.
 - The README's triage section is shorter: what the assistant answers, one real example, and
   how well it works in three sentences. The guardrails, results chart, findings and ADR
   history moved to `docs/EVALUATION.md`, and the overview's flowchart is gone.
