@@ -137,6 +137,9 @@ jobs:
           docker load --input simulators.tar
           make bench-up BENCH_BUILD=--no-build
       - name: Bench suite against the containers
+        # TEMPORARY: a bench configuration error, to show the triage comment. Revert before merging.
+        env:
+          BENCH_LEVEL_OFFSET_DB: "80"
         run: make bench-test
       - name: Results summary on the run page
         if: ${{ !cancelled() && hashFiles('reports/bench-junit.xml') != '' }}
