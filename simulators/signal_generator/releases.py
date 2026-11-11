@@ -16,6 +16,13 @@ CHANGED_OUTPUT_RELEASE = "0.2.0-rc1"
 LEAKY_RESET_RELEASE = "0.2.0-rc2"
 """A release candidate whose *RST no longer clears the level offset."""
 
+FREQUENCY_ERROR_RELEASE = "0.2.0-rc3"
+"""A release candidate whose output frequency is FREQUENCY_ERROR_PPM high."""
+
+FREQUENCY_ERROR_PPM = 4.0
+"""How far the 0.2.0-rc3 output is off: 4 kHz at 1 GHz, past the suite's 1 kHz limit, but
+400 Hz at 100 MHz, which snaps to the right sweep point and passes."""
+
 
 class ReleaseChange(Protocol):
     """One change a release makes to the generator."""
@@ -86,9 +93,43 @@ class ResetKeepsTheLevelOffset:
         instrument.keep_offset_across_reset()
 
 
+@runtime_checkable
+class FrequencyErrorInstrument(Protocol):
+    """An instrument whose output frequency a release can put off."""
+
+    def set_frequency_error_ppm(self, error_ppm: float) -> None:
+        """Make the output frequency this many parts per million high.
+
+        Args:
+            error_ppm: The error.
+        """
+
+
+class FrequencyIsOff:
+    """The output frequency is FREQUENCY_ERROR_PPM high, while FREQ? reads back the setting.
+
+    A regression in the synthesizer's settings: the firmware reports what was asked for, so
+    only a measurement of the output catches it, and only at the higher frequencies.
+    """
+
+    def apply(self, instrument: ScpiInstrument) -> None:
+        """Give the instrument the frequency error.
+
+        Args:
+            instrument: The generator.
+
+        Raises:
+            TypeError: If the instrument has no output frequency to put off.
+        """
+        if not isinstance(instrument, FrequencyErrorInstrument):
+            raise TypeError(f"{type(instrument).__name__} has no output frequency to put off")
+        instrument.set_frequency_error_ppm(FREQUENCY_ERROR_PPM)
+
+
 RELEASE_CHANGES: dict[str, tuple[ReleaseChange, ...]] = {
     CHANGED_OUTPUT_RELEASE: (OutputNeedsStateKeyword(),),
     LEAKY_RESET_RELEASE: (ResetKeepsTheLevelOffset(),),
+    FREQUENCY_ERROR_RELEASE: (FrequencyIsOff(),),
 }
 """The changes each simulated release makes, by exact firmware version."""
 

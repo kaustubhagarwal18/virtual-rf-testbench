@@ -234,7 +234,12 @@ def test_a_delay_waits_before_each_line_without_holding_the_lock() -> None:
         """Ask the slow server and, while it waits, a fast server sharing its lock."""
         lock = asyncio.Lock()
         slow = await serve_lines(
-            lambda line: [line], "127.0.0.1", 0, name="scpi", lock=lock, delay_s=lambda: delay_s
+            lambda line: [line],
+            "127.0.0.1",
+            0,
+            name="scpi",
+            lock=lock,
+            delay_s=lambda line: delay_s if line else 0.0,
         )
         fast = await serve_lines(lambda line: [line], "127.0.0.1", 0, name="admin", lock=lock)
         async with slow, fast:

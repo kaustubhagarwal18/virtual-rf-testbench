@@ -12,6 +12,7 @@ from drivers.session import (
     RsInstrumentSession,
     socket_resource,
 )
+from drivers.spectrum_analyzer import SpectrumAnalyzer
 from tests.integration.conftest import RunningBench
 from tests.integration.processes import ask
 from tests.utilities.bench import measure_peak_at, open_bench
@@ -42,6 +43,50 @@ def test_extra_cable_loss_lowers_the_analyzer_reading(running_bench: RunningBenc
     assert healthy_dbm - faulty_dbm == pytest.approx(EXTRA_LOSS_DB, abs=READING_TOLERANCE_DB)
 
 
+def test_an_alignment_error_raises_the_analyzer_reading(running_bench: RunningBench) -> None:
+    """With a 2 dB alignment error, the same carrier reads 2 dB higher: the opposite of a loss."""
+    with open_bench(
+        "127.0.0.1", running_bench.generator.scpi_port, running_bench.analyzer.scpi_port
+    ) as (generator, analyzer):
+        healthy_dbm = measure_peak_at(generator, analyzer, 1e9, -10.0).level_dbm
+        reply = admin(
+            running_bench.analyzer.admin_port, f"FAULT ALIGNMENT_ERROR_DB {EXTRA_LOSS_DB}"
+        )
+        assert reply == {"fault": "ALIGNMENT_ERROR_DB", "value": EXTRA_LOSS_DB}
+        faulty_dbm = measure_peak_at(generator, analyzer, 1e9, -10.0).level_dbm
+        admin(running_bench.analyzer.admin_port, "CLEAR")
+    assert faulty_dbm - healthy_dbm == pytest.approx(EXTRA_LOSS_DB, abs=READING_TOLERANCE_DB)
+
+
+def test_a_slow_sweep_times_out_the_sweep_but_not_other_commands(
+    running_bench: RunningBench,
+) -> None:
+    """With a slow sweep, *IDN? answers at once on the same session; only the sweep times out."""
+    resource = socket_resource("127.0.0.1", running_bench.analyzer.scpi_port)
+    admin(running_bench.analyzer.admin_port, f"FAULT SLOW_SWEEP_S {SLOW_RESPONSE_S}")
+    try:
+        with RsInstrumentSession(resource, timeout_ms=SHORT_TIMEOUT_MS) as session:
+            assert session.query("*IDN?").startswith("VirtualRF")
+            with pytest.raises(InstrumentTimeoutError):
+                SpectrumAnalyzer(session).sweep()
+    finally:
+        admin(running_bench.analyzer.admin_port, "CLEAR")
+
+
+def test_a_bench_opened_without_reset_keeps_the_last_tests_offset(
+    running_bench: RunningBench,
+) -> None:
+    """With the reset skipped, an offset set in one session is still there in the next."""
+    ports = ("127.0.0.1", running_bench.generator.scpi_port, running_bench.analyzer.scpi_port)
+    with open_bench(*ports) as (generator, _analyzer):
+        generator.set_offset_db(-2.0)
+    with open_bench(*ports, reset=False) as (generator, _analyzer):
+        leaked_db = generator.offset_db()
+    with open_bench(*ports) as (generator, _analyzer):
+        reset_db = generator.offset_db()
+    assert (leaked_db, reset_db) == (-2.0, 0.0)
+
+
 def test_slow_responses_trip_a_short_timeout_until_cleared(running_bench: RunningBench) -> None:
     """With slow responses on, a query times out; after CLEAR, the same query answers."""
     resource = socket_resource("127.0.0.1", running_bench.generator.scpi_port)
@@ -57,13 +102,19 @@ def test_slow_responses_trip_a_short_timeout_until_cleared(running_bench: Runnin
 
 
 def test_each_simulator_offers_only_its_own_faults(running_bench: RunningBench) -> None:
-    """The generator offers slow responses; the cable and link faults belong to the analyzer."""
+    """The generator offers slow responses; cable, link, alignment, sweep: the analyzer's."""
     generator_faults = admin(running_bench.generator.admin_port, "FAULTS?")
     analyzer_faults = admin(running_bench.analyzer.admin_port, "FAULTS?")
     assert generator_faults == {"active": {}, "available": ["SLOW_RESPONSE_S"]}
     assert analyzer_faults == {
         "active": {},
-        "available": ["EXTRA_CABLE_LOSS_DB", "LINK_DOWN", "LINK_FAILS_EVERY"],
+        "available": [
+            "ALIGNMENT_ERROR_DB",
+            "EXTRA_CABLE_LOSS_DB",
+            "LINK_DOWN",
+            "LINK_FAILS_EVERY",
+            "SLOW_SWEEP_S",
+        ],
     }
 
 

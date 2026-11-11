@@ -10,7 +10,11 @@ from simulators.common.faults import (
     LINK_DOWN,
     LINK_FAILS_EVERY,
     SLOW_RESPONSES,
+    SLOW_SWEEP,
     FaultSwitches,
+    every_line_delay,
+    starts_a_sweep,
+    sweep_delay,
 )
 from simulators.common.physics import SourceState
 from simulators.spectrum_analyzer.link import NO_SIGNAL, CableWithFaults
@@ -174,3 +178,45 @@ def test_a_fractional_link_fault_counts_whole_sweeps() -> None:
     cable = CableWithFaults(FixedLink(TONE), switches)
     commands.handle("FAULT LINK_FAILS_EVERY 2.5")
     assert [cable.source_state() == NO_SIGNAL for _ in range(4)] == [False, True, False, True]
+
+
+@pytest.mark.parametrize(
+    ("line", "starts"),
+    [
+        ("INIT", True),
+        ("init", True),
+        ("INITiate", True),
+        ("INIT1:IMM", True),
+        (":INITIATE2:IMMEDIATE", True),
+        ("*CLS;INIT", True),
+        ("INIT:CONT OFF", False),
+        ("INIT:CONT?", False),
+        ("CALC:MARK:MAX", False),
+        ("*IDN?", False),
+        ("", False),
+    ],
+)
+def test_a_sweep_start_is_recognised_in_any_spelling(line: str, starts: bool) -> None:
+    """INITiate in long, short, numbered or compound form starts a sweep; nothing else does."""
+    assert starts_a_sweep(line) is starts
+
+
+def test_the_sweep_delay_applies_only_to_lines_that_start_a_sweep() -> None:
+    """With SLOW_SWEEP_S on, INIT waits that long and every other line not at all."""
+    switches = FaultSwitches([SLOW_SWEEP])
+    commands = AdminCommands()
+    switches.register_commands(commands)
+    commands.handle(f"FAULT {SLOW_SWEEP.name} 3")
+    delay = sweep_delay(switches)
+    assert delay("INIT") == pytest.approx(3.0)
+    assert delay("*IDN?") == 0.0
+
+
+def test_the_every_line_delay_applies_to_every_line() -> None:
+    """SLOW_RESPONSE_S delays every line the same, whatever it is."""
+    switches = FaultSwitches([SLOW_RESPONSES])
+    commands = AdminCommands()
+    switches.register_commands(commands)
+    commands.handle(f"FAULT {SLOW_RESPONSES.name} 2")
+    delay = every_line_delay(switches, SLOW_RESPONSES)
+    assert [delay("INIT"), delay("*IDN?")] == pytest.approx([2.0, 2.0])
