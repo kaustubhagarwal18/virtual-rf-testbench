@@ -88,7 +88,8 @@ def verdict_lines(verdict: Verdict) -> list[str]:
     Returns:
         The bullets. Every verdict says what to do, UNKNOWN included. When a gate or a
         check stood in for the model, its reason replaces the model's words, which are no
-        longer the answer.
+        longer the answer; an overruled answer's past fixes go too, since they are fixes
+        for the action the check refused.
     """
     to_do = NO_SAFE_ANSWER if verdict.fix is Fix.UNKNOWN else verdict.fix.value
     lines = [
@@ -103,6 +104,8 @@ def verdict_lines(verdict: Verdict) -> list[str]:
         lines.append(f"- **Why:** {code(verdict.because)}")
         lines.append(f"- **Where:** {code(verdict.where)}")
         lines.append(f"- **Cited:** {codes(verdict.cited)}")
+    if verdict.overruled:
+        return lines
     lines += [
         f"- **Last time:** {code(fix_applied)} ({codes(source_ids)})"
         for fix_applied, source_ids in grouped_past_fixes(verdict)

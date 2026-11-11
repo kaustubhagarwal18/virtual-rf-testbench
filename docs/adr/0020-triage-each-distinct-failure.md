@@ -33,7 +33,9 @@ one model prompt, which takes 20 to 60 s on a CPU runner.
   the answer and its cause, and a "What to do" line: the action's description, or, for
   `UNKNOWN` and an unusable reply, to look at the failure by hand. Two failures with the same
   answer still get two blocks: merging them hid which failure was which, and left an
-  `UNKNOWN` block with nothing to do. A reply that can't be used is that failure's problem;
+  `UNKNOWN` block with nothing to do. An answer a check overruled shows no "Last time"
+  line: those are fixes for the action the check refused, and quoting them beside "look at
+  this failure by hand" read as advice to apply them. A reply that can't be used is that failure's problem;
   the other failures keep their answers.
 - **A fifth check, and one more line in a focused run's evidence.** `ALIGNMENT` becomes
   `UNKNOWN` when no level or power reading (dB, dBm) is out of limits, since an alignment
@@ -48,6 +50,12 @@ one model prompt, which takes 20 to 60 s on a CPU runner.
   inline code like the model's words (ADR 0018).
 
 ## Consequences
+
+- In CI, with both faults again (run 43006883624), the 8 failed tests formed 4 failures:
+  path loss answered `ALIGNMENT` and the first frequency failure `FIRMWARE`, both right and
+  both quoting their own fault's past fix. The model answered `ALIGNMENT` on the other two
+  frequency failures, and the new check turned both into `UNKNOWN`. The README shows the
+  comment.
 
 - The HTTP API still returns one verdict, for the first failure. A per-failure answer there
   is planned.

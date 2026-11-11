@@ -56,13 +56,21 @@ retrieval does most of the work, and the gate is what keeps it from being confid
   (firmware, bench or test) is looked up from the action.
 - **Retrieval**: the three closest past runs, cited by neutral ids; their recorded fix is
   quoted, never generated.
-- **Guardrails**: a gate answers `UNKNOWN` when the past runs disagree, and four rule checks
+- **Guardrails**: a gate answers `UNKNOWN` when the past runs disagree, and five rule checks
   refuse a verdict the evidence contradicts.
 - **Local and private**: `qwen2.5:3b` and `nomic-embed-text` on Ollama; nothing leaves the
   machine.
 - **In CI**: when the bench job fails, each distinct failure (up to five) is triaged on its
   own, and the answers, with what fixed the cited past runs, go into the pull request
   comment.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/ci-triage-comment-dark.png">
+    <img src="docs/images/ci-triage-comment-light.png" width="760" alt="The triage section of a pull request comment for a bench run with two injected faults, release 0.2.0-rc3 (frequency 4 ppm high) and a 3 dB analyzer alignment error. 8 failed tests form 4 distinct failures, each with its own block. Failure 1, path loss: ALIGNMENT, run the instrument's self-alignment, as three past runs did. Failure 2, level and frequency across the band: FIRMWARE, report a firmware regression and pin the previous release, as three past runs did. Failures 3 and 4, level accuracy and recovery after a dropped connection: the model chose ALIGNMENT and a check refused it, since no level or power reading failed, so the answer is UNKNOWN and the advice is to look by hand.">
+  </picture>
+</p>
+<p align="center"><sub>The comment on a CI run with two unrelated faults at once (ADR 0020).</sub></p>
 
 ## 2 · Data
 

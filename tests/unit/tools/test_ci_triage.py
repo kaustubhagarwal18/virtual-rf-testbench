@@ -112,7 +112,7 @@ def test_a_gated_unknown_says_why_the_model_was_not_asked() -> None:
 
 
 def test_an_overruled_answer_gives_the_check_instead_of_the_model_words() -> None:
-    """A verdict a check replaced says why, and hides the refused answer's reasoning."""
+    """A verdict a check replaced says why, and hides the refused answer and its past fix."""
     verdict = Verdict(
         Fix.UNKNOWN,
         "LINK",
@@ -125,7 +125,7 @@ def test_an_overruled_answer_gives_the_check_instead_of_the_model_words() -> Non
     assert "`no signal was logged`" in section
     assert "refused reasoning" not in section
     assert "**Why:**" not in section
-    assert "`Reconnected the cable`" in section
+    assert "Last time" not in section
 
 
 def test_a_model_unknown_keeps_its_own_reason() -> None:
