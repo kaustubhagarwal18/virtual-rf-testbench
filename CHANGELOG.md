@@ -9,6 +9,11 @@ it, so the package version moves only with a release.
 
 ### Added
 
+- **Triage in CI** (ADR 0018): when the bench job fails, a job allowed to fail saves the run
+  (`tools/save_failed_run.py`), triages it with a local model as the API does
+  (`tools/ci_triage.py`) and adds the verdict to the pull request comment: the action, its
+  cause, the reason, and what fixed the cited past runs. Text the logs could steer is shown
+  only as inline code.
 - **A "No signal" ablation** in `make eval` (`full evidence, no signal line`): 5 of 9
   faults, 11 wrong, against full evidence's 7 and 6, so the README's first finding is
   reproducible rather than quoted from ADR 0017. It needed no new prompts.

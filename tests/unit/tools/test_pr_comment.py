@@ -99,3 +99,51 @@ def test_runs_as_a_module(tmp_path: Path) -> None:
         check=True,
     )
     assert completed.stdout.startswith(MARKER)
+
+
+def test_a_triage_section_comes_straight_after_the_results_headline() -> None:
+    """The verdict sits above the tables and the failures, so a long failure list can't bury it."""
+    summary = "## Test results: 19 failed\n\n| Suite | Run |\n|---|--:|\n\n### Failures\n\n- x\n"
+    comment = render_comment(
+        summary,
+        [JobResult("Bench", "failure")],
+        RUN_URL,
+        COMMIT,
+        triage="### Triage of the failed bench run\n\nVerdict here\n",
+    )
+    lines = comment.splitlines()
+    assert lines[1] == "## Test results: 19 failed"
+    assert lines[3] == "### Triage of the failed bench run"
+    triage_at = comment.index("### Triage of the failed bench run")
+    assert triage_at < comment.index("| Suite | Run |") < comment.index("### Failures")
+    assert comment.index("### Failures") < comment.index("### CI jobs")
+
+
+def test_main_includes_the_triage_file_when_given(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """--triage reads the section the triage job wrote."""
+    section = tmp_path / "triage.md"
+    section.write_text("### Triage of the failed bench run\n\n`CABLE`\n", encoding="utf-8")
+    arguments = [str(tmp_path / "junit.xml"), "--triage", str(section)]
+    assert main([*arguments, "--run-url", RUN_URL, "--commit", COMMIT]) == 0
+    assert "`CABLE`" in capsys.readouterr().out
+
+
+def test_main_says_when_the_triage_section_is_missing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A triage file asked for but not written means the job didn't finish; the comment says so."""
+    arguments = [str(tmp_path / "junit.xml"), "--triage", str(tmp_path / "absent.md")]
+    assert main([*arguments, "--run-url", RUN_URL, "--commit", COMMIT]) == 0
+    comment = capsys.readouterr().out
+    assert "### Triage of the failed bench run" in comment
+    assert "the triage job didn't finish" in comment
+
+
+def test_without_triage_the_comment_has_no_triage_section(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """When the bench passed, CI doesn't pass --triage and the comment doesn't mention it."""
+    assert main([str(tmp_path / "junit.xml"), "--run-url", RUN_URL, "--commit", COMMIT]) == 0
+    assert "Triage" not in capsys.readouterr().out

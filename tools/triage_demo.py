@@ -15,13 +15,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from triage.answer import VERDICT_SCHEMA, MalformedAnswerError, past_fix_lines
-from triage.embed import OllamaEmbedder
 from triage.evaluate import expected_fix
 from triage.evidence import FULL, SavedRun, error_only_evidence
 from triage.label import load_label
 from triage.llm import DEFAULT_MODEL, LLMProvider, ModelUnavailableError, OllamaProvider
 from triage.prompt import Fix, Source
-from triage.retrieval import DEFAULT_HISTORY, DEFAULT_TOP_K, InMemoryRetriever, Retriever
+from triage.retrieval import DEFAULT_HISTORY, DEFAULT_TOP_K, Retriever, history_index
 from triage.service import triage_run
 from triage.textfmt import clip
 
@@ -215,11 +214,7 @@ def main(
     provider = provider or OllamaProvider(model=parsed.model, response_format=VERDICT_SCHEMA)
     try:
         run = SavedRun.load(parsed.run)
-        if retriever is None:
-            retriever = InMemoryRetriever.from_history(  # pragma: no cover - needs Ollama
-                parsed.history, OllamaEmbedder()
-            )
-        result = run_demo(run, provider, retriever)
+        result = run_demo(run, provider, retriever or history_index(parsed.history))
     except (ModelUnavailableError, FileNotFoundError, KeyError) as error:
         sys.stdout.write(f"{error}\n")
         return 1

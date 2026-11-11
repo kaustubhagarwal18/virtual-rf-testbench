@@ -48,6 +48,9 @@
 
 - Lint, tests with an 80% coverage floor, the bench suite against the containers, a secret
   scan over the full history, and a results comment on each pull request.
+- Triage in CI: when the bench job fails, a job allowed to fail triages the saved run as the
+  API does and adds the verdict, with what fixed the cited past runs, to the pull request
+  comment (ADR 0018).
 - The image is built once, scanned with Trivy, benched as built, and pushed to GitHub
   Container Registry from `main` (ADR 0011).
 
@@ -58,9 +61,7 @@
 2. **The tag-bump pull request.** Once a chart's values file pins the image, CI opens a pull
    request that bumps it to the tag the publish job just pushed. It waits for the chart: there
    is no file to bump yet.
-3. **Triage in CI.** When the bench job fails, a separate job (allowed to fail) triages the
-   run with a local model and adds the verdict to the pull request comment.
-4. **The rest of the planned triage service.** An ingestion worker, Redis, and Postgres with
+3. **The rest of the planned triage service.** An ingestion worker, Redis, and Postgres with
    pgvector behind the existing `Retriever` interface, once the history is large enough for
    an in-memory index to matter (ADR 0010).
 

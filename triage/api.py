@@ -29,7 +29,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from triage.abstain import SERVICE_GATES, SourceGate
 from triage.answer import VERDICT_SCHEMA, MalformedAnswerError
 from triage.checks import DEFAULT_CHECKS, VerdictCheck
-from triage.embed import OllamaEmbedder
 from triage.evidence import SavedRun
 from triage.llm import DEFAULT_MODEL, LLMProvider, ModelUnavailableError, OllamaProvider
 from triage.retrieval import (
@@ -38,6 +37,7 @@ from triage.retrieval import (
     HistoryStore,
     InMemoryRetriever,
     Retriever,
+    history_index,
 )
 from triage.service import triage_run
 
@@ -460,7 +460,7 @@ def main(arguments: Sequence[str] | None = None, serve: Any = None) -> int:
             )
             return 1
         try:
-            history = InMemoryRetriever.from_history(parsed.history, OllamaEmbedder())
+            history = history_index(parsed.history)
         except ModelUnavailableError as error:
             sys.stdout.write(f"{error}\n")
             return 1

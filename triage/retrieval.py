@@ -16,7 +16,7 @@ from typing import Any, Protocol
 
 import numpy as np
 
-from triage.embed import Embedder
+from triage.embed import Embedder, OllamaEmbedder
 from triage.evidence import FULL, SavedRun, build_evidence
 from triage.label import load_label
 from triage.prompt import Source
@@ -201,3 +201,16 @@ def normalise(vectors: np.ndarray) -> np.ndarray:
     """
     lengths = np.linalg.norm(vectors, axis=1, keepdims=True)
     return vectors / np.where(lengths == 0, 1.0, lengths)
+
+
+def history_index(history: Path, embedder: Embedder | None = None) -> InMemoryRetriever:
+    """Index a folder of history runs, with the local Ollama embedder unless one is given.
+
+    Args:
+        history: The folder of labelled history runs.
+        embedder: How to embed them; None uses Ollama's embedding model.
+
+    Returns:
+        The retriever, ready to search.
+    """
+    return InMemoryRetriever.from_history(history, embedder or OllamaEmbedder())
