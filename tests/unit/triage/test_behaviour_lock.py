@@ -31,6 +31,14 @@ RUNS = Path("triage/data/runs")
 LOCK_FILE = Path(__file__).with_name("behaviour_lock.json")
 UPDATE_VARIABLE = "UPDATE_BEHAVIOUR_LOCK"
 
+NAMED_RELEASES = [
+    ("w", "b"),
+    ("release 0.2.0-rc2", "the offset leaks"),
+    ("the generator", "0.1.0 and 0.2.0-rc3 both seen"),
+]
+"""Verdict wording with no release, a release no run ran, and releases some runs ran, so the
+release check's every outcome is locked."""
+
 
 def action_keys() -> list[str]:
     """Return every action's key, UNKNOWN included, in the order the prompt lists them."""
@@ -102,8 +110,9 @@ def fingerprint() -> dict[str, str]:
         own = by_fault[str(load_label(run)["fault"])]
         parts[f"prompt {run.folder.name}"] = build_prompt(build_evidence(run), own)
         parts[f"checks {run.folder.name}"] = [
-            reviewed(apply_checks(run, Verdict(action(key), "w", "b", []), DEFAULT_CHECKS))
+            reviewed(apply_checks(run, Verdict(action(key), where, because, []), DEFAULT_CHECKS))
             for key in action_keys()
+            for where, because in NAMED_RELEASES
         ]
         parts[f"vote {run.folder.name}"] = [
             reviewed(vote_run(run, own[:3], checks=DEFAULT_CHECKS, gates=DEFAULT_GATES)),
