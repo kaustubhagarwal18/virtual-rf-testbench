@@ -228,6 +228,10 @@ flowchart LR
 - **Evidence** leads with the first failure, because a run with nineteen errors has one
   cause, and puts any SCPI error the instruments reported ahead of it, because a rejected
   command shows up as a timeout. It never reads `label.json`.
+- **In CI**, a run's failed tests are first split into distinct failures (`failures.py`):
+  the tests one setup step stopped, or the cases of one test failing the same way. Each of
+  the first five is triaged as a run focused on it, and gets its own block in the comment
+  (ADR 0020).
 - **Retrieval** embeds each resolved run with `nomic-embed-text` and ranks by cosine
   similarity in memory. A source is cited by a hash of its text (`past-3fa2c1d0`), never by
   its folder, because folder names name the fault (ADR 0009).
@@ -236,8 +240,9 @@ flowchart LR
   off-list action is refused, not interpreted.
 - **Checks** compare the verdict with facts the evidence states outright, and turn a
   contradicted one into `UNKNOWN`: `FIRMWARE` naming a release the run didn't run,
-  `FIRMWARE` when the firmware is the same release as the last passing run, and `TIMEOUT`
-  when a failed test reports an SCPI error. A check never picks another action in the
+  `FIRMWARE` when the firmware is the same release as the last passing run, `TIMEOUT`
+  when a failed test reports an SCPI error, and `ALIGNMENT` when no signal reached the
+  analyzer or no level or power reading is out of limits. A check never picks another action in the
   model's place.
 - **Gates** (`abstain.py`) answer `UNKNOWN` before the model is asked. The API applies one:
   the retrieved precedents record different actions. The evaluation also scores a second,
@@ -249,10 +254,11 @@ flowchart LR
   only, full evidence, full evidence without its firmware line, plus retrieval, plus the
   checks, the same with the question's own fault held out of the history, and both of those
   with the gates. The fault is the unit scored: one is solved when all three
-  of its questions are right, with a 95% interval over the 9 faults (ADR 0012). It counts
+  of its questions are right, with a 95% interval over the 13 faults (ADR 0012). It counts
   right, `UNKNOWN`, confidently wrong and malformed answers apart, scores against the action
   key each label records, and reports how often retrieval offered a past run of the
-  question's own fault. Model answers are cached under `.cache/triage-answers/`, so a rerun
+  question's own fault, and whether a right answer cites and quotes its own fault's past
+  runs (ADR 0019). Model answers are cached under `.cache/triage-answers/`, so a rerun
   asks only the prompts that changed.
 
 The API (ADR 0010) keeps the history in memory, loaded from `triage/data/runs/history/` at
@@ -325,7 +331,7 @@ flowchart LR
 | Checks on a verdict | `triage/checks.py` |
 | Abstaining from retrieval, and its threshold | `triage/abstain.py`, `tools/calibrate_abstention.py` |
 | The HTTP API | `triage/api.py` |
-| Triage of a failed bench run in CI, and its comment section | `tools/save_failed_run.py`, `tools/ci_triage.py`, the `triage` job in `.github/workflows/ci.yml` |
+| Triage of a failed bench run in CI, and its comment section | `tools/save_failed_run.py`, `triage/failures.py`, `tools/ci_triage.py`, the `triage` job in `.github/workflows/ci.yml` |
 | Evaluation scenarios and running them | `triage/evaluate.py` |
 | Outcomes, scores and the 95% interval | `triage/scores.py` |
 | The report and its findings | `triage/report.py`, `triage/results/rag.md`, `docs/EVALUATION.md` |

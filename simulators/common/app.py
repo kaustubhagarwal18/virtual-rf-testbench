@@ -116,7 +116,7 @@ async def start_scpi_and_admin(
     scpi_port: int,
     admin_port: int,
     *,
-    scpi_delay_s: Callable[[], float] | None = None,
+    scpi_delay_s: Callable[[str], float] | None = None,
 ) -> tuple[asyncio.Server, asyncio.Server]:
     """Start an instrument's SCPI and admin servers, sharing one lock so they never interleave.
 
@@ -126,7 +126,7 @@ async def start_scpi_and_admin(
         host: The address to listen on.
         scpi_port: The SCPI port; 0 picks a free port.
         admin_port: The admin port; 0 picks a free port.
-        scpi_delay_s: Asked before each SCPI line, for a delay that doesn't hold the lock;
+        scpi_delay_s: Asked with each SCPI line, for a delay that doesn't hold the lock;
             None means no delay.
 
     Returns:

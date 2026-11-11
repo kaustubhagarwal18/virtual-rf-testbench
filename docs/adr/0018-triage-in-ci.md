@@ -1,6 +1,6 @@
 # ADR 0018: Triage a failed bench run in CI, and put the verdict in the pull request comment
 
-- **Status:** Accepted
+- **Status:** Accepted; ADR 0020 triages each distinct failure, not only the first
 - **Date:** 2026-11-11
 
 ## Context

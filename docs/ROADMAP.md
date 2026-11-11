@@ -17,18 +17,19 @@
 
 ### Faults and the data set
 
-- Nine faults across the three causes: bench faults on the admin ports, configuration
+- Thirteen faults across the three causes: bench faults on the admin ports, configuration
   faults in the station's settings, and firmware regressions as simulated releases
   (ADR 0005). `make fault NAME=...` runs one and saves it with its label.
 - `make fault-dataset` builds the labelled data set: three history runs and three question
-  runs per fault, 54 in all.
+  runs per fault, 78 in all.
 
 ### Triage
 
 - The pipeline: evidence led by the first failure, a fixed list of actions, strict parsing
   and a local `qwen2.5:3b` (ADR 0008).
 - Retrieval of the most similar resolved runs, in memory, cited by neutral ids (ADR 0009).
-- Four checks that turn a verdict the evidence contradicts into `UNKNOWN` (ADR 0012, ADR 0017).
+- Five checks that turn a verdict the evidence contradicts into `UNKNOWN` (ADR 0012, ADR 0017,
+  ADR 0020).
 - The evaluation: thirteen scenarios, each changing one thing, scored per fault as right,
   `UNKNOWN`, confidently wrong and malformed, with a 95% interval over faults and retrieval
   recall (ADR 0009, ADR 0012). Labels record the action key the score is checked against.
@@ -39,8 +40,9 @@
 - A majority-vote baseline: five scenarios answered by the precedents' most common action,
   each the twin of a model scenario, so the report shows what the model adds beyond
   retrieval (ADR 0015).
-- Answers state the cause (firmware, bench or test) and quote what fixed each cited past run
-  (ADR 0016).
+- Answers state the cause (firmware, bench or test) and quote what fixed the past runs behind
+  them (ADR 0016): each cited run, then each other offered run resolved by the same action
+  (ADR 0019).
 - A FastAPI service (`make triage-api`): `POST /triage`, `POST /history`, `GET /health`
   (ADR 0010).
 
@@ -50,18 +52,28 @@
   scan over the full history, and a results comment on each pull request.
 - Triage in CI: when the bench job fails, a job allowed to fail triages the saved run as the
   API does and adds the verdict, with what fixed the cited past runs, to the pull request
-  comment (ADR 0018).
+  comment (ADR 0018). Each distinct failure, up to five per run, gets its own answer
+  (ADR 0020).
 - The image is built once, scanned with Trivy, benched as built, and pushed to GitHub
   Container Registry from `main` (ADR 0011).
 
 ## Next, in order
 
-1. **The cluster.** k3s runs the same images through Helm charts, deployed by Argo CD from
+1. **Triage unit and integration failures, not only bench failures.** CI triages only a
+   failed bench run: when a pull request breaks a unit or integration test, the comment lists
+   the failure but doesn't explain it. These failures have no measurements, instrument logs
+   or firmware versions, so this needs its own evidence (the traceback and the files the pull
+   request changed), history runs of such failures to retrieve from, a decision on which
+   action they map to, and the Triage job to run when the Test job fails.
+2. **Per-failure answers in the HTTP API.** A `POST /triage/failures` endpoint returning one
+   answer per distinct failure, as CI does (ADR 0020), with the same cap; `POST /triage`
+   stays as it is.
+3. **The cluster.** k3s runs the same images through Helm charts, deployed by Argo CD from
    Git, with secrets from OpenBao and observability.
-2. **The tag-bump pull request.** Once a chart's values file pins the image, CI opens a pull
+4. **The tag-bump pull request.** Once a chart's values file pins the image, CI opens a pull
    request that bumps it to the tag the publish job just pushed. It waits for the chart: there
    is no file to bump yet.
-3. **The rest of the planned triage service.** An ingestion worker, Redis, and Postgres with
+5. **The rest of the planned triage service.** An ingestion worker, Redis, and Postgres with
    pgvector behind the existing `Retriever` interface, once the history is large enough for
    an in-memory index to matter (ADR 0010).
 
@@ -75,6 +87,15 @@
 
 ## Known issues
 
+- CI triages bench failures only. A failed unit or integration test is listed in the pull
+  request comment without an explanation; extending triage to them is next on the list.
+- A run focused on one failure keeps the whole run's instrument logs, since a log line names
+  no test. In CI, a run with two unrelated faults (release `0.2.0-rc3`, frequency 4 ppm
+  high, plus a 3 dB alignment error) had its frequency failures answered `ALIGNMENT`, pulled
+  by the analyzer's alignment warning, and one answered `UNKNOWN` by the gate; none got
+  `FIRMWARE`. A check now refuses `ALIGNMENT` without a failed level reading: in two more
+  runs of the same faults, 2 of 4 failures were right and 2 `UNKNOWN`, but which two
+  changed from run to run (ADR 0020).
 - Every command in a compound line needs its full path: `CALC:MARK:X?;Y?`, which real
   instruments accept, gives -113 for `Y?`. The drivers always send full paths.
 - RsInstrument leaves a socket open when a connection is refused, so Python reports a

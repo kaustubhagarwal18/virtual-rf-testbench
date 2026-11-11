@@ -1,10 +1,13 @@
-"""Triage CI's failed bench run and write the verdict as a section of the pull request comment.
+"""Triage CI's failed bench run and write the verdicts as a section of the pull request comment.
 
-It runs the pipeline the API runs: the closest past runs from the committed history, the
-disagreement gate, the model, then the checks. The run comes from the pull request's own
-code, so its logs are untrusted and can steer what the model writes; every piece of text
-that isn't fixed by this module is shown as inline code on one line, which GitHub never
-reads as a mention, link, image or HTML. The action itself is one key from a fixed list.
+The run's failed tests are split into distinct failures (triage.failures), and each of the
+first few is triaged on its own with the pipeline the API runs: the closest past runs from
+the committed history, the disagreement gate, the model, then the checks. Each failure gets
+its own block saying what to do, even when two get the same answer. The run comes from the
+pull request's own code, so its logs are untrusted and can steer what the model writes;
+every piece of text that isn't fixed by this module is shown as inline code on one line,
+which GitHub never reads as a mention, link, image or HTML. The action itself is one key
+from a fixed list.
 
     python -m tools.ci_triage reports/failed-run --out reports/triage.md
 """
@@ -12,19 +15,28 @@ reads as a mention, link, image or HTML. The action itself is one key from a fix
 import argparse
 import sys
 from collections.abc import Sequence
+from functools import partial
 from pathlib import Path
 
-from triage.abstain import SERVICE_GATES
-from triage.answer import VERDICT_SCHEMA, MalformedAnswerError, PastFix, Verdict
-from triage.checks import DEFAULT_CHECKS
-from triage.evidence import FULL, SavedRun
+from triage.answer import VERDICT_SCHEMA, Verdict, grouped_past_fixes
+from triage.evidence import SavedRun
+from triage.failures import (
+    DEFAULT_MAX_FAILURES,
+    FailureAnswer,
+    RunTriage,
+    triage_failures,
+    triage_like_the_api,
+)
 from triage.llm import DEFAULT_MODEL, LLMProvider, ModelUnavailableError, OllamaProvider
-from triage.retrieval import DEFAULT_HISTORY, DEFAULT_TOP_K, Retriever, history_index
-from triage.service import triage_run
+from triage.prompt import Fix
+from triage.retrieval import DEFAULT_HISTORY, Retriever, history_index
 from triage.textfmt import clip
 
 HEADING = "### Triage of the failed bench run"
 """The section's first line."""
+
+SHOWN_TESTS = 3
+"""How many of an answer's tests are named before the rest are counted."""
 
 TEXT_LIMIT = 300
 """The longest piece of untrusted text shown, in characters, before it is cut."""
@@ -63,17 +75,27 @@ def codes(texts: Sequence[str]) -> str:
     return ", ".join(code(text) for text in texts) or "(none)"
 
 
-def render_verdict(verdict: Verdict) -> str:
-    """Write the section for a verdict.
+NO_SAFE_ANSWER = "no safe answer, so look at this failure by hand"
+"""What to do when triage has no action for a failure; fixed text, never the model's."""
+
+
+def verdict_lines(verdict: Verdict) -> list[str]:
+    """Write the bullets for one verdict: the action, what to do, and why.
 
     Args:
         verdict: What triage decided.
 
     Returns:
-        The section's Markdown. When a gate or a check stood in for the model, its reason
-        replaces the model's words, which are no longer the answer.
+        The bullets. Every verdict says what to do, UNKNOWN included. When a gate or a
+        check stood in for the model, its reason replaces the model's words, which are no
+        longer the answer; an overruled answer's past fixes go too, since they are fixes
+        for the action the check refused.
     """
-    lines = [HEADING, "", f"**{code(verdict.fix.name)}** · cause: **{verdict.category}**", ""]
+    to_do = NO_SAFE_ANSWER if verdict.fix is Fix.UNKNOWN else verdict.fix.value
+    lines = [
+        f"- **Answer:** **{code(verdict.fix.name)}** · cause: **{verdict.category}**",
+        f"- **What to do:** {to_do}",
+    ]
     if verdict.gate_reason:
         lines.append(f"- **Model not asked:** {code(verdict.gate_reason)}")
     elif verdict.overruled:
@@ -82,27 +104,102 @@ def render_verdict(verdict: Verdict) -> str:
         lines.append(f"- **Why:** {code(verdict.because)}")
         lines.append(f"- **Where:** {code(verdict.where)}")
         lines.append(f"- **Cited:** {codes(verdict.cited)}")
+    if verdict.overruled:
+        return lines
     lines += [
         f"- **Last time:** {code(fix_applied)} ({codes(source_ids)})"
-        for fix_applied, source_ids in _group_past_fixes(verdict.past_fixes).items()
+        for fix_applied, source_ids in grouped_past_fixes(verdict)
     ]
-    lines += ["", FOOTER]
-    return "\n".join(lines) + "\n"
+    return lines
 
 
-def _group_past_fixes(past_fixes: Sequence[PastFix]) -> dict[str, list[str]]:
-    """Group the cited past runs by their recorded fix, so one fix is listed once.
+def _plural(count: int, noun: str) -> str:
+    """Write a count with its noun, adding an s unless the count is one.
 
     Args:
-        past_fixes: Each cited run's recorded fix, in citation order.
+        count: The count.
+        noun: The noun, singular.
 
     Returns:
-        Each distinct fix, in first-cited order, with the ids of the runs it fixed.
+        For example '1 test' or '3 tests'.
     """
-    grouped: dict[str, list[str]] = {}
-    for past in past_fixes:
-        grouped.setdefault(past.fix_applied, []).append(past.source_id)
-    return grouped
+    return f"{count} {noun if count == 1 else noun + 's'}"
+
+
+def tests_line(test_ids: Sequence[str]) -> str:
+    """List the tests an answer covers: the first few by name, then how many more.
+
+    Args:
+        test_ids: The tests' names, which the pull request's code chose, so untrusted.
+
+    Returns:
+        One bullet line.
+    """
+    shown = codes(test_ids[:SHOWN_TESTS])
+    more = len(test_ids) - SHOWN_TESTS
+    return f"- **Tests ({len(test_ids)}):** {shown}" + (f" and {more} more" if more > 0 else "")
+
+
+def answer_lines(answer: FailureAnswer, number: int, count: int) -> list[str]:
+    """Write one failure's block: what failed, its tests, and what to do about it.
+
+    Args:
+        answer: The failure's answer.
+        number: Its place among the failures, from 1.
+        count: How many failures the run has.
+
+    Returns:
+        The lines, led by a heading naming the failure.
+    """
+    heading = f"#### Failure {number} of {count}: {code(answer.group.description)}"
+    lines = [heading, "", tests_line(answer.group.test_ids)]
+    if answer.verdict is not None:
+        return lines + verdict_lines(answer.verdict)
+    return [
+        *lines,
+        "- **Answer:** none",
+        f"- **What to do:** {NO_SAFE_ANSWER}",
+        f"- **Problem:** {code(answer.problem)}",
+    ]
+
+
+def summary_line(result: RunTriage) -> str:
+    """Say how the failed tests split into distinct failures.
+
+    Args:
+        result: The run's triage.
+
+    Returns:
+        One line of fixed text and counts.
+    """
+    failures = _plural(result.distinct_failures, "distinct failure")
+    line = f"{_plural(result.failed_tests, 'failed test')}: {failures}"
+    if result.distinct_failures == 1:
+        return line + "."
+    return line + ", each triaged on its own below."
+
+
+def render_triage(result: RunTriage) -> str:
+    """Write the section: a summary, one block per failure triaged, and any left over.
+
+    Args:
+        result: The run's triage.
+
+    Returns:
+        The section's Markdown.
+    """
+    lines = [HEADING, "", summary_line(result)]
+    for number, answer in enumerate(result.answers, start=1):
+        lines += ["", *answer_lines(answer, number, result.distinct_failures)]
+    if result.untriaged:
+        skipped = ", ".join(
+            f"{code(group.description)} ({_plural(len(group.tests), 'test')})"
+            for group in result.untriaged
+        )
+        cap = _plural(result.limit, "failure")
+        lines += ["", f"**Not triaged** (at most {cap} per run): {skipped}"]
+    lines += ["", FOOTER]
+    return "\n".join(lines) + "\n"
 
 
 def render_problem(reason: str) -> str:
@@ -117,19 +214,21 @@ def render_problem(reason: str) -> str:
     return f"{HEADING}\n\nNo verdict: {code(reason)}\n"
 
 
-def triage_failed_run(run: SavedRun, provider: LLMProvider, retriever: Retriever) -> Verdict:
-    """Triage the run as the API does: past runs, the disagreement gate, the model, the checks.
+def positive_count(text: str) -> int:
+    """Read a command-line count that must be at least one.
 
     Args:
-        run: The failed run.
-        provider: The answering model.
-        retriever: The source of past runs.
+        text: The argument as typed.
 
     Returns:
-        The verdict, UNKNOWN when the gate or a check found no safe answer.
+        The count.
+
+    Raises:
+        argparse.ArgumentTypeError: If it isn't a whole number of at least one.
     """
-    sources = retriever.similar_to(run, DEFAULT_TOP_K)
-    return triage_run(run, provider, FULL, sources, checks=DEFAULT_CHECKS, gates=SERVICE_GATES)
+    if not text.isdigit() or int(text) < 1:
+        raise argparse.ArgumentTypeError(f"expected a whole number of at least 1, got {text!r}")
+    return int(text)
 
 
 def main(
@@ -147,8 +246,9 @@ def main(
         retriever: The source of past runs; None indexes the history with the Ollama embedder.
 
     Returns:
-        0 with a verdict; 1 when the run is missing, the model or embedder can't be reached,
-        or its reply can't be used.
+        0 with an answer for each failure triaged, even one whose reply couldn't be used;
+        1 when the run is missing or has no failed test, or the model or embedder can't be
+        reached.
     """
     parser = argparse.ArgumentParser(
         prog="python -m tools.ci_triage", description="Triage CI's failed bench run."
@@ -157,15 +257,25 @@ def main(
     parser.add_argument("--out", type=Path, required=True, help="the Markdown file to write")
     parser.add_argument("--history", type=Path, default=DEFAULT_HISTORY, help="history runs")
     parser.add_argument("--model", default=DEFAULT_MODEL, help="Ollama model to ask")
+    parser.add_argument(
+        "--max-failures",
+        type=positive_count,
+        default=DEFAULT_MAX_FAILURES,
+        help=f"distinct failures to triage, each one prompt (default: {DEFAULT_MAX_FAILURES})",
+    )
     parsed = parser.parse_args(arguments)
     provider = provider or OllamaProvider(model=parsed.model, response_format=VERDICT_SCHEMA)
     try:
         run = SavedRun.load(parsed.run)
-        verdict = triage_failed_run(run, provider, retriever or history_index(parsed.history))
-        section, exit_code = render_verdict(verdict), 0
+        index = retriever or history_index(parsed.history)
+        answer = partial(triage_like_the_api, provider=provider, retriever=index)
+        result = triage_failures(run, answer, parsed.max_failures)
+        section, exit_code = render_triage(result), 0
+        if not result.distinct_failures:
+            section, exit_code = render_problem("the saved run has no failed test to triage"), 1
     except FileNotFoundError:
         section, exit_code = render_problem("the bench failed before the suite saved a run"), 1
-    except (ModelUnavailableError, MalformedAnswerError) as error:
+    except ModelUnavailableError as error:
         section, exit_code = render_problem(str(error)), 1
     parsed.out.parent.mkdir(parents=True, exist_ok=True)
     parsed.out.write_text(section, encoding="utf-8")

@@ -1,0 +1,9 @@
+{
+  "fault": "fixture_skips_reset",
+  "size": null,
+  "unit": "",
+  "category": "test",
+  "cause": "A change to the bench fixture dropped the *RST that starts every test from the instruments' defaults, so the level offset one test sets is still there for the tests after it",
+  "fix": "Restored the reset in the bench fixture, so every test starts from defaults",
+  "action": "TEST_CLEANUP"
+}

@@ -1,0 +1,9 @@
+{
+  "fault": "sweep_timeout",
+  "size": 5.0,
+  "unit": "s",
+  "category": "test",
+  "cause": "The test's 2 s instrument timeout is shorter than the analyzer's sweep time",
+  "fix": "Raised the timeout for the sweep to cover its measured sweep time",
+  "action": "TIMEOUT"
+}

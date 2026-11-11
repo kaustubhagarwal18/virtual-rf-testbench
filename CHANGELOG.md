@@ -9,6 +9,21 @@ it, so the package version moves only with a release.
 
 ### Added
 
+- **An answer for each distinct failure in CI** (ADR 0020): the failed tests are grouped by
+  setup step, or by test function and kind of failure, and each of the first five groups is
+  triaged on its own; the comment has one numbered block per failure, naming it, listing its
+  tests and saying what to do, and names the failures past the cap. A fifth check turns
+  `ALIGNMENT` into `UNKNOWN` when no level or power reading is out of limits.
+- **Four faults** (ADR 0019): `analyzer_needs_alignment` (the analyzer reads high and warns
+  its alignment is out of date), `sweep_timeout` (only the sweep outlives the timeout),
+  `firmware_frequency_error` (release `0.2.0-rc3`, 4 ppm high) and `fixture_skips_reset` (a
+  test-code defect: the fixture's `*RST` is skipped, so an offset leaks as in
+  `reset_leaks_offset`, on unchanged firmware). The data set has 13 faults and 78 runs, and
+  every action on the list resolves at least one.
+- **Citations are scored**: the report splits right answers by whether they cite their own
+  fault's past runs, another fault's or none, and counts those whose quoted fixes include
+  their own fault's.
+- **"What to do"** in the CI comment: the action's description from the fixed list.
 - **Triage in CI** (ADR 0018): when the bench job fails, a job allowed to fail saves the run
   (`tools/save_failed_run.py`), triages it with a local model as the API does
   (`tools/ci_triage.py`) and adds the verdict to the pull request comment: the action, its
@@ -73,6 +88,12 @@ it, so the package version moves only with a release.
 
 ### Changed
 
+- An answer quotes the recorded fix of each cited past run, then of each other offered run
+  resolved by the same action, so a right answer citing a look-alike of another fault still
+  shows its own fault's fix: behind the gate, 27 of 27 right answers now do (ADR 0019).
+- `open_bench` takes a `reset` flag, and a code-defect fault's restore takes the bench down,
+  so a run with the reset skipped can't dirty the next one.
+- The server's SCPI delay hook receives the line, so a delay can depend on the command.
 - The README's results are one figure, Table 1 drawn as rows of solved-fault dots and
   wrong-answer bars; the fuller chart stays in `docs/EVALUATION.md`. The example answer is
   now one the API gives (`cable_loss-1`): the old one, on `config_decimal_error`, is refused
@@ -126,6 +147,9 @@ it, so the package version moves only with a release.
 
 ### Known issues
 
+- The majority vote is confidently wrong on `fixture_skips_reset` (3 of 39 questions): its
+  identical history runs are indexed once, and two look-alike runs outvote it. The gate
+  answers `UNKNOWN` there (ADR 0019).
 - With retrieval, the model answers `ALIGNMENT` on `link_down`, copying "recalibrated" from
   the past runs' fix; a check turns it into `UNKNOWN` (ADR 0017), so the API gives no answer
   there, where the majority vote would say `LINK`.

@@ -6,11 +6,14 @@ import pytest
 
 from tests.unit.tools.fakes import FakeBench
 from tests.utilities.bench_config import CHANNEL_BANDWIDTH_VARIABLE, LEVEL_OFFSET_VARIABLE
+from tests.utilities.injected_defects import SKIP_RESET_VARIABLE
+from tools.bench_control import BenchControlError
 from tools.faults import (
     ANALYZER,
     CATALOGUE,
     GENERATOR,
     AdminFault,
+    CodeDefectFault,
     ConfigFault,
     ReleaseFault,
 )
@@ -105,8 +108,8 @@ def test_an_instrument_fault_needs_no_special_environment(name: str) -> None:
 
 
 def test_every_configured_variable_is_one_the_suite_reads() -> None:
-    """A configuration fault that set an unknown variable would change nothing."""
-    known = {LEVEL_OFFSET_VARIABLE, CHANNEL_BANDWIDTH_VARIABLE}
+    """A configuration or code-defect fault that set an unknown variable would change nothing."""
+    known = {LEVEL_OFFSET_VARIABLE, CHANNEL_BANDWIDTH_VARIABLE, SKIP_RESET_VARIABLE}
     for fault in CATALOGUE.values():
         if isinstance(fault, ConfigFault):
             assert set(fault.variables) <= known, f"{fault.name} sets something unread"
@@ -117,3 +120,31 @@ def test_the_catalogue_covers_every_category_more_than_once() -> None:
     counts = Counter(fault.label.category for fault in CATALOGUE.values())
     assert set(counts) == {"bench", "test", "firmware"}
     assert min(counts.values()) >= FAULTS_PER_CATEGORY
+
+
+def test_a_code_defect_takes_the_bench_down_when_it_is_restored() -> None:
+    """A skipped reset leaves the instruments dirty, so the next run must start fresh ones."""
+    fault = CATALOGUE["fixture_skips_reset"]
+    assert isinstance(fault, CodeDefectFault)
+    bench = FakeBench()
+    fault.apply(bench, None, "0.1.0")
+    fault.restore(bench, "0.1.0")
+    assert bench.calls[-1] == ("down", "")
+    assert fault.suite_environment(None) == {SKIP_RESET_VARIABLE: "1"}
+
+
+def test_a_configuration_fault_leaves_the_bench_running() -> None:
+    """A wrong setting dirties nothing the next test's reset won't clear, so no restart."""
+    bench = FakeBench()
+    CATALOGUE["config_decimal_error"].restore(bench, "0.1.0")
+    assert ("down", "") not in bench.calls
+
+
+def test_a_code_defect_takes_the_bench_down_even_when_clearing_fails() -> None:
+    """An admin port that stopped answering must not leave the dirty containers running."""
+    fault = CATALOGUE["fixture_skips_reset"]
+    bench = FakeBench(clear_fails_after=2)
+    fault.apply(bench, None, "0.1.0")
+    with pytest.raises(BenchControlError):
+        fault.restore(bench, "0.1.0")
+    assert bench.calls[-1] == ("down", "")

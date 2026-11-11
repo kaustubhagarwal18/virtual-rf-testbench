@@ -8,12 +8,15 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from simulators.common.faults import (
+    ALIGNMENT_ERROR,
     EXTRA_CABLE_LOSS,
     LINK_DOWN,
     LINK_FAILS_EVERY,
     SLOW_RESPONSES,
+    SLOW_SWEEP,
     FaultDefinition,
 )
+from tests.utilities.injected_defects import SKIP_RESET_VARIABLE
 
 GENERATOR = "generator"
 ANALYZER = "analyzer"
@@ -39,6 +42,9 @@ class Bench(Protocol):
         Args:
             firmware_version: The release both instruments report.
         """
+
+    def down(self) -> None:
+        """Take the bench down, so the next start recreates both instruments from nothing."""
 
 
 @dataclass(frozen=True)
@@ -256,6 +262,33 @@ class ConfigFault:
         clear_all(bench)
 
 
+@dataclass(frozen=True)
+class CodeDefectFault(ConfigFault):
+    """A defect in the test code, switched on through the suite's environment.
+
+    The instruments and the station's settings are healthy; the suite itself is wrong, as
+    after a change to a fixture. It is applied and restored as a configuration fault is,
+    through `tests/utilities/injected_defects.py`, which a real suite wouldn't have.
+    """
+
+    def restore(self, bench: Bench, default_version: str) -> None:
+        """Switch every fault off and take the bench down.
+
+        The defect leaves the instruments in whatever state its last test left them, and
+        nothing resets them; fresh containers are the only clean start for the next run, so
+        the bench goes down even when an instrument doesn't answer the clear.
+
+        Args:
+            bench: The bench.
+            default_version: The bench's normal release, unused: the next start rebuilds it.
+        """
+        del default_version
+        try:
+            clear_all(bench)
+        finally:
+            bench.down()
+
+
 def clear_all(bench: Bench) -> None:
     """Switch every fault off on both instruments.
 
@@ -266,7 +299,7 @@ def clear_all(bench: Bench) -> None:
         bench.send_admin(instrument, "CLEAR")
 
 
-Fault = AdminFault | ConfigFault | ReleaseFault
+Fault = AdminFault | ConfigFault | CodeDefectFault | ReleaseFault
 
 CATALOGUE: dict[str, Fault] = {
     fault.name: fault
@@ -356,6 +389,57 @@ CATALOGUE: dict[str, Fault] = {
                 "meant: a misplaced decimal point, and far more than the cable's loss",
                 "Corrected level_offset_db to 1.5",
                 action="CONFIGURATION",
+            ),
+        ),
+        AdminFault(
+            name="analyzer_needs_alignment",
+            instrument=ANALYZER,
+            definition=ALIGNMENT_ERROR,
+            label=Label(
+                "bench",
+                "The analyzer's self-alignment was out of date after a temperature change, so "
+                "every level it read was high",
+                "Ran the analyzer's self-alignment and reran the suite",
+                action="ALIGNMENT",
+            ),
+            history_sizes=(1.0, 2.0, 4.0),
+            question_sizes=(1.5, 3.0, 5.0),
+        ),
+        AdminFault(
+            name="sweep_timeout",
+            instrument=ANALYZER,
+            definition=SLOW_SWEEP,
+            label=Label(
+                "test",
+                "The test's 2 s instrument timeout is shorter than the analyzer's sweep time",
+                "Raised the timeout for the sweep to cover its measured sweep time",
+                action="TIMEOUT",
+            ),
+            history_sizes=(2.5, 3.0, 4.0),
+            question_sizes=(3.5, 2.2, 5.0),
+            selection=("-m", "smoke"),
+        ),
+        CodeDefectFault(
+            name="fixture_skips_reset",
+            variables={SKIP_RESET_VARIABLE: "1"},
+            label=Label(
+                "test",
+                "A change to the bench fixture dropped the *RST that starts every test from the "
+                "instruments' defaults, so the level offset one test sets is still there for "
+                "the tests after it",
+                "Restored the reset in the bench fixture, so every test starts from defaults",
+                action="TEST_CLEANUP",
+            ),
+        ),
+        ReleaseFault(
+            name="firmware_frequency_error",
+            firmware_version="0.2.0-rc3",
+            label=Label(
+                "firmware",
+                "Release 0.2.0-rc3 puts the output frequency 4 ppm high while FREQ? still reads "
+                "back the setting: 4 kHz off at 1 GHz",
+                "Reported the regression; the release restored the synthesizer's frequency",
+                action="FIRMWARE",
             ),
         ),
         ReleaseFault(

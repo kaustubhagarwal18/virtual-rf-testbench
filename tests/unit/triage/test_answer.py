@@ -92,6 +92,33 @@ def test_past_fixes_are_the_cited_sources_fixes_in_citation_order() -> None:
     )
 
 
+CONFIG_SOURCES = [
+    Source("past-a", "a", action="CONFIGURATION", fix_applied="Corrected level_offset_db"),
+    Source("past-b", "b", action="CONFIGURATION", fix_applied="Set level_offset_db"),
+    Source("past-c", "c", action="LINK", fix_applied="Reseated the link"),
+    Source("past-d", "d", action="CONFIGURATION"),
+]
+"""Three closest past runs and one without a recorded fix, most similar first."""
+
+
+def test_offered_runs_resolved_by_the_same_action_are_quoted_after_the_cited_ones() -> None:
+    """A run the model didn't cite still shows its fix when its action is the verdict's."""
+    verdict = Verdict(Fix.CONFIGURATION, "bench configuration", "offset", cited=["past-b"])
+    assert with_past_fixes(verdict, CONFIG_SOURCES).past_fixes == (
+        PastFix("past-b", "Set level_offset_db"),
+        PastFix("past-a", "Corrected level_offset_db"),
+    )
+
+
+@pytest.mark.parametrize("fix", [Fix.UNKNOWN, Fix.CABLE])
+def test_only_cited_runs_are_quoted_when_no_offered_run_shares_the_action(fix: Fix) -> None:
+    """UNKNOWN, or an action no offered run was resolved by, quotes the cited runs alone."""
+    verdict = Verdict(fix, "", "", cited=["past-c"])
+    assert with_past_fixes(verdict, CONFIG_SOURCES).past_fixes == (
+        PastFix("past-c", "Reseated the link"),
+    )
+
+
 def test_a_verdict_states_the_category_of_its_action() -> None:
     """The category is the action's: CABLE is the bench, UNKNOWN is unknown."""
     assert Verdict(Fix.CABLE, "cable", "loss").category == "bench"

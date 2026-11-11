@@ -16,13 +16,17 @@ from simulators.common.app import (
     start_scpi_and_admin,
 )
 from simulators.common.faults import (
+    ALIGNMENT_ERROR,
     EXTRA_CABLE_LOSS,
     LINK_DOWN,
     LINK_FAILS_EVERY,
+    SLOW_SWEEP,
     FaultSwitches,
+    sweep_delay,
 )
 from simulators.common.physics import BenchParameters, PhysicsModel
 from simulators.common.server import bound_port
+from simulators.spectrum_analyzer.alignment import SwitchedAlignment
 from simulators.spectrum_analyzer.instrument import SpectrumAnalyzerScpi
 from simulators.spectrum_analyzer.link import AdminPortLink, CableWithFaults
 
@@ -112,8 +116,8 @@ def parse_settings(
 async def start(settings: Settings) -> tuple[asyncio.Server, asyncio.Server]:
     """Start the analyzer's SCPI and admin servers, measuring the generator at its address.
 
-    The analyzer reads the generator through the bench cable, whose fault (extra loss) is
-    switched on the analyzer's admin port.
+    The analyzer reads the generator through the bench cable. Its faults (extra cable loss,
+    a dropped or loose link, an out-of-date alignment, a slow sweep) are switched on its admin port.
 
     Args:
         settings: How to run.
@@ -121,7 +125,9 @@ async def start(settings: Settings) -> tuple[asyncio.Server, asyncio.Server]:
     Returns:
         The SCPI server and the admin server, both listening.
     """
-    switches = FaultSwitches([EXTRA_CABLE_LOSS, LINK_DOWN, LINK_FAILS_EVERY])
+    switches = FaultSwitches(
+        [EXTRA_CABLE_LOSS, LINK_DOWN, LINK_FAILS_EVERY, ALIGNMENT_ERROR, SLOW_SWEEP]
+    )
     cable = CableWithFaults(
         AdminPortLink(settings.generator_admin_host, settings.generator_admin_port), switches
     )
@@ -130,11 +136,17 @@ async def start(settings: Settings) -> tuple[asyncio.Server, asyncio.Server]:
         cable,
         PhysicsModel(BenchParameters()),
         settings.serial_number,
+        alignment=SwitchedAlignment(switches),
     )
     commands = AdminCommands()
     switches.register_commands(commands)
     scpi, admin = await start_scpi_and_admin(
-        analyzer.process, commands, settings.host, settings.scpi_port, settings.admin_port
+        analyzer.process,
+        commands,
+        settings.host,
+        settings.scpi_port,
+        settings.admin_port,
+        scpi_delay_s=sweep_delay(switches),
     )
     _LOGGER.info(
         "Spectrum analyzer listening",

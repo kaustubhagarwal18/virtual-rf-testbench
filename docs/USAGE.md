@@ -91,19 +91,24 @@ runs the bench suite, saves the run, and restores the bench.
 | `cable_loss` | bench | Calibration is out of limits at every frequency; the levels, being calibrated, still pass |
 | `link_down` | bench | Nothing connected: 12 measurements read the noise floor, and each sweep logs a warning |
 | `link_flaky` | bench | A loose connector drops one sweep in four: a few failures with nothing wrong in their own numbers |
+| `analyzer_needs_alignment` | bench | The analyzer reads every level high, so the measured path loss falls *below* its limit (a damaged cable pushes it above), and each sweep logs that the alignment is out of date |
 | `slow_responses` | test | Every instrument call outlives the session timeout; the instruments report no errors |
+| `sweep_timeout` | test | The session opens and answers, but the first sweep (`INIT`) outlives the 2 s timeout |
 | `config_parameter_missing` | test | The setup sequence stops at step 1; `sequence.log` names the parameter nobody set |
 | `config_parameter_out_of_range` | test | Step 1 again, with a value beyond the generator's range |
 | `config_decimal_error` | test | A 15 dB offset where 1.5 dB was meant: step 2 fails, and only the log says so |
+| `fixture_skips_reset` | test | A fixture change dropped the `*RST` before each test, so the offset test's offset reaches every test after it: the same failure as `reset_leaks_offset`, on unchanged firmware |
 | `reset_leaks_offset` | firmware | `0.2.0-rc2` stops clearing the level offset on `*RST`, so every test after the offset test fails on a setting it never touched |
 | `output_command_change` | firmware | `0.2.0-rc1` drops the short `OUTP` form: -113 on a new release |
+| `firmware_frequency_error` | firmware | `0.2.0-rc3` puts the output 4 ppm high while `FREQ?` reads back the setting: 4 kHz off at 1 GHz and above, within limits at 100 MHz |
 
 ```
 make fault NAME=cable_loss SIZE=1.5
 ```
 
 `make fault` starts the bench on the release each fault needs, so the bench and config faults
-run in any order. The two firmware faults (`reset_leaks_offset`, `output_command_change`)
+run in any order. The three firmware faults (`reset_leaks_offset`, `output_command_change`,
+`firmware_frequency_error`)
 rebuild a running bench, so start it with `make bench-up` first if it's down. Each run lands
 in `results/faults/<fault>-<timestamp>/` with `results.json`,
 `logs.txt`, `sequence.log` and a separate `label.json` holding the known cause — what a
@@ -111,7 +116,7 @@ closed ticket would carry. A run where nothing failed isn't saved; one pytest co
 is kept and reported, never counted as a pass.
 
 `make fault-dataset` builds the triage data set in `triage/data/runs/`: three history runs
-and three question runs per fault, 54 in all, in about 8 minutes. Where a fault has a size,
+and three question runs per fault, 78 in all. Where a fault has a size,
 each question uses a size that no history run has. ADR 0005 explains the faults, ADR 0007
 the sequence log.
 
@@ -191,8 +196,8 @@ jq -n --slurpfile results triage/data/runs/questions/cable_loss-1/results.json '
 ```
 
 The reply is the verdict as JSON: `fix`, `action`, `where`, `because`, `cited`, `category`
-(`firmware`, `bench`, `test` or `unknown`) and `past_fixes` (each cited run's recorded fix,
-quoted), plus `overruled` when a check stood in for the model and `gate_reason` when the
+(`firmware`, `bench`, `test` or `unknown`) and `past_fixes` (the recorded fix of each cited
+run, then of each other offered run resolved by the same action, quoted), plus `overruled` when a check stood in for the model and `gate_reason` when the
 past runs disagreed and the model wasn't asked. `POST /history` adds a resolved run (its evidence plus
 a `label` with `fault`, `cause`, `fix` and, optionally, `action`), and `GET /health` reports
 how many past runs are loaded. Interactive docs are at `http://127.0.0.1:8000/docs`. The

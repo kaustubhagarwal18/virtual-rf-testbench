@@ -41,6 +41,7 @@ class SignalGeneratorScpi(ScpiInstrument):
         self._state = DEFAULT_STATE
         self._offset_db = DEFAULT_OFFSET_DB
         self._reset_clears_offset = True
+        self._frequency_error_ppm = 0.0
         self.register(
             "[SOURce]:FREQuency[:CW]", write=self._set_frequency, query=self._query_frequency
         )
@@ -65,9 +66,22 @@ class SignalGeneratorScpi(ScpiInstrument):
         of -1.5 dB, for a cable that loses 1.5 dB, puts out 1.5 dB more than requested.
 
         Returns:
-            The frequency, the level at the connector and the RF output state.
+            The frequency, off by the release's frequency error if it has one, the level at
+            the connector and the RF output state.
         """
-        return replace(self._state, level_dbm=self._state.level_dbm - self._offset_db)
+        return replace(
+            self._state,
+            frequency_hz=self._state.frequency_hz * (1 + self._frequency_error_ppm * 1e-6),
+            level_dbm=self._state.level_dbm - self._offset_db,
+        )
+
+    def set_frequency_error_ppm(self, error_ppm: float) -> None:
+        """Put the output frequency this many parts per million high, for a faulty release.
+
+        Args:
+            error_ppm: The error.
+        """
+        self._frequency_error_ppm = error_ppm
 
     def on_reset(self) -> None:
         """Return to the default settings, as *RST does.

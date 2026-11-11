@@ -18,6 +18,7 @@ from simulators.healthcheck import check_instrument
 from tests.utilities.bench import open_bench
 from tests.utilities.bench_config import load_bench_config
 from tests.utilities.calibration import Calibration, measure_path_loss
+from tests.utilities.injected_defects import reset_on_open
 from tests.utilities.results_file import (
     DEFAULT_RESULTS_PATH,
     RESULTS_PATH_VARIABLE,
@@ -137,7 +138,13 @@ def prepare(generator: SignalGenerator, analyzer: SpectrumAnalyzer, sequence: Se
 
 @pytest.fixture(name="bench")
 def fixture_bench(sequencer: Sequencer) -> Iterator[tuple[SignalGenerator, SpectrumAnalyzer]]:
-    """Open reset sessions on both containerised instruments and run the setup sequence."""
-    with open_bench(BENCH_HOST, GENERATOR_PORT, ANALYZER_PORT) as (generator, analyzer):
+    """Open reset sessions on both containerised instruments and run the setup sequence.
+
+    The reset is skipped only when the fault tooling switches on the skip-reset defect.
+    """
+    with open_bench(BENCH_HOST, GENERATOR_PORT, ANALYZER_PORT, reset=reset_on_open()) as (
+        generator,
+        analyzer,
+    ):
         prepare(generator, analyzer, sequencer)
         yield generator, analyzer

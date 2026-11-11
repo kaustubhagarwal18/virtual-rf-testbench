@@ -1,5 +1,6 @@
 """The simulated spectrum analyzer: settings, sweeps, the peak marker and channel power."""
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 
@@ -13,6 +14,7 @@ from simulators.common.parser import (
     parse_choice,
 )
 from simulators.common.physics import PhysicsModel, SourceState
+from simulators.spectrum_analyzer.alignment import ALIGNMENT_WARNING, Alignment, CurrentAlignment
 from simulators.spectrum_analyzer.link import GeneratorLink
 
 MANUFACTURER = "VirtualRF"
@@ -23,6 +25,8 @@ RBW_RANGE_HZ = (1.0, 10e6)
 CHANNEL_BANDWIDTH_RANGE_HZ = (100.0, 100e6)
 SWEEP_POINTS = 1001
 """Points per sweep, as on R&S analyzers; the marker frequency snaps to one of them."""
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -133,6 +137,7 @@ class SpectrumAnalyzerScpi(ScpiInstrument):
         generator: GeneratorLink,
         physics: PhysicsModel,
         serial_number: str = "200001",
+        alignment: Alignment | None = None,
     ) -> None:
         """Create the analyzer at its default settings, with its commands registered.
 
@@ -141,10 +146,12 @@ class SpectrumAnalyzerScpi(ScpiInstrument):
             generator: Tells the analyzer what the generator is sending.
             physics: Turns the generator's output into readings.
             serial_number: The unit's serial number, reported by *IDN?.
+            alignment: How far its readings are off; None means its alignment is current.
         """
         super().__init__(Identity(MANUFACTURER, MODEL, serial_number, firmware_version))
         self._generator = generator
         self._physics = physics
+        self._alignment = alignment or CurrentAlignment()
         self._settings = DEFAULT_SETTINGS
         self._sweep: SweepResult | None = None
         self._marker: Marker | None = None
@@ -350,7 +357,12 @@ class SpectrumAnalyzerScpi(ScpiInstrument):
         channel_power_dbm = self._physics.channel_power_reading_dbm(
             in_view, settings.centre_hz, swept_channel_hz
         )
-        self._sweep = SweepResult(peak_frequency_hz, peak_level_dbm, channel_power_dbm)
+        error_db = self._alignment.reading_error_db()
+        if error_db:
+            _LOGGER.warning(ALIGNMENT_WARNING)
+        self._sweep = SweepResult(
+            peak_frequency_hz, peak_level_dbm + error_db, channel_power_dbm + error_db
+        )
         return self._sweep
 
     def _strongest_in_span(self, source: SourceState) -> SourceState:

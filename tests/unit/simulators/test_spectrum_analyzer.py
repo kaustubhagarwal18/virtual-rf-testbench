@@ -342,3 +342,56 @@ def test_the_marker_sits_on_whichever_signal_is_in_the_span() -> None:
     analyzer = make_analyzer()
     analyzer.process("FREQ:CENT 2 GHz")
     assert peak(analyzer)[0] == pytest.approx(2e9, abs=1e3)
+
+
+@dataclass
+class FixedAlignment:
+    """An alignment state with a fixed reading error, for tests."""
+
+    error_db: float
+
+    def reading_error_db(self) -> float:
+        """Return the fixed error.
+
+        Returns:
+            The error, in dB.
+        """
+        return self.error_db
+
+
+def channel_power(analyzer: SpectrumAnalyzerScpi) -> float:
+    """Return the channel power reading."""
+    return float(analyzer.process("CALC:MARK:FUNC:POW:RES? CPOW")[0])
+
+
+@pytest.mark.parametrize("error_db", [0.5, 2.0, 10.0])
+def test_an_out_of_date_alignment_reads_every_level_high(
+    error_db: float, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Peak and channel power both read high by the error, and the analyzer warns about it."""
+    aligned = make_analyzer()
+    drifted = SpectrumAnalyzerScpi(
+        firmware_version="1.2.3",
+        generator=FakeGenerator(),
+        physics=PhysicsModel(PARAMETERS),
+        alignment=FixedAlignment(error_db),
+    )
+    assert peak(drifted)[1] - peak(aligned)[1] == pytest.approx(error_db, abs=LEVEL_TOLERANCE_DB)
+    assert channel_power(drifted) - channel_power(aligned) == pytest.approx(
+        error_db, abs=LEVEL_TOLERANCE_DB
+    )
+    assert any("Alignment data out of date" in record.getMessage() for record in caplog.records)
+
+
+def test_a_current_alignment_neither_shifts_readings_nor_warns(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """With no alignment error the readings are the bench's own, and nothing is logged."""
+    analyzer = SpectrumAnalyzerScpi(
+        firmware_version="1.2.3",
+        generator=FakeGenerator(),
+        physics=PhysicsModel(PARAMETERS),
+        alignment=FixedAlignment(0.0),
+    )
+    assert peak(analyzer)[1] == pytest.approx(EXPECTED_TONE_DBM, abs=LEVEL_TOLERANCE_DB)
+    assert not any("Alignment" in record.getMessage() for record in caplog.records)

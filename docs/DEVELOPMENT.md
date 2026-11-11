@@ -48,7 +48,7 @@ GitHub Actions runs on every pull request and on every push to `main`:
 | Bench (containers) | Loads that same image, `make bench-up BENCH_BUILD=--no-build`, `make bench-test`, then `make bench-summary` on the run's summary page; shows the simulator logs if anything failed, and saves a failed run for the triage job |
 | Publish image | On pushes to `main` only, once every other job passed: pushes the scanned image to GitHub Container Registry as `virtual-rf-testbench-simulators:<version>-<commit>` |
 | Secret scan | gitleaks 8.30.1 over the full git history, including merge commits; the download is checksum-verified |
-| Triage (allowed to fail) | Only when the bench job failed: starts Ollama 0.40.14 (pinned, checksum-verified, cached with its models) on the runner and triages the saved run as the API does (`tools/ci_triage.py`); the verdict goes on the run's summary page and into the results comment |
+| Triage (allowed to fail) | Only when the bench job failed: starts Ollama 0.40.14 (pinned, checksum-verified, cached with its models) on the runner and triages each distinct failure in the saved run, up to five, as the API does (`tools/ci_triage.py`); the answers go on the run's summary page and into the results comment |
 | Results comment | On pull requests, once the other jobs finish: posts one comment with the test and bench results, coverage, any failures, the triage verdict when the bench failed, and each job's result, and updates that same comment on every push |
 
 Actions are pinned to commit SHAs, and dependencies install from `uv.lock` exactly

@@ -1,0 +1,57 @@
+07:49:59.373 INFO  step=1 action=read bench configuration instrument=station result=ok
+07:49:59.375 INFO  step=2 action=verify level offset instrument=generator parameter=level_offset_db expected=0.0 result=ok
+07:49:59.376 INFO  step=3 action=set channel bandwidth instrument=analyzer parameter=channel_bandwidth_hz value=100000.0 result=ok
+07:49:59.391 INFO  step=4 action=read bench configuration instrument=station result=ok
+07:49:59.393 INFO  step=5 action=verify level offset instrument=generator parameter=level_offset_db expected=0.0 result=ok
+07:49:59.395 INFO  step=6 action=set channel bandwidth instrument=analyzer parameter=channel_bandwidth_hz value=100000.0 result=ok
+07:49:59.512 INFO  step=7 action=read bench configuration instrument=station result=ok
+07:49:59.514 INFO  step=8 action=verify level offset instrument=generator parameter=level_offset_db expected=0.0 result=ok
+07:49:59.515 INFO  step=9 action=set channel bandwidth instrument=analyzer parameter=channel_bandwidth_hz value=100000.0 result=ok
+07:49:59.559 INFO  step=10 action=read bench configuration instrument=station result=ok
+07:49:59.560 INFO  step=11 action=verify level offset instrument=generator parameter=level_offset_db expected=0.0 result=ok
+07:49:59.562 INFO  step=12 action=set channel bandwidth instrument=analyzer parameter=channel_bandwidth_hz value=100000.0 result=ok
+07:49:59.603 INFO  step=13 action=read bench configuration instrument=station result=ok
+07:49:59.604 INFO  step=14 action=verify level offset instrument=generator parameter=level_offset_db expected=0.0 result=ok
+07:49:59.606 INFO  step=15 action=set channel bandwidth instrument=analyzer parameter=channel_bandwidth_hz value=100000.0 result=ok
+07:49:59.633 INFO  step=16 action=read bench configuration instrument=station result=ok
+07:49:59.634 INFO  step=17 action=verify level offset instrument=generator parameter=level_offset_db expected=0.0 result=ok
+07:49:59.637 INFO  step=18 action=set channel bandwidth instrument=analyzer parameter=channel_bandwidth_hz value=100000.0 result=ok
+07:49:59.665 INFO  step=19 action=read bench configuration instrument=station result=ok
+07:49:59.667 INFO  step=20 action=verify level offset instrument=generator parameter=level_offset_db expected=0.0 result=ok
+07:49:59.669 INFO  step=21 action=set channel bandwidth instrument=analyzer parameter=channel_bandwidth_hz value=100000.0 result=ok
+07:49:59.697 INFO  step=22 action=read bench configuration instrument=station result=ok
+07:49:59.698 INFO  step=23 action=verify level offset instrument=generator parameter=level_offset_db expected=0.0 result=ok
+07:49:59.700 INFO  step=24 action=set channel bandwidth instrument=analyzer parameter=channel_bandwidth_hz value=100000.0 result=ok
+07:49:59.730 INFO  step=25 action=read bench configuration instrument=station result=ok
+07:49:59.731 INFO  step=26 action=verify level offset instrument=generator parameter=level_offset_db expected=0.0 result=ok
+07:49:59.733 INFO  step=27 action=set channel bandwidth instrument=analyzer parameter=channel_bandwidth_hz value=100000.0 result=ok
+07:49:59.808 INFO  step=28 action=read bench configuration instrument=station result=ok
+07:49:59.809 INFO  step=29 action=verify level offset instrument=generator parameter=level_offset_db expected=0.0 result=ok
+07:49:59.811 INFO  step=30 action=set channel bandwidth instrument=analyzer parameter=channel_bandwidth_hz value=100000.0 result=ok
+07:49:59.883 INFO  step=31 action=read bench configuration instrument=station result=ok
+07:49:59.885 INFO  step=32 action=verify level offset instrument=generator parameter=level_offset_db expected=0.0 result=ok
+07:49:59.886 INFO  step=33 action=set channel bandwidth instrument=analyzer parameter=channel_bandwidth_hz value=100000.0 result=ok
+07:49:59.931 INFO  step=34 action=read bench configuration instrument=station result=ok
+07:49:59.932 INFO  step=35 action=verify level offset instrument=generator parameter=level_offset_db expected=0.0 result=ok
+07:49:59.935 INFO  step=36 action=set channel bandwidth instrument=analyzer parameter=channel_bandwidth_hz value=100000.0 result=ok
+07:49:59.972 INFO  step=37 action=read bench configuration instrument=station result=ok
+07:49:59.974 INFO  step=38 action=verify level offset instrument=generator parameter=level_offset_db expected=0.0 result=ok
+07:49:59.977 INFO  step=39 action=set channel bandwidth instrument=analyzer parameter=channel_bandwidth_hz value=100000.0 result=ok
+07:50:00.008 INFO  step=40 action=read bench configuration instrument=station result=ok
+07:50:00.010 INFO  step=41 action=verify level offset instrument=generator parameter=level_offset_db expected=0.0 result=ok
+07:50:00.013 INFO  step=42 action=set channel bandwidth instrument=analyzer parameter=channel_bandwidth_hz value=100000.0 result=ok
+07:50:00.056 INFO  step=43 action=read bench configuration instrument=station result=ok
+07:50:00.057 INFO  step=44 action=verify level offset instrument=generator parameter=level_offset_db expected=0.0 result=ok
+07:50:00.059 INFO  step=45 action=set channel bandwidth instrument=analyzer parameter=channel_bandwidth_hz value=100000.0 result=ok
+07:50:00.099 INFO  step=46 action=read bench configuration instrument=station result=ok
+07:50:00.101 INFO  step=47 action=verify level offset instrument=generator parameter=level_offset_db expected=0.0 result=ok
+07:50:00.104 INFO  step=48 action=set channel bandwidth instrument=analyzer parameter=channel_bandwidth_hz value=100000.0 result=ok
+07:50:00.128 INFO  step=49 action=read bench configuration instrument=station result=ok
+07:50:00.130 INFO  step=50 action=verify level offset instrument=generator parameter=level_offset_db expected=0.0 result=ok
+07:50:00.132 INFO  step=51 action=set channel bandwidth instrument=analyzer parameter=channel_bandwidth_hz value=100000.0 result=ok
+07:50:00.154 INFO  step=52 action=read bench configuration instrument=station result=ok
+07:50:00.158 INFO  step=53 action=verify level offset instrument=generator parameter=level_offset_db expected=0.0 result=ok
+07:50:00.161 INFO  step=54 action=set channel bandwidth instrument=analyzer parameter=channel_bandwidth_hz value=100000.0 result=ok
+07:50:00.188 INFO  step=55 action=read bench configuration instrument=station result=ok
+07:50:00.191 INFO  step=56 action=verify level offset instrument=generator parameter=level_offset_db expected=0.0 result=ok
+07:50:00.203 INFO  step=57 action=set channel bandwidth instrument=analyzer parameter=channel_bandwidth_hz value=100000.0 result=ok

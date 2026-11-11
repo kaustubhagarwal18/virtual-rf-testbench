@@ -74,7 +74,7 @@ def describe(verdict: Verdict) -> str:
 
     Returns:
         The fix, where, why, whether that is the firmware, the bench or the test, what was
-        cited and what fixed each cited run last time, plus why a check overruled the model
+        cited and what fixed the past runs behind it last time, plus why a check overruled the model
         if one did.
     """
     lines = [

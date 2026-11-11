@@ -1,0 +1,9 @@
+{
+  "fault": "analyzer_needs_alignment",
+  "size": 2.0,
+  "unit": "dB",
+  "category": "bench",
+  "cause": "The analyzer's self-alignment was out of date after a temperature change, so every level it read was high",
+  "fix": "Ran the analyzer's self-alignment and reran the suite",
+  "action": "ALIGNMENT"
+}

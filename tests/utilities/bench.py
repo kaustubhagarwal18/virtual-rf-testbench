@@ -18,9 +18,9 @@ _LOGGER = logging.getLogger(__name__)
 
 @contextmanager
 def open_bench(
-    host: str, generator_port: int, analyzer_port: int
+    host: str, generator_port: int, analyzer_port: int, *, reset: bool = True
 ) -> Iterator[tuple[SignalGenerator, SpectrumAnalyzer]]:
-    """Open reset driver sessions on both instruments, and close them afterwards.
+    """Open driver sessions on both instruments, and close them afterwards.
 
     Opening a session sends *RST, so every test starts from the instruments' defaults.
 
@@ -28,13 +28,16 @@ def open_bench(
         host: Where both instruments listen.
         generator_port: The generator's SCPI port.
         analyzer_port: The analyzer's SCPI port.
+        reset: Whether opening resets them; False only for the skip-reset defect.
 
     Yields:
         The generator and analyzer drivers.
     """
     with (
-        RsInstrumentSession(socket_resource(host, generator_port)) as generator_session,
-        RsInstrumentSession(socket_resource(host, analyzer_port)) as analyzer_session,
+        RsInstrumentSession(
+            socket_resource(host, generator_port), reset=reset
+        ) as generator_session,
+        RsInstrumentSession(socket_resource(host, analyzer_port), reset=reset) as analyzer_session,
     ):
         yield SignalGenerator(generator_session), SpectrumAnalyzer(analyzer_session)
 

@@ -48,6 +48,10 @@ class FakeBench:
         """Record a restart as a release."""
         self.calls.append(("start", firmware_version))
 
+    def down(self) -> None:
+        """Record taking the bench down."""
+        self.calls.append(("down", ""))
+
     def logs_since(self, since: datetime) -> str:
         """Return the fixed logs."""
         del since

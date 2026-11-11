@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 792" width="900" height="792" role="img" aria-labelledby="title desc">
-  <title id="title">Triage results: faults solved out of 9</title>
-  <desc id="desc">Faults solved out of 9, with 95% intervals, and confident wrong answers out of 27, for each scenario. Without retrieval: error only 3, full evidence 7, full evidence without the firmware line 6, without the no-signal line 5. With retrieval: 6, with checks 6, with checks and gates 5. The same precedents answered by majority vote, with no model: 9, and 6 with checks and gates, with no wrong answers. With the question's own fault held out: with checks 4 (the vote 4), with checks and gates 1 (the vote 2, with no wrong answers).</desc>
+  <title id="title">Triage results: faults solved out of 13</title>
+  <desc id="desc">Faults solved out of 13, with 95% intervals, and confident wrong answers out of 39, for each scenario. Without retrieval: error only 5, full evidence 8, without the firmware line 8, without the no-signal line 6. With retrieval: 11, with checks 11, with checks and gates 9 and no wrong answers. The same precedents answered by majority vote, with no model: 12 with 3 wrong answers, and 10 with checks and gates, with none. With the question's own fault held out: with checks 4 (the vote 5), with checks and gates 1 (the vote 2, with 6 wrong answers).</desc>
   <defs>
     <linearGradient id="barBase" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#8957e5"/>
@@ -54,14 +54,14 @@
 
   <g filter="url(#shadow)"><rect x="20" y="16" width="860" height="760" rx="18" class="panel"/></g>
 
-  <text x="48" y="54" class="heading">Faults solved, out of 9</text>
+  <text x="48" y="54" class="heading">Faults solved, out of 13</text>
   <text x="48" y="76" class="caption">A fault is solved when all three of its questions are right. The thin line is the 95% interval.</text>
 
   <!-- column heads and axis -->
   <text x="330" y="108" class="colhead">FAULTS SOLVED</text>
-  <text x="776" y="108" class="colhead">WRONG, OF 27</text>
+  <text x="776" y="108" class="colhead">WRONG, OF 39</text>
   <g class="axis" text-anchor="middle">
-    <text x="330" y="124">0</text><text x="430" y="124">3</text><text x="530" y="124">6</text><text x="630" y="124">9</text>
+    <text x="330.0" y="124">0</text><text x="399.2" y="124">3</text><text x="468.5" y="124">6</text><text x="537.7" y="124">9</text><text x="630.0" y="124">13</text>
   </g>
 
   <!-- ===== Without retrieval ===== -->
@@ -69,32 +69,32 @@
 
   <text x="48" y="178" class="name">Error message only</text>
   <rect x="330" y="164" width="300" height="20" rx="10" class="track"/>
-  <rect x="330" y="164" width="100" height="20" rx="10" fill="url(#barBase)"/>
-  <line x1="363.3" y1="174" x2="530" y2="174" class="whisker"/>
-  <text x="644" y="179" class="value">3</text>
-  <text x="776" y="179" class="wrong">18</text>
+  <rect x="330" y="164" width="115.4" height="20" rx="10" fill="url(#barBase)"/>
+  <line x1="376.2" y1="174" x2="514.6" y2="174" class="whisker"/>
+  <text x="644" y="179" class="value">5</text>
+  <text x="776" y="179" class="wrong">24</text>
 
   <text x="48" y="214" class="name">Full evidence</text>
   <rect x="330" y="200" width="300" height="20" rx="10" class="track"/>
-  <rect x="330" y="200" width="233.3" height="20" rx="10" fill="url(#barBase)"/>
-  <line x1="463.3" y1="210" x2="596.7" y2="210" class="whisker"/>
-  <text x="644" y="215" class="value">7</text>
-  <text x="776" y="215" class="wrong">6</text>
+  <rect x="330" y="200" width="184.6" height="20" rx="10" fill="url(#barBase)"/>
+  <line x1="445.4" y1="210" x2="583.8" y2="210" class="whisker"/>
+  <text x="644" y="215" class="value">8</text>
+  <text x="776" y="215" class="wrong">15</text>
 
   <text x="48" y="250" class="name">Full evidence, no version line</text>
   <rect x="330" y="236" width="300" height="20" rx="10" class="track"/>
-  <rect x="330" y="236" width="200" height="20" rx="10" fill="url(#barBase)" opacity="0.55"/>
-  <line x1="430" y1="246" x2="596.7" y2="246" class="whisker"/>
-  <text x="644" y="251" class="value">6</text>
-  <text x="776" y="251" class="wrong">9</text>
+  <rect x="330" y="236" width="184.6" height="20" rx="10" fill="url(#barBase)" opacity="0.55"/>
+  <line x1="445.4" y1="246" x2="583.8" y2="246" class="whisker"/>
+  <text x="644" y="251" class="value">8</text>
+  <text x="776" y="251" class="wrong">15</text>
   <text x="48" y="266" class="note">ablation</text>
 
   <text x="48" y="302" class="name">Full evidence, no signal line</text>
   <rect x="330" y="288" width="300" height="20" rx="10" class="track"/>
-  <rect x="330" y="288" width="166.7" height="20" rx="10" fill="url(#barBase)" opacity="0.55"/>
-  <line x1="396.7" y1="298" x2="563.3" y2="298" class="whisker"/>
-  <text x="644" y="303" class="value">5</text>
-  <text x="776" y="303" class="wrong">11</text>
+  <rect x="330" y="288" width="138.5" height="20" rx="10" fill="url(#barBase)" opacity="0.55"/>
+  <line x1="399.2" y1="298" x2="537.7" y2="298" class="whisker"/>
+  <text x="644" y="303" class="value">6</text>
+  <text x="776" y="303" class="wrong">20</text>
   <text x="48" y="318" class="note">ablation: loses link_down and link_flaky</text>
 
   <line x1="48" y1="336" x2="852" y2="336" class="rule"/>
@@ -104,23 +104,23 @@
 
   <text x="48" y="388" class="name">+ top 3 past runs</text>
   <rect x="330" y="374" width="300" height="20" rx="10" class="track"/>
-  <rect x="330" y="374" width="200" height="20" rx="10" fill="url(#barRag)"/>
-  <line x1="430" y1="384" x2="596.7" y2="384" class="whisker"/>
-  <text x="644" y="389" class="value">6</text>
-  <text x="776" y="389" class="wrong">9</text>
+  <rect x="330" y="374" width="253.8" height="20" rx="10" fill="url(#barRag)"/>
+  <line x1="514.6" y1="384" x2="606.9" y2="384" class="whisker"/>
+  <text x="644" y="389" class="value">11</text>
+  <text x="776" y="389" class="wrong">6</text>
 
   <text x="48" y="424" class="name">+ checks</text>
   <rect x="330" y="410" width="300" height="20" rx="10" class="track"/>
-  <rect x="330" y="410" width="200" height="20" rx="10" fill="url(#barRag)"/>
-  <line x1="430" y1="420" x2="596.7" y2="420" class="whisker"/>
-  <text x="644" y="425" class="value">6</text>
+  <rect x="330" y="410" width="253.8" height="20" rx="10" fill="url(#barRag)"/>
+  <line x1="514.6" y1="420" x2="606.9" y2="420" class="whisker"/>
+  <text x="644" y="425" class="value">11</text>
   <text x="776" y="425" class="wrong">3</text>
 
   <text x="48" y="460" class="name">+ checks + disagreement gate</text>
   <rect x="330" y="446" width="300" height="20" rx="10" class="track"/>
-  <rect x="330" y="446" width="166.7" height="20" rx="10" fill="url(#barRag)"/>
-  <line x1="396.7" y1="456" x2="563.3" y2="456" class="whisker"/>
-  <text x="644" y="461" class="value">5</text>
+  <rect x="330" y="446" width="207.7" height="20" rx="10" fill="url(#barRag)"/>
+  <line x1="468.5" y1="456" x2="583.8" y2="456" class="whisker"/>
+  <text x="644" y="461" class="value">9</text>
   <text x="776" y="461" class="wrong-zero">0</text>
   <text x="48" y="476" class="note">what the API runs</text>
 
@@ -131,19 +131,19 @@
 
   <text x="48" y="546" class="name">Most common action of the 3</text>
   <rect x="330" y="532" width="300" height="20" rx="10" class="track"/>
-  <rect x="330" y="532" width="300" height="20" rx="10" fill="url(#barVote)"/>
-  <line x1="530" y1="542" x2="630" y2="542" class="whisker"/>
-  <text x="644" y="547" class="value">9</text>
-  <text x="776" y="547" class="wrong-zero">0</text>
-  <text x="48" y="562" class="note">recall: every question had a past run of its own fault</text>
+  <rect x="330" y="532" width="276.9" height="20" rx="10" fill="url(#barVote)"/>
+  <line x1="537.7" y1="542" x2="630.0" y2="542" class="whisker"/>
+  <text x="644" y="547" class="value">12</text>
+  <text x="776" y="547" class="wrong">3</text>
+  <text x="48" y="562" class="note">misses fixture_skips_reset: its identical runs count once</text>
 
   <text x="48" y="598" class="name">+ checks + disagreement gate</text>
   <rect x="330" y="584" width="300" height="20" rx="10" class="track"/>
-  <rect x="330" y="584" width="200" height="20" rx="10" fill="url(#barVote)"/>
-  <line x1="430" y1="594" x2="596.7" y2="594" class="whisker"/>
-  <text x="644" y="599" class="value">6</text>
+  <rect x="330" y="584" width="230.8" height="20" rx="10" fill="url(#barVote)"/>
+  <line x1="468.5" y1="594" x2="606.9" y2="594" class="whisker"/>
+  <text x="644" y="599" class="value">10</text>
   <text x="776" y="599" class="wrong-zero">0</text>
-  <text x="48" y="614" class="note">the model's 5: it answers UNKNOWN on link_down</text>
+  <text x="48" y="614" class="note">the model's 9: it answers UNKNOWN on link_down</text>
 
   <line x1="48" y1="632" x2="852" y2="632" class="rule"/>
 
@@ -152,23 +152,23 @@
 
   <text x="48" y="684" class="name">Retrieval + checks</text>
   <rect x="330" y="670" width="300" height="20" rx="10" class="track"/>
-  <rect x="330" y="670" width="133.3" height="20" rx="10" fill="url(#barHeld)"/>
-  <line x1="396.7" y1="680" x2="563.3" y2="680" class="whisker"/>
+  <rect x="330" y="670" width="92.3" height="20" rx="10" fill="url(#barHeld)"/>
+  <line x1="376.2" y1="680" x2="491.5" y2="680" class="whisker"/>
   <text x="644" y="685" class="value">4</text>
-  <text x="776" y="685" class="wrong">12</text>
+  <text x="776" y="685" class="wrong">18</text>
 
   <text x="48" y="720" class="name">Majority vote + checks</text>
   <rect x="330" y="706" width="300" height="20" rx="10" class="track"/>
-  <rect x="330" y="706" width="133.3" height="20" rx="10" fill="url(#barVote)"/>
-  <line x1="396.7" y1="716" x2="563.3" y2="716" class="whisker"/>
-  <text x="644" y="721" class="value">4</text>
-  <text x="776" y="721" class="wrong">6</text>
+  <rect x="330" y="706" width="115.4" height="20" rx="10" fill="url(#barVote)"/>
+  <line x1="376.2" y1="716" x2="514.6" y2="716" class="whisker"/>
+  <text x="644" y="721" class="value">5</text>
+  <text x="776" y="721" class="wrong">18</text>
 
   <text x="48" y="756" class="name">Retrieval + both gates</text>
   <rect x="330" y="742" width="300" height="20" rx="10" class="track"/>
-  <rect x="330" y="742" width="33.3" height="20" rx="10" fill="url(#barHeld)"/>
-  <line x1="330" y1="752" x2="463.3" y2="752" class="whisker"/>
+  <rect x="330" y="742" width="23.1" height="20" rx="10" fill="url(#barHeld)"/>
+  <line x1="330.0" y1="752" x2="422.3" y2="752" class="whisker"/>
   <text x="644" y="757" class="value">1</text>
-  <text x="776" y="757" class="wrong">3</text>
-  <text x="668" y="757" class="note">vote 2, 0 wrong</text>
+  <text x="776" y="757" class="wrong">9</text>
+  <text x="668" y="757" class="note">vote 2, 6 wrong</text>
 </svg>

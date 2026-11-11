@@ -14,7 +14,8 @@ level only: a real bench doesn't announce its faults, and the logs are triage ev
 
 import logging
 import math
-from collections.abc import Sequence
+import re
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from simulators.common.admin import (
@@ -56,9 +57,22 @@ LINK_FAILS_EVERY = FaultDefinition("LINK_FAILS_EVERY", "sweeps", (0.0, 1000.0))
 """A loose connector: every Nth reading of the generator's state fails, and only that one.
 Whole sweeps only: the value is truncated, so anything below 1 leaves the link alone."""
 
+ALIGNMENT_ERROR = FaultDefinition("ALIGNMENT_ERROR_DB", "dB", (0.0, 10.0))
+"""An analyzer whose self-alignment is out of date: every level it reads is this much high."""
+
 SLOW_RESPONSES = FaultDefinition("SLOW_RESPONSE_S", "s", (0.0, 30.0))
 """A delay before each SCPI line is handled, as from an overloaded instrument. The server
 waits before taking the instrument's lock, so the admin port stays responsive."""
+
+SLOW_SWEEP = FaultDefinition("SLOW_SWEEP_S", "s", (0.0, 30.0))
+"""A delay before each sweep the analyzer is told to start, as from a sweep that takes far
+longer than its settings call for. Every other line answers at once."""
+
+_SWEEP_START = re.compile(r"^:?INIT(IATE)?\d*(:IMM(EDIATE)?)?$", re.IGNORECASE)
+"""INITiate[<n>][:IMMediate] in any spelling: the command that starts a sweep."""
+
+LineDelay = Callable[[str], float]
+"""Given a received SCPI line, how many seconds it waits before it is handled."""
 
 
 class FaultSwitches:
@@ -194,3 +208,65 @@ def _parse_value(definition: FaultDefinition, text: str) -> float:
             f"{definition.name} must be from {low:g} to {high:g} {definition.unit}, got {text}"
         )
     return value
+
+
+def starts_a_sweep(line: str) -> bool:
+    """Check whether a SCPI line starts a sweep, in any of its message units.
+
+    Args:
+        line: The received line; units are separated by ';'.
+
+    Returns:
+        True when one of its units is INITiate[<n>][:IMMediate] with no parameters.
+    """
+    return any(_SWEEP_START.match(unit.strip()) for unit in line.split(";"))
+
+
+def every_line_delay(switches: FaultSwitches, definition: FaultDefinition) -> LineDelay:
+    """Delay every line by a fault switch's value.
+
+    Args:
+        switches: The instrument's fault switches.
+        definition: The switch that holds the delay in seconds.
+
+    Returns:
+        The delay for any line.
+    """
+
+    def delay(line: str) -> float:
+        """Return the switch's value, whatever the line.
+
+        Args:
+            line: The received line, unused.
+
+        Returns:
+            The delay in seconds.
+        """
+        del line
+        return switches.value(definition.name)
+
+    return delay
+
+
+def sweep_delay(switches: FaultSwitches) -> LineDelay:
+    """Delay only the lines that start a sweep, by the SLOW_SWEEP_S switch's value.
+
+    Args:
+        switches: The analyzer's fault switches, which must include SLOW_SWEEP.
+
+    Returns:
+        The delay for a line: the switch's value for a sweep start, otherwise 0.
+    """
+
+    def delay(line: str) -> float:
+        """Return the sweep delay for a sweep start, and none for anything else.
+
+        Args:
+            line: The received line.
+
+        Returns:
+            The delay in seconds.
+        """
+        return switches.value(SLOW_SWEEP.name) if starts_a_sweep(line) else 0.0
+
+    return delay

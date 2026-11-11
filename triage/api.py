@@ -267,7 +267,8 @@ class VerdictResponse(BaseModel):
             model, or empty when the model was asked.
         category: Whether the action answers the firmware, the bench or the test code, or
             unknown for UNKNOWN.
-        past_fixes: What fixed each cited past run, quoted from its record, in citation order.
+        past_fixes: What fixed each cited past run, then each other offered run resolved by
+            the same action, quoted from its record.
     """
 
     fix: str

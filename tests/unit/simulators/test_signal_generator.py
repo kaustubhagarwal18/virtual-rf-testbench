@@ -7,8 +7,11 @@ from simulators.common.physics import SourceState
 from simulators.signal_generator.instrument import SignalGeneratorScpi
 from simulators.signal_generator.releases import (
     CHANGED_OUTPUT_RELEASE,
+    FREQUENCY_ERROR_PPM,
+    FREQUENCY_ERROR_RELEASE,
     LEAKY_RESET_RELEASE,
     RELEASE_CHANGES,
+    FrequencyIsOff,
 )
 
 
@@ -190,3 +193,44 @@ def test_the_leaky_release_refuses_an_instrument_without_an_offset() -> None:
     (change,) = RELEASE_CHANGES[LEAKY_RESET_RELEASE]
     with pytest.raises(TypeError, match="no level offset to keep"):
         change.apply(ScpiInstrument(Identity("VirtualRF", "X-1", "1", "1.0.0")))
+
+
+@pytest.mark.parametrize("frequency_hz", [100e6, 1e9, 5e9])
+def test_the_frequency_release_puts_out_a_frequency_off_by_its_error(frequency_hz: float) -> None:
+    """The output is FREQUENCY_ERROR_PPM high, while the setting still reads back as asked."""
+    generator = SignalGeneratorScpi(firmware_version=FREQUENCY_ERROR_RELEASE)
+    generator.process(f"FREQ {frequency_hz:g}")
+    assert float(generator.process("FREQ?")[0]) == frequency_hz
+    assert generator.source_state().frequency_hz == pytest.approx(
+        frequency_hz * (1 + FREQUENCY_ERROR_PPM * 1e-6)
+    )
+
+
+CARRIER_HZ = 1e9
+"""The frequency the frequency-release tests set."""
+
+
+def test_every_other_release_puts_out_the_frequency_asked_for() -> None:
+    """The baseline output frequency is exactly the setting."""
+    generator = make_generator()
+    generator.process(f"FREQ {CARRIER_HZ:g}")
+    assert generator.source_state().frequency_hz == CARRIER_HZ
+
+
+def test_the_frequency_release_survives_a_reset() -> None:
+    """The error is the firmware's, so *RST doesn't clear it."""
+    generator = SignalGeneratorScpi(firmware_version=FREQUENCY_ERROR_RELEASE)
+    generator.process("*RST")
+    generator.process(f"FREQ {CARRIER_HZ:g}")
+    assert generator.source_state().frequency_hz != CARRIER_HZ
+
+
+def test_the_frequency_release_refuses_an_instrument_without_a_frequency() -> None:
+    """Applying the change to an instrument that can't take a frequency error is a type error."""
+    with pytest.raises(TypeError, match="no output frequency"):
+        FrequencyIsOff().apply(ScpiInstrument(Identity("VirtualRF", "X", "1", "1.0")))
+
+
+def test_the_frequency_release_is_listed() -> None:
+    """The release appears in the table of simulated releases."""
+    assert FREQUENCY_ERROR_RELEASE in RELEASE_CHANGES

@@ -6,7 +6,6 @@ import logging
 import os
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
-from functools import partial
 
 from simulators.common.app import (
     SimulatorSettings,
@@ -15,7 +14,7 @@ from simulators.common.app import (
     run_simulator,
     start_scpi_and_admin,
 )
-from simulators.common.faults import SLOW_RESPONSES, FaultSwitches
+from simulators.common.faults import SLOW_RESPONSES, FaultSwitches, every_line_delay
 from simulators.common.server import bound_port
 from simulators.signal_generator.admin import generator_admin_commands
 from simulators.signal_generator.instrument import SignalGeneratorScpi
@@ -83,7 +82,7 @@ async def start(settings: Settings) -> tuple[asyncio.Server, asyncio.Server]:
         settings.host,
         settings.scpi_port,
         settings.admin_port,
-        scpi_delay_s=partial(switches.value, SLOW_RESPONSES.name),
+        scpi_delay_s=every_line_delay(switches, SLOW_RESPONSES),
     )
     _LOGGER.info(
         "Signal generator listening",

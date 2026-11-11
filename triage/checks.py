@@ -13,7 +13,13 @@ from dataclasses import replace
 from typing import Protocol
 
 from triage.answer import Verdict
-from triage.evidence import SavedRun, firmware_changed, instrument_errors, no_signal_note
+from triage.evidence import (
+    SavedRun,
+    failed_level_reading,
+    firmware_changed,
+    instrument_errors,
+    no_signal_note,
+)
 from triage.prompt import Fix
 
 
@@ -165,11 +171,43 @@ class AlignmentWithoutSignalCheck:
         )
 
 
+class AlignmentWithoutLevelReadingCheck:
+    """Refuse a self-alignment verdict when no level or power reading is out of limits.
+
+    An analyzer's alignment error shifts the levels it reads; it doesn't move a frequency,
+    stop a setup step or time out a query. In CI, a run with two faults (a release putting
+    the frequency 4 ppm high, and a 3 dB alignment error) had its frequency failures
+    answered ALIGNMENT, drawn by the alignment warning in the run's logs (ADR 0020).
+    """
+
+    def review(self, run: SavedRun, verdict: Verdict) -> Verdict:
+        """Overrule ALIGNMENT when no failed reading is a level or a power.
+
+        Args:
+            run: The run the verdict is about, whole or focused on one failure.
+            verdict: The model's verdict.
+
+        Returns:
+            The verdict, or UNKNOWN with the reason it was overruled.
+        """
+        if verdict.fix is not Fix.ALIGNMENT or failed_level_reading(run):
+            return verdict
+        return replace(
+            verdict,
+            fix=Fix.UNKNOWN,
+            overruled=(
+                "the model chose ALIGNMENT, but no level or power reading is out of limits "
+                "in this failure: an alignment error shifts levels, not frequencies"
+            ),
+        )
+
+
 DEFAULT_CHECKS: tuple[VerdictCheck, ...] = (
     ForeignReleaseCheck(),
     FirmwareUnchangedCheck(),
     TimeoutWithInstrumentErrorCheck(),
     AlignmentWithoutSignalCheck(),
+    AlignmentWithoutLevelReadingCheck(),
 )
 """The checks the service applies to every verdict."""
 

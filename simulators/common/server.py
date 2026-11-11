@@ -32,7 +32,7 @@ async def serve_lines(
     name: str,
     lock: asyncio.Lock | None = None,
     connection_log_level: int = logging.INFO,
-    delay_s: Callable[[], float] | None = None,
+    delay_s: Callable[[str], float] | None = None,
 ) -> asyncio.Server:
     """Start a server that runs each received line through a handler.
 
@@ -47,7 +47,7 @@ async def serve_lines(
         lock: Held while the handler runs; servers on one instrument share it. None gives
             this server its own.
         connection_log_level: The level for 'client connected' and 'disconnected' logs.
-        delay_s: Asked before each line; the line then waits that many seconds before it
+        delay_s: Asked with each line; the line then waits that many seconds before it
             takes the lock, so a slow instrument never blocks servers sharing the lock.
             None means no delay.
 
@@ -66,7 +66,7 @@ async def serve_lines(
         Returns:
             The handler's replies.
         """
-        if delay_s is not None and (seconds := delay_s()) > 0:
+        if delay_s is not None and (seconds := delay_s(line)) > 0:
             await asyncio.sleep(seconds)
         async with instrument_lock:
             return await asyncio.to_thread(_run_handler, handler, line, name, peer)

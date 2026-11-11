@@ -1,0 +1,9 @@
+{
+  "fault": "firmware_frequency_error",
+  "size": null,
+  "unit": "",
+  "category": "firmware",
+  "cause": "Release 0.2.0-rc3 puts the output frequency 4 ppm high while FREQ? still reads back the setting: 4 kHz off at 1 GHz",
+  "fix": "Reported the regression; the release restored the synthesizer's frequency",
+  "action": "FIRMWARE"
+}
