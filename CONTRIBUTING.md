@@ -50,6 +50,7 @@ says why, with real numbers when something was measured.
 | pylint | 10/10 |
 | pydoclint | every module, class and function has a Google-style docstring with Args, Returns and Raises; test functions need one line |
 | bandit, codespell | clean |
+| hadolint, mbake | the Dockerfile and the Makefile pass |
 | pytest | passes, with at least 80% coverage overall |
 
 Fix the code rather than silencing a check. If a suppression is truly needed, scope it to

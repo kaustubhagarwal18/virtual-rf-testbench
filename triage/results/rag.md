@@ -22,6 +22,7 @@ flowchart LR
 | error only |  | 3 of 9 | 1 to 6 | 9 of 27 | 0 | 18 | 0 |
 | full evidence | error only | 7 of 9 | 4 to 8 | 21 of 27 | 0 | 6 | 0 |
 | full evidence, no firmware line | full evidence | 6 of 9 | 3 to 8 | 18 of 27 | 0 | 9 | 0 |
+| full evidence, no signal line | full evidence | 5 of 9 | 2 to 7 | 16 of 27 | 0 | 11 | 0 |
 | full + retrieval | full evidence | 6 of 9 | 3 to 8 | 18 of 27 | 0 | 9 | 0 |
 | full + retrieval + checks | full + retrieval | 6 of 9 | 3 to 8 | 18 of 27 | 6 | 3 | 0 |
 | full + retrieval + checks, own fault held out | full + retrieval + checks | 4 of 9 | 2 to 7 | 12 of 27 | 3 | 12 | 0 |
@@ -37,17 +38,17 @@ flowchart LR
 
 Questions right, of those asked, for each fault.
 
-| Fault | Expected | error only | full evidence | full evidence, no firmware line | full + retrieval | full + retrieval + checks | full + retrieval + checks, own fault held out | full + retrieval + checks + gates | full + retrieval + checks + gates, own fault held out | majority vote | majority vote + checks | majority vote + checks, own fault held out | majority vote + checks + gates | majority vote + checks + gates, own fault held out |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| cable_loss | CABLE | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 | 3/3 | 0/3 | 3/3 | 3/3 | 0/3 | 3/3 | 0/3 |
-| config_decimal_error | CONFIGURATION | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 | 0/3 | 3/3 | 3/3 | 0/3 | 0/3 | 0/3 |
-| config_parameter_missing | CONFIGURATION | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 |
-| config_parameter_out_of_range | CONFIGURATION | 0/3 | 0/3 | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 |
-| link_down | LINK | 0/3 | 3/3 | 3/3 | 0/3 | 0/3 | 3/3 | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
-| link_flaky | LINK | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 | 3/3 | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
-| output_command_change | FIRMWARE | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 | 3/3 | 0/3 | 3/3 | 3/3 | 0/3 | 3/3 | 0/3 |
-| reset_leaks_offset | FIRMWARE | 3/3 | 3/3 | 0/3 | 0/3 | 0/3 | 0/3 | 0/3 | 0/3 | 3/3 | 3/3 | 0/3 | 0/3 | 0/3 |
-| slow_responses | TIMEOUT | 3/3 | 0/3 | 0/3 | 0/3 | 0/3 | 0/3 | 0/3 | 0/3 | 3/3 | 3/3 | 0/3 | 0/3 | 0/3 |
+| Fault | Expected | error only | full evidence | full evidence, no firmware line | full evidence, no signal line | full + retrieval | full + retrieval + checks | full + retrieval + checks, own fault held out | full + retrieval + checks + gates | full + retrieval + checks + gates, own fault held out | majority vote | majority vote + checks | majority vote + checks, own fault held out | majority vote + checks + gates | majority vote + checks + gates, own fault held out |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| cable_loss | CABLE | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 | 3/3 | 0/3 | 3/3 | 3/3 | 0/3 | 3/3 | 0/3 |
+| config_decimal_error | CONFIGURATION | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 | 0/3 | 3/3 | 3/3 | 0/3 | 0/3 | 0/3 |
+| config_parameter_missing | CONFIGURATION | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 |
+| config_parameter_out_of_range | CONFIGURATION | 0/3 | 0/3 | 0/3 | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 |
+| link_down | LINK | 0/3 | 3/3 | 3/3 | 0/3 | 0/3 | 0/3 | 3/3 | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| link_flaky | LINK | 0/3 | 3/3 | 3/3 | 1/3 | 3/3 | 3/3 | 0/3 | 3/3 | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| output_command_change | FIRMWARE | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 | 3/3 | 0/3 | 3/3 | 3/3 | 0/3 | 3/3 | 0/3 |
+| reset_leaks_offset | FIRMWARE | 3/3 | 3/3 | 0/3 | 3/3 | 0/3 | 0/3 | 0/3 | 0/3 | 0/3 | 3/3 | 3/3 | 0/3 | 0/3 | 0/3 |
+| slow_responses | TIMEOUT | 3/3 | 0/3 | 0/3 | 0/3 | 0/3 | 0/3 | 0/3 | 0/3 | 0/3 | 3/3 | 3/3 | 0/3 | 0/3 | 0/3 |
 
 ## error only: 3 of 9 faults solved (95% interval 1 to 6); 9 of 27 questions right; 0 UNKNOWN, 18 wrong, 0 malformed
 
@@ -150,6 +151,40 @@ Confident wrong choices: FIRMWARE x6.
 | slow_responses-3 | TIMEOUT | FIRMWARE | ✗ | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> FIRMWARE (previous release) because The test_instruments_identify_as_the_release_under_test failed with an... |
 
 Confident wrong choices: FIRMWARE x6, CONFIGURATION x3.
+
+## full evidence, no signal line: 5 of 9 faults solved (95% interval 2 to 7); 16 of 27 questions right; 0 UNKNOWN, 11 wrong, 0 malformed
+
+| Question | Expected | Chosen | | Error shown → the model's answer |
+|---|---|---|---|---|
+| cable_loss-1 | CABLE | CABLE | ✓ | `Failed: path_loss_100mhz: 1.8898817412 dB, limit 0 to 0.974341649025 dB, margin -0.91554...` -> CABLE (cable and connectors) because The test results indicate that the path loss calibration does not match the cable datasheet,... |
+| cable_loss-2 | CABLE | CABLE | ✓ | `Failed: path_loss_100mhz: 1.3898817412 dB, limit 0 to 0.974341649025 dB, margin -0.41554...` -> CABLE (cable and connectors) because The test path loss calibration does not match the cable datasheet, indicating potential... |
+| cable_loss-3 | CABLE | CABLE | ✓ | `Failed: path_loss_100mhz: 2.8898817412 dB, limit 0 to 0.974341649025 dB, margin -1.91554...` -> CABLE (cable and connectors) because The test results indicate that the path loss calibration does not match the cable datasheet,... |
+| config_decimal_error-1 | CONFIGURATION | CONFIGURATION | ✓ | `AssertionError: the generator carries a level offset of 0 dB, but the bench configuration...` -> CONFIGURATION (bench configuration) because The generator's level offset is expected to be 15 dB, but the configuration indicates... |
+| config_decimal_error-2 | CONFIGURATION | CONFIGURATION | ✓ | `AssertionError: the generator carries a level offset of 0 dB, but the bench configuration...` -> CONFIGURATION (bench configuration) because The generator's level offset is expected to be 15 dB, but the configuration indicates... |
+| config_decimal_error-3 | CONFIGURATION | CONFIGURATION | ✓ | `AssertionError: the generator carries a level offset of 0 dB, but the bench configuration...` -> CONFIGURATION (bench configuration) because The generator's level offset is expected to be 15 dB, but the configuration indicates... |
+| config_parameter_missing-1 | CONFIGURATION | CONFIGURATION | ✓ | `ConfigurationError: BENCH_LEVEL_OFFSET_DB is not set in the bench configuration` -> CONFIGURATION (bench configuration) because ConfigurationError: BENCH_LEVEL_OFFSET_DB is not set in the bench configuration |
+| config_parameter_missing-2 | CONFIGURATION | CONFIGURATION | ✓ | `ConfigurationError: BENCH_LEVEL_OFFSET_DB is not set in the bench configuration` -> CONFIGURATION (bench configuration) because ConfigurationError: BENCH_LEVEL_OFFSET_DB is not set in the bench configuration |
+| config_parameter_missing-3 | CONFIGURATION | CONFIGURATION | ✓ | `ConfigurationError: BENCH_LEVEL_OFFSET_DB is not set in the bench configuration` -> CONFIGURATION (bench configuration) because ConfigurationError: BENCH_LEVEL_OFFSET_DB is not set in the bench configuration |
+| config_parameter_out_of_range-1 | CONFIGURATION | FIRMWARE | ✗ | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> FIRMWARE (previous release) because The configuration error suggests a regression in the firmware of the instrument, which is the... |
+| config_parameter_out_of_range-2 | CONFIGURATION | FIRMWARE | ✗ | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> FIRMWARE (previous release) because The configuration error suggests a regression in the firmware of the instrument, which is the... |
+| config_parameter_out_of_range-3 | CONFIGURATION | FIRMWARE | ✗ | `ConfigurationError: BENCH_LEVEL_OFFSET_DB=80 is outside the instrument's range of -50 to...` -> FIRMWARE (previous release) because The configuration error suggests a regression in the firmware of the instrument, which is the... |
+| link_down-1 | LINK | CABLE | ✗ | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> CABLE (signal generator and spectrum analyzer) because The tests failed due to path_loss values exceeding the limits, indicating... |
+| link_down-2 | LINK | CABLE | ✗ | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> CABLE (signal generator and spectrum analyzer) because The tests failed due to path_loss values exceeding the limits, indicating... |
+| link_down-3 | LINK | CABLE | ✗ | `Failed: path_loss_100mhz: 109.243158555 dB, limit 0 to 0.974341649025 dB, margin -108.269...` -> CABLE (cable) because The tests failed due to path_loss values exceeding the limits, indicating no signal or a severely... |
+| link_flaky-1 | LINK | CABLE | ✗ | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> CABLE (cable and connectors) because The cable and connectors may be faulty or misaligned, causing intermittent signal issues and... |
+| link_flaky-2 | LINK | CABLE | ✗ | `Failed: path_loss_1000mhz: 110.881881396 dB, limit 1 to 2 dB, margin -108.882 dB, FAIL` -> CABLE (cable and connectors) because The tests failed due to no signal reaching the analyzer, indicating the cable or connectors... |
+| link_flaky-3 | LINK | LINK | ✓ | `Failed: path_loss_5000mhz: 110.132770235 dB, limit 2.85410196625 to 3.85410196625 dB,...` -> LINK (the path between the instruments) because No signal or intermittent signal issues found in instrument logs indicate the... |
+| output_command_change-1 | FIRMWARE | FIRMWARE | ✓ | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE (instrument firmware) because The instrument error is related to the firmware version, which has changed since the last... |
+| output_command_change-2 | FIRMWARE | FIRMWARE | ✓ | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE (instrument firmware) because The instrument error is related to the firmware version, which has changed since the last... |
+| output_command_change-3 | FIRMWARE | FIRMWARE | ✓ | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply to...` -> FIRMWARE (instrument firmware) because The instrument error is related to the firmware version, which has changed since the last... |
+| reset_leaks_offset-1 | FIRMWARE | FIRMWARE | ✓ | `AssertionError: the generator carries a level offset of -2 dB, but the bench...` -> FIRMWARE (generator firmware) because The generator's firmware is different from the last passing run, which may have introduced... |
+| reset_leaks_offset-2 | FIRMWARE | FIRMWARE | ✓ | `AssertionError: the generator carries a level offset of -2 dB, but the bench...` -> FIRMWARE (generator firmware) because The generator's firmware is different from the last passing run, which may have introduced... |
+| reset_leaks_offset-3 | FIRMWARE | FIRMWARE | ✓ | `AssertionError: the generator carries a level offset of -2 dB, but the bench...` -> FIRMWARE (generator firmware) because The generator's firmware is different from the last passing run, which may have introduced... |
+| slow_responses-1 | TIMEOUT | FIRMWARE | ✗ | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> FIRMWARE (previous release) because The test failures are due to an instrument timeout error, which could indicate a firmware... |
+| slow_responses-2 | TIMEOUT | FIRMWARE | ✗ | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> FIRMWARE (previous release) because The test failures are due to an InstrumentTimeoutError, which could indicate a regression in... |
+| slow_responses-3 | TIMEOUT | FIRMWARE | ✗ | `drivers.session.InstrumentTimeoutError: TCPIP::127.0.0.1::5025::SOCKET: no reply within...` -> FIRMWARE (previous release) because The test failures are due to an instrument timeout error, which could indicate a firmware... |
+
+Confident wrong choices: FIRMWARE x6, CABLE x5.
 
 ## full + retrieval: 6 of 9 faults solved (95% interval 3 to 8); 18 of 27 questions right; 0 UNKNOWN, 9 wrong, 0 malformed
 
@@ -484,9 +519,10 @@ Confident wrong choices: LINK x3, CONFIGURATION x3.
 ## Findings
 
 - Best scenario: majority vote, 9 of 9 faults solved (95% interval 6 to 9); 27 of 27 questions right; 0 UNKNOWN, 0 wrong, 0 malformed.
-- A fault's questions split (some right, some wrong) in 0 of 117 fault-and-scenario cells; otherwise they were answered alike, so the fault, not the question, is the unit the scores count.
+- A fault's questions split (some right, some wrong) in 1 of 126 fault-and-scenario cells; otherwise they were answered alike, so the fault, not the question, is the unit the scores count.
 - error only to full evidence raised faults solved by 4 (3 to 7 of 9); confident wrong answers went from 18 to 6 of 27.
 - full evidence to full evidence, no firmware line lowered faults solved by 1 (7 to 6 of 9); confident wrong answers went from 6 to 9 of 27.
+- full evidence to full evidence, no signal line lowered faults solved by 2 (7 to 5 of 9); confident wrong answers went from 6 to 11 of 27.
 - full evidence to full + retrieval lowered faults solved by 1 (7 to 6 of 9); confident wrong answers went from 6 to 9 of 27.
 - full + retrieval to full + retrieval + checks did not change the faults solved (6 to 6 of 9); confident wrong answers went from 9 to 3 of 27.
 - full + retrieval + checks to full + retrieval + checks, own fault held out lowered faults solved by 2 (6 to 4 of 9); confident wrong answers went from 3 to 12 of 27.
@@ -514,7 +550,7 @@ Confident wrong choices: LINK x3, CONFIGURATION x3.
 - full + retrieval + checks + gates, own fault held out: the gates answered UNKNOWN without asking the model on 21 of 27 questions; without the gates, 9 of those were confident wrong answers and 9 were right.
 - majority vote + checks + gates: the gates answered UNKNOWN before the vote on 9 of 27 questions; without the gates, 0 of those were confident wrong answers and 9 were right.
 - majority vote + checks + gates, own fault held out: the gates answered UNKNOWN before the vote on 21 of 27 questions; without the gates, 6 of those were confident wrong answers and 6 were right.
-- Most common confident wrong choice: FIRMWARE (30 times across the scenarios).
+- Most common confident wrong choice: FIRMWARE (36 times across the scenarios).
 - Right in every question of every scenario: none.
 
 6 faults have no size to vary (config_decimal_error, config_parameter_missing, config_parameter_out_of_range, link_down, output_command_change, reset_leaks_offset), so their questions repeat their history runs' scenario and differ only in timing and reading noise (see triage/data/README.md). Of the 9 faults majority vote solved, 6 are among them: on those, retrieval finds a near-identical past run, which shows recall, not generalising to a new one.

@@ -133,13 +133,27 @@ def test_an_unusable_reply_is_shown_as_a_result_not_a_crash(tmp_path: Path) -> N
     assert not result.retrieval.right
 
 
-def test_render_names_the_change_retrieval_made(tmp_path: Path) -> None:
-    """The report marks each verdict and states the action retrieval changed it to."""
-    provider = FakeProvider([FIRMWARE_REPLY, CABLE_REPLY])
-    report = render(run_demo(cable_run(tmp_path), provider, demo_retriever()))
+@pytest.mark.parametrize(
+    ("replies", "sentence"),
+    [
+        (
+            [FIRMWARE_REPLY, CABLE_REPLY],
+            "Retrieval changed the verdict from FIRMWARE to CABLE, the resolving fix.",
+        ),
+        (
+            [CABLE_REPLY_NO_CITE, FIRMWARE_REPLY],
+            "Retrieval changed the verdict from CABLE to FIRMWARE, not the resolving fix.",
+        ),
+    ],
+)
+def test_render_names_the_change_retrieval_made(
+    tmp_path: Path, replies: list[str], sentence: str
+) -> None:
+    """The report marks each verdict and says whether retrieval moved it to the resolving fix."""
+    report = render(run_demo(cable_run(tmp_path), FakeProvider(replies), demo_retriever()))
     assert "[wrong]" in report
     assert "[RIGHT]" in report
-    assert "changed the verdict from FIRMWARE to CABLE to the resolving fix" in report
+    assert sentence in report
 
 
 def test_render_says_when_the_verdict_did_not_change(tmp_path: Path) -> None:

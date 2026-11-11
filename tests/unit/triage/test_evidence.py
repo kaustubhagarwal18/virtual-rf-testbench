@@ -10,6 +10,7 @@ from triage.evidence import (
     EVALUATED_LEVELS,
     FULL,
     FULL_WITHOUT_FIRMWARE,
+    FULL_WITHOUT_SIGNAL,
     LEVELS,
     NO_SIGNAL_LOG,
     SavedRun,
@@ -248,23 +249,31 @@ def test_the_error_only_evidence_stays_the_pasted_message(tmp_path: Path) -> Non
     assert build_evidence(run, ERROR_ONLY) == TIMED_OUT_TEST["message"]
 
 
-def test_the_ablation_drops_only_the_firmware_line(tmp_path: Path) -> None:
-    """Without the firmware line, every other line of the full evidence is unchanged."""
+@pytest.mark.parametrize(
+    ("level", "dropped_prefix"),
+    [(FULL_WITHOUT_FIRMWARE, "Instruments:"), (FULL_WITHOUT_SIGNAL, "No signal:")],
+)
+def test_an_ablation_drops_only_its_own_line(
+    tmp_path: Path, level: str, dropped_prefix: str
+) -> None:
+    """Each ablation removes exactly its one line; every other line of the full evidence stays."""
     folder = write_run(tmp_path / "run", [FAILING_TEST])
     results = json.loads((folder / "results.json").read_text(encoding="utf-8"))
     results["firmware_versions"] = {"analyzer": "0.1.0", "generator": "0.1.0"}
     (folder / "results.json").write_text(json.dumps(results), encoding="utf-8")
+    (folder / "logs.txt").write_text(NO_SIGNAL_LINE + "\n", encoding="utf-8")
     run = SavedRun.load(folder)
     full = build_evidence(run, FULL).splitlines()
-    ablated = build_evidence(run, FULL_WITHOUT_FIRMWARE).splitlines()
-    assert [line for line in full if not line.startswith("Instruments:")] == ablated
+    ablated = build_evidence(run, level).splitlines()
+    assert [line for line in full if not line.startswith(dropped_prefix)] == ablated
     assert len(full) == len(ablated) + 1
 
 
-def test_the_ablation_is_evaluated_but_not_offered_to_callers() -> None:
-    """A request may ask for error-only or full; only the evaluation builds the ablation."""
+def test_the_ablations_are_evaluated_but_not_offered_to_callers() -> None:
+    """A request may ask for error-only or full; only the evaluation builds the ablations."""
     assert FULL_WITHOUT_FIRMWARE not in LEVELS
-    assert set(EVALUATED_LEVELS) == {*LEVELS, FULL_WITHOUT_FIRMWARE}
+    assert FULL_WITHOUT_SIGNAL not in LEVELS
+    assert set(EVALUATED_LEVELS) == {*LEVELS, FULL_WITHOUT_FIRMWARE, FULL_WITHOUT_SIGNAL}
 
 
 NO_SIGNAL_LINE = (

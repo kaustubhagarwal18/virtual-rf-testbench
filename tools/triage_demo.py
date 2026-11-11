@@ -25,7 +25,7 @@ from triage.retrieval import DEFAULT_HISTORY, DEFAULT_TOP_K, InMemoryRetriever, 
 from triage.service import triage_run
 from triage.textfmt import clip
 
-DEFAULT_RUN = Path("triage/data/runs/questions/cable_loss-1")
+DEFAULT_RUN = Path("triage/data/runs/questions/config_parameter_out_of_range-1")
 """The run the demo shows when none is named: retrieval flips its verdict to the right fix."""
 
 UNUSABLE = "unusable"
@@ -175,10 +175,10 @@ def render(result: DemoResult) -> str:
         "",
     ]
     if result.baseline.chosen != result.retrieval.chosen:
-        verb = "to the resolving fix" if result.retrieval.right else "but not to the resolving fix"
+        verdict = "the resolving fix" if result.retrieval.right else "not the resolving fix"
         lines.append(
             f"Retrieval changed the verdict from {result.baseline.chosen} "
-            f"to {result.retrieval.chosen} {verb}."
+            f"to {result.retrieval.chosen}, {verdict}."
         )
     else:
         lines.append(f"Retrieval did not change the verdict ({result.baseline.chosen}).")

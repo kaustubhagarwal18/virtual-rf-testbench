@@ -251,11 +251,14 @@ FULL = "full"
 FULL_WITHOUT_FIRMWARE = "full-without-firmware"
 """FULL minus its firmware line: an ablation, to measure what that one line does."""
 
+FULL_WITHOUT_SIGNAL = "full-without-signal"
+"""FULL minus its "No signal" line: an ablation, to measure what that one line does."""
+
 LEVELS = (ERROR_ONLY, FULL)
 """The evidence levels a caller may ask for."""
 
-EVALUATED_LEVELS = (*LEVELS, FULL_WITHOUT_FIRMWARE)
-"""Every level the evaluation can score, the ablation included."""
+EVALUATED_LEVELS = (*LEVELS, FULL_WITHOUT_FIRMWARE, FULL_WITHOUT_SIGNAL)
+"""Every level the evaluation can score, the ablations included."""
 
 NOTABLE_LOG_LEVELS = ("WARNING", "ERROR")
 """Instrument log lines worth showing: a healthy run's INFO lines are noise."""
@@ -385,7 +388,7 @@ def error_only_evidence(run: SavedRun) -> str:
     return failure.detail or failure.where
 
 
-def full_evidence(run: SavedRun, firmware_line: bool = True) -> str:
+def full_evidence(run: SavedRun, firmware_line: bool = True, signal_line: bool = True) -> str:
     """Build everything the run recorded, led by the failure the rest follows from.
 
     A missing signal and an SCPI error the instruments reported come before the first
@@ -395,6 +398,7 @@ def full_evidence(run: SavedRun, firmware_line: bool = True) -> str:
     Args:
         run: The run.
         firmware_line: Whether to state the instruments' versions; False only for the ablation.
+        signal_line: Whether to state a missing signal; False only for the ablation.
 
     Returns:
         The evidence as text, ready to put in a prompt.
@@ -405,7 +409,8 @@ def full_evidence(run: SavedRun, firmware_line: bool = True) -> str:
     # Only the reason's first line: where there are parameters they carry the same numbers
     # more precisely, and a prompt shouldn't say everything twice.
     reason = failure.detail.splitlines()[0] if failure.detail else ""
-    lines = [note for note in (no_signal_note(run), instrument_error_note(run)) if note]
+    signal = no_signal_note(run) if signal_line else ""
+    lines = [note for note in (signal, instrument_error_note(run)) if note]
     lines += [
         f"First failure: {failure.where} (found in {failure.source}).",
         f"Reason: {reason}",
@@ -439,10 +444,23 @@ def _full_without_firmware(run: SavedRun) -> str:
     return full_evidence(run, firmware_line=False)
 
 
+def _full_without_signal(run: SavedRun) -> str:
+    """Build the full evidence without its "No signal" line, for the ablation.
+
+    Args:
+        run: The run.
+
+    Returns:
+        The evidence as text.
+    """
+    return full_evidence(run, signal_line=False)
+
+
 _BUILDERS: dict[str, Callable[[SavedRun], str]] = {
     ERROR_ONLY: error_only_evidence,
     FULL: full_evidence,
     FULL_WITHOUT_FIRMWARE: _full_without_firmware,
+    FULL_WITHOUT_SIGNAL: _full_without_signal,
 }
 """How each evidence level is built; a new level is a new entry, not a new branch."""
 

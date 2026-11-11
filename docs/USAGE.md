@@ -178,11 +178,13 @@ With local Ollama running and both models pulled:
 make triage-demo RUN=triage/data/runs/questions/cable_loss-1
 ```
 
-shows one failure triaged with and without past runs, side by side. `make triage RUN=…`
+shows one failure triaged with and without past runs, side by side; it leaves out the
+checks and the disagreement gate, to show what the past runs alone add. `make triage RUN=…`
 explains one run, and `make eval` scores every scenario; answers are cached in
 `.cache/triage-answers/`, so a rerun asks only what changed.
 
-`make triage-api` serves the same pipeline on `http://127.0.0.1:8000`. From another terminal:
+`make triage-api` serves the whole pipeline, checks and disagreement gate included, on
+`http://127.0.0.1:8000`. From another terminal:
 
 ```
 jq -n --slurpfile results triage/data/runs/questions/cable_loss-1/results.json '{results: $results[0]}' | curl -s -X POST http://127.0.0.1:8000/triage -H 'Content-Type: application/json' -d @-

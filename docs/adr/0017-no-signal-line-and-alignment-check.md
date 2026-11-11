@@ -59,3 +59,5 @@ of 9, then confident wrong answers of 27.
   too; cached answers for other prompts are unaffected.
 - ADR 0015's tables record the numbers before this change; `triage/results/rag.md` has the
   current ones.
+- The "Before" column for full evidence is reproducible: `make eval` runs it as the
+  `full evidence, no signal line` ablation (5 of 9, 11 wrong).

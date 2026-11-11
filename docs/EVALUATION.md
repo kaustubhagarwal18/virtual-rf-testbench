@@ -25,7 +25,7 @@ turn an answer into `UNKNOWN` or refuse it, never pick a different action.
 ## Results
 
 <p align="center">
-  <img src="images/triage-results.svg" width="860" alt="Faults solved out of 9: error only 3, full evidence 7, without the version line 6; with retrieval 6, with checks 6, with the disagreement gate 5 and no wrong answers; a majority vote over the same past runs, with no model, 9 with no wrong answers, and 6 with the gate; with the question's own fault held out, 4 with checks (the vote 4) and 1 with both gates (the vote 2).">
+  <img src="images/triage-results.svg" width="860" alt="Faults solved out of 9: error only 3, full evidence 7, without the version line 6, without the no-signal line 5; with retrieval 6, with checks 6, with the disagreement gate 5 and no wrong answers; a majority vote over the same past runs, with no model, 9 with no wrong answers, and 6 with the gate; with the question's own fault held out, 4 with checks (the vote 4) and 1 with both gates (the vote 2).">
 </p>
 
 Counts, not percentages: with 9 faults, "6 of 9, 3 to 8" is honest where "67%" is not.
@@ -45,7 +45,8 @@ Every question's answer is in [`triage/results/rag.md`](../triage/results/rag.md
   model copies "recalibrated" from `link_down`'s past fixes into `ALIGNMENT`, and
   `reset_leaks_offset` becomes `CONFIGURATION`. With the fault held out, 4 of 9.
 - **Stating a fact from the logs can matter.** A line saying the analyzer logged "No signal
-  reaching the analyzer" took the evidence-only answer from 5 to 7 of 9 (ADR 0017).
+  reaching the analyzer" takes the evidence-only answer from 5 to 7 of 9: the ablation
+  without it loses `link_down` and two of three `link_flaky` questions (ADR 0017).
 - **A small model follows the odd precedent out.** Offered two past runs of its own fault
   and one look-alike, it often copies the look-alike. That is why the gate exists.
 - **Wording matters.** "Firmware: … (unchanged)" pulled the model to `FIRMWARE`. Saying
