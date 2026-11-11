@@ -10,6 +10,7 @@ from tests.unit.triage.test_evidence import FAILING_TEST, NO_SIGNAL_LINE, write_
 from triage.answer import Verdict
 from triage.checks import (
     DEFAULT_CHECKS,
+    AlignmentWithoutLevelReadingCheck,
     AlignmentWithoutSignalCheck,
     FirmwareUnchangedCheck,
     ForeignReleaseCheck,
@@ -147,12 +148,13 @@ def test_the_measured_miss_is_caught_by_the_default_checks(tmp_path: Path) -> No
 
 
 def test_the_service_applies_every_check() -> None:
-    """The default checks are the release, firmware, timeout and alignment checks, in order."""
+    """The default checks are the release, firmware, timeout and two alignment checks, in order."""
     assert [type(check) for check in DEFAULT_CHECKS] == [
         ForeignReleaseCheck,
         FirmwareUnchangedCheck,
         TimeoutWithInstrumentErrorCheck,
         AlignmentWithoutSignalCheck,
+        AlignmentWithoutLevelReadingCheck,
     ]
 
 
@@ -177,5 +179,42 @@ def test_only_alignment_without_a_signal_is_overruled(
         assert reviewed.fix is Fix.UNKNOWN
         assert "no signal" in reviewed.overruled
         assert reviewed.cited == ["past-1"]
+    else:
+        assert reviewed == verdict
+
+
+FAILED_UNITS: dict[str, tuple[str, ...]] = {
+    "a level": ("dBm",),
+    "a path loss": ("dB",),
+    "a level and a frequency": ("Hz", "dBm"),
+    "a frequency": ("Hz",),
+    "a relative level": ("dBc",),
+    "no reading": (),
+}
+"""What a failed test's out-of-limit readings can be measured in."""
+
+LEVEL_CASES = {"a level", "a path loss", "a level and a frequency"}
+"""The cases with a level or power reading out of limits, which alignment can explain."""
+
+
+def run_with_failed_units(tmp_path: Path, units: tuple[str, ...]) -> SavedRun:
+    """Return a failed run whose one failed test has out-of-limit readings in these units."""
+    measurement = FAILING_TEST["measurements"][0]  # type: ignore[index]
+    measurements = [{**measurement, "name": f"reading_{unit}", "unit": unit} for unit in units]
+    test = {**FAILING_TEST, "measurements": measurements}
+    return SavedRun.load(write_run(tmp_path / "run", [test]))
+
+
+@pytest.mark.parametrize(("fix", "case"), list(itertools.product(list(Fix), sorted(FAILED_UNITS))))
+def test_only_alignment_without_a_failed_level_reading_is_overruled(
+    tmp_path: Path, fix: Fix, case: str
+) -> None:
+    """Alignment shifts levels, not frequencies: ALIGNMENT without a failed level is refused."""
+    run = run_with_failed_units(tmp_path, FAILED_UNITS[case])
+    verdict = Verdict(fix, "analyzer", "because", ["past-1"])
+    reviewed = AlignmentWithoutLevelReadingCheck().review(run, verdict)
+    if fix is Fix.ALIGNMENT and case not in LEVEL_CASES:
+        assert reviewed.fix is Fix.UNKNOWN
+        assert "no level or power reading" in reviewed.overruled
     else:
         assert reviewed == verdict

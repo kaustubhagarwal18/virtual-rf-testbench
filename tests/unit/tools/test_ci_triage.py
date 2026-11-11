@@ -13,6 +13,7 @@ from tests.unit.tools.test_triage_demo import StubRetriever, UnreachableProvider
 from tests.unit.triage.test_evidence import FAILING_TEST, write_run
 from tools.ci_triage import (
     HEADING,
+    NO_SAFE_ANSWER,
     SHOWN_TESTS,
     TEXT_LIMIT,
     main,
@@ -67,7 +68,7 @@ LEVEL_GROUP = FailureGroup(
 def render_verdict(verdict: Verdict, group: FailureGroup = LEVEL_GROUP) -> str:
     """Render the section for a run with one failure that got this verdict."""
     return render_triage(
-        RunTriage([FailureAnswer((group,), verdict)], failed_tests=1, distinct_failures=1)
+        RunTriage([FailureAnswer(group, verdict)], failed_tests=1, distinct_failures=1)
     )
 
 
@@ -245,9 +246,9 @@ def test_an_answer_says_what_to_do_in_the_action_list_words() -> None:
     "verdict",
     [Verdict.gated("disagree"), Verdict(Fix.UNKNOWN, "", "nothing points anywhere")],
 )
-def test_an_unknown_has_nothing_to_do(verdict: Verdict) -> None:
-    """UNKNOWN is no action, so there is no 'What to do' line."""
-    assert "What to do" not in render_verdict(verdict)
+def test_an_unknown_says_to_look_by_hand(verdict: Verdict) -> None:
+    """UNKNOWN has no action, so what to do is to look at the failure by hand."""
+    assert f"- **What to do:** {NO_SAFE_ANSWER}" in render_verdict(verdict)
 
 
 def test_a_single_failure_names_its_tests_and_says_it_is_one() -> None:
@@ -266,26 +267,36 @@ def test_each_answer_lists_the_tests_it_covers_and_counts_the_rest() -> None:
     assert "`test_case[3]`" not in section
 
 
-def test_several_answers_each_get_a_block_under_one_summary() -> None:
-    """Two different answers each say what to do, under a summary of how the run split."""
-    alignment = Verdict(Fix.ALIGNMENT, "analyzer", "reads high", [])
+def test_every_failure_gets_a_numbered_block_saying_what_to_do() -> None:
+    """Each failure is named in its own heading and says what to do, even if answers agree."""
     other = FailureGroup("test_other: Failed", ("tests/x.py::test_other",))
+    third = FailureGroup("test_third: Failed", ("tests/x.py::test_third",))
     result = RunTriage(
-        [FailureAnswer((LEVEL_GROUP,), answered()), FailureAnswer((other,), alignment)],
+        [
+            FailureAnswer(LEVEL_GROUP, answered()),
+            FailureAnswer(other, Verdict(Fix.ALIGNMENT, "analyzer", "reads high", [])),
+            FailureAnswer(third, answered()),
+        ],
         failed_tests=4,
-        distinct_failures=2,
+        distinct_failures=3,
     )
     section = render_triage(result)
-    assert "4 failed tests: 2 distinct failures, each triaged on its own; 2 different" in section
+    assert "4 failed tests: 3 distinct failures, each triaged on its own below." in section
     assert section.count("- **What to do:**") == len(result.answers)
-    assert section.index("`CABLE`") < section.index("`ALIGNMENT`")
+    assert "#### Failure 1 of 3: `test_level_at_1ghz: Failed`" in section
+    assert "#### Failure 2 of 3: `test_other: Failed`" in section
+    assert "#### Failure 3 of 3: `test_third: Failed`" in section
+    cable = [
+        answer for answer in result.answers if answer.verdict and answer.verdict.fix is Fix.CABLE
+    ]
+    assert section.count("`CABLE`") == len(cable)
 
 
 def test_failures_past_the_cap_are_named_as_not_triaged() -> None:
     """A failure left out by the cap is listed with its test count, as code."""
     skipped = FailureGroup("<b>test_x</b>: Failed", ("a::test_x", "a::test_y"))
     result = RunTriage(
-        [FailureAnswer((LEVEL_GROUP,), answered())],
+        [FailureAnswer(LEVEL_GROUP, answered())],
         untriaged=[skipped],
         failed_tests=3,
         distinct_failures=2,
@@ -302,14 +313,15 @@ def test_a_failure_without_a_usable_reply_says_why_and_keeps_the_others() -> Non
     """An unusable reply for one failure is that block's problem; the other block stands."""
     result = RunTriage(
         [
-            FailureAnswer((LEVEL_GROUP,), None, "the model's answer: not JSON"),
-            FailureAnswer((FailureGroup("t: Failed", ("a::t",)),), answered()),
+            FailureAnswer(LEVEL_GROUP, None, "the model's answer: not JSON"),
+            FailureAnswer(FailureGroup("t: Failed", ("a::t",)), answered()),
         ],
         failed_tests=2,
         distinct_failures=2,
     )
     section = render_triage(result)
-    assert "**No answer**" in section
+    assert "- **Answer:** none" in section
+    assert f"- **What to do:** {NO_SAFE_ANSWER}" in section
     assert "- **Problem:** `the model's answer: not JSON`" in section
     assert "`CABLE`" in section
 
@@ -323,8 +335,8 @@ def test_test_names_are_only_ever_shown_as_code(hostile: str) -> None:
     assert outside_code_spans(section) == outside_code_spans(baseline)
 
 
-def test_main_asks_once_per_failure_and_merges_the_same_answer(tmp_path: Path) -> None:
-    """Two failures that both get CABLE cost two prompts and show one block."""
+def test_main_asks_once_per_failure_and_shows_each(tmp_path: Path) -> None:
+    """Two failures that both get CABLE cost two prompts and show two blocks."""
     tests = [failing_test("test_a"), failing_test("test_b")]
     folder = write_run(tmp_path / "run", tests)
     out = tmp_path / "triage.md"
@@ -333,8 +345,8 @@ def test_main_asks_once_per_failure_and_merges_the_same_answer(tmp_path: Path) -
     section = out.read_text(encoding="utf-8")
     assert code == 0
     assert len(provider.prompts) == len(tests)
-    assert section.count("`CABLE`") == 1
-    assert "- **Tests (2):** `test_a`, `test_b`" in section
+    assert section.count("`CABLE`") == len(tests)
+    assert "#### Failure 2 of 2: `test_b: Failed`" in section
 
 
 def test_main_triages_only_as_many_failures_as_asked(tmp_path: Path) -> None:

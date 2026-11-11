@@ -7,7 +7,14 @@ import pytest
 
 from tests.unit.triage.test_evidence import PASSING_TEST, write_run
 from triage.answer import MalformedAnswerError, Verdict
-from triage.evidence import SEQUENCE_FILE, SavedRun, failed_tests, first_failure, full_evidence
+from triage.evidence import (
+    NO_LEVEL_READING,
+    SEQUENCE_FILE,
+    SavedRun,
+    failed_tests,
+    first_failure,
+    full_evidence,
+)
 from triage.failures import (
     DEFAULT_MAX_FAILURES,
     failure_groups,
@@ -166,16 +173,21 @@ def test_each_failure_is_asked_once_and_the_rest_are_listed_past_the_cap(
     assert result.distinct_failures == len(tests)
 
 
-def test_failures_with_the_same_answer_are_merged(tmp_path: Path) -> None:
-    """Two failures that both get CABLE are one answer naming both; ALIGNMENT stays apart."""
+def test_every_failure_keeps_its_own_answer_even_when_two_agree(tmp_path: Path) -> None:
+    """Three failures, two of them CABLE: three answers, each naming its own failure."""
     tests = [failing(name, "Failed: x") for name in ("test_a", "test_b", "test_c")]
     _, answer = answer_by_test({"test_a": Fix.CABLE, "test_b": Fix.ALIGNMENT, "test_c": Fix.CABLE})
     result = triage_failures(load(tmp_path, tests), answer)
     assert [answered.verdict.fix for answered in result.answers if answered.verdict] == [
         Fix.CABLE,
         Fix.ALIGNMENT,
+        Fix.CABLE,
     ]
-    assert result.answers[0].test_ids == ("test_a", "test_c")
+    assert [answered.group.test_ids for answered in result.answers] == [
+        ("test_a",),
+        ("test_b",),
+        ("test_c",),
+    ]
 
 
 def test_an_unusable_answer_for_one_failure_keeps_the_others(tmp_path: Path) -> None:
@@ -218,3 +230,31 @@ def test_a_message_naming_no_exception_is_grouped_by_its_outcome(tmp_path: Path)
     """A message without an exception class falls back to the outcome as its kind."""
     plain = failing("test_plain", "the reading never settled", outcome="error")
     assert failure_groups(load(tmp_path, [plain]))[0].description == "test_plain: error"
+
+
+def with_reading(test_id: str, unit: str) -> dict[str, object]:
+    """Return a failed test whose one out-of-limit reading is in the given unit."""
+    reading = {
+        "name": f"reading_{unit}",
+        "value": 1.0,
+        "unit": unit,
+        "limit_low": 0.0,
+        "limit_high": 0.5,
+        "margin": -0.5,
+        "passed": False,
+    }
+    return {**failing(test_id, "Failed: reading out of limits"), "measurements": [reading]}
+
+
+def test_a_focused_frequency_failure_says_no_level_reading_failed(tmp_path: Path) -> None:
+    """Another failure's level warning can't be read as this one's cause: the line says so."""
+    run = load(tmp_path, [with_reading("test_level", "dBm"), with_reading("test_frequency", "Hz")])
+    level, frequency = failure_groups(run)
+    assert NO_LEVEL_READING in full_evidence(focus(run, frequency, [level, frequency]))
+    assert NO_LEVEL_READING not in full_evidence(focus(run, level, [level, frequency]))
+
+
+def test_a_whole_run_never_gets_the_reading_line(tmp_path: Path) -> None:
+    """The line is for focused runs only, so history and the evaluation keep their evidence."""
+    run = load(tmp_path, [with_reading("test_frequency", "Hz")])
+    assert NO_LEVEL_READING not in full_evidence(run)

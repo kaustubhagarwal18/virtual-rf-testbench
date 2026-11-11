@@ -154,26 +154,17 @@ def focus(run: SavedRun, group: FailureGroup, groups: Sequence[FailureGroup]) ->
 
 @dataclass(frozen=True)
 class FailureAnswer:
-    """The answer for one or more failures that got the same one.
+    """The answer for one distinct failure.
 
     Attributes:
-        groups: The failures it answers.
+        group: The failure.
         verdict: What triage decided; None when the model's reply couldn't be used.
         problem: Why there is no verdict, when there isn't one.
     """
 
-    groups: tuple[FailureGroup, ...]
+    group: FailureGroup
     verdict: Verdict | None
     problem: str = ""
-
-    @property
-    def test_ids(self) -> tuple[str, ...]:
-        """The names of every test this answer covers.
-
-        Returns:
-            The tests' names, group by group.
-        """
-        return tuple(test_id for group in self.groups for test_id in group.test_ids)
 
 
 @dataclass(frozen=True)
@@ -181,7 +172,7 @@ class RunTriage:
     """Every answer for one run.
 
     Attributes:
-        answers: One per distinct answer, in the order of the first failure each covers.
+        answers: One per failure triaged, in the order the failures were found.
         untriaged: The failures past the cap, not asked about.
         failed_tests: How many tests failed or errored in the run.
         distinct_failures: How many groups those tests formed.
@@ -193,46 +184,6 @@ class RunTriage:
     failed_tests: int = 0
     distinct_failures: int = 0
     limit: int = DEFAULT_MAX_FAILURES
-
-
-def _same_answer(verdict: Verdict) -> tuple[str, str, str]:
-    """Say what makes two verdicts the same answer to a reader.
-
-    Args:
-        verdict: The verdict.
-
-    Returns:
-        Its action, with the gate's or the check's reason when one stood in for the model.
-    """
-    return verdict.fix.name, verdict.gate_reason, verdict.overruled
-
-
-def _merged(answers: list[FailureAnswer]) -> list[FailureAnswer]:
-    """Merge the answers that say the same thing, keeping the first one's words.
-
-    Args:
-        answers: One answer per failure.
-
-    Returns:
-        One answer per distinct verdict; failures without a verdict stay apart.
-    """
-    merged: list[FailureAnswer] = []
-    for answer in answers:
-        match = next(
-            (
-                index
-                for index, earlier in enumerate(merged)
-                if answer.verdict
-                and earlier.verdict
-                and _same_answer(earlier.verdict) == _same_answer(answer.verdict)
-            ),
-            None,
-        )
-        if match is None:
-            merged.append(answer)
-        else:
-            merged[match] = replace(merged[match], groups=merged[match].groups + answer.groups)
-    return merged
 
 
 def triage_failures(
@@ -248,18 +199,19 @@ def triage_failures(
         limit: How many failures to ask about; the rest are listed as untriaged.
 
     Returns:
-        The answers, merged where they agree. A reply that couldn't be used becomes that
-        failure's problem; an unreachable model still stops the whole run.
+        One answer per failure triaged, even where two agree: each failure is something
+        to act on. A reply that couldn't be used becomes that failure's problem; an
+        unreachable model still stops the whole run.
     """
     groups = failure_groups(run)
     answers = []
     for group in groups[:limit]:
         try:
-            answers.append(FailureAnswer((group,), answer(focus(run, group, groups))))
+            answers.append(FailureAnswer(group, answer(focus(run, group, groups))))
         except MalformedAnswerError as unusable:
-            answers.append(FailureAnswer((group,), None, f"the model's answer: {unusable}"))
+            answers.append(FailureAnswer(group, None, f"the model's answer: {unusable}"))
     return RunTriage(
-        answers=_merged(answers),
+        answers=answers,
         untriaged=groups[limit:],
         failed_tests=len(failed_tests(run)),
         distinct_failures=len(groups),

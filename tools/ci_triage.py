@@ -2,11 +2,12 @@
 
 The run's failed tests are split into distinct failures (triage.failures), and each of the
 first few is triaged on its own with the pipeline the API runs: the closest past runs from
-the committed history, the disagreement gate, the model, then the checks. Failures that get
-the same answer share one block. The run comes from the pull request's own
-code, so its logs are untrusted and can steer what the model writes; every piece of text
-that isn't fixed by this module is shown as inline code on one line, which GitHub never
-reads as a mention, link, image or HTML. The action itself is one key from a fixed list.
+the committed history, the disagreement gate, the model, then the checks. Each failure gets
+its own block saying what to do, even when two get the same answer. The run comes from the
+pull request's own code, so its logs are untrusted and can steer what the model writes;
+every piece of text that isn't fixed by this module is shown as inline code on one line,
+which GitHub never reads as a mention, link, image or HTML. The action itself is one key
+from a fixed list.
 
     python -m tools.ci_triage reports/failed-run --out reports/triage.md
 """
@@ -74,24 +75,31 @@ def codes(texts: Sequence[str]) -> str:
     return ", ".join(code(text) for text in texts) or "(none)"
 
 
+NO_SAFE_ANSWER = "no safe answer, so look at this failure by hand"
+"""What to do when triage has no action for a failure; fixed text, never the model's."""
+
+
 def verdict_lines(verdict: Verdict) -> list[str]:
-    """Write the lines for one verdict: the action and its cause, then the reasons.
+    """Write the bullets for one verdict: the action, what to do, and why.
 
     Args:
         verdict: What triage decided.
 
     Returns:
-        The lines. When a gate or a check stood in for the model, its reason replaces the
-        model's words, which are no longer the answer.
+        The bullets. Every verdict says what to do, UNKNOWN included. When a gate or a
+        check stood in for the model, its reason replaces the model's words, which are no
+        longer the answer.
     """
-    lines = [f"**{code(verdict.fix.name)}** · cause: **{verdict.category}**", ""]
+    to_do = NO_SAFE_ANSWER if verdict.fix is Fix.UNKNOWN else verdict.fix.value
+    lines = [
+        f"- **Answer:** **{code(verdict.fix.name)}** · cause: **{verdict.category}**",
+        f"- **What to do:** {to_do}",
+    ]
     if verdict.gate_reason:
         lines.append(f"- **Model not asked:** {code(verdict.gate_reason)}")
     elif verdict.overruled:
         lines.append(f"- **Overruled by a check:** {code(verdict.overruled)}")
     else:
-        if verdict.fix is not Fix.UNKNOWN:
-            lines.append(f"- **What to do:** {verdict.fix.value}")
         lines.append(f"- **Why:** {code(verdict.because)}")
         lines.append(f"- **Where:** {code(verdict.where)}")
         lines.append(f"- **Cited:** {codes(verdict.cited)}")
@@ -129,28 +137,31 @@ def tests_line(test_ids: Sequence[str]) -> str:
     return f"- **Tests ({len(test_ids)}):** {shown}" + (f" and {more} more" if more > 0 else "")
 
 
-def answer_lines(answer: FailureAnswer) -> list[str]:
-    """Write the lines for one answer: its verdict, or the problem, and the tests it covers.
+def answer_lines(answer: FailureAnswer, number: int, count: int) -> list[str]:
+    """Write one failure's block: what failed, its tests, and what to do about it.
 
     Args:
-        answer: The answer.
+        answer: The failure's answer.
+        number: Its place among the failures, from 1.
+        count: How many failures the run has.
 
     Returns:
-        The lines.
+        The lines, led by a heading naming the failure.
     """
-    if answer.verdict is None:
-        return [
-            "**No answer**",
-            "",
-            tests_line(answer.test_ids),
-            f"- **Problem:** {code(answer.problem)}",
-        ]
-    headline, blank, *bullets = verdict_lines(answer.verdict)
-    return [headline, blank, tests_line(answer.test_ids), *bullets]
+    heading = f"#### Failure {number} of {count}: {code(answer.group.description)}"
+    lines = [heading, "", tests_line(answer.group.test_ids)]
+    if answer.verdict is not None:
+        return lines + verdict_lines(answer.verdict)
+    return [
+        *lines,
+        "- **Answer:** none",
+        f"- **What to do:** {NO_SAFE_ANSWER}",
+        f"- **Problem:** {code(answer.problem)}",
+    ]
 
 
 def summary_line(result: RunTriage) -> str:
-    """Say how the failed tests split into distinct failures, and into how many answers.
+    """Say how the failed tests split into distinct failures.
 
     Args:
         result: The run's triage.
@@ -162,12 +173,11 @@ def summary_line(result: RunTriage) -> str:
     line = f"{_plural(result.failed_tests, 'failed test')}: {failures}"
     if result.distinct_failures == 1:
         return line + "."
-    answers = len(result.answers)
-    return line + f", each triaged on its own; {_plural(answers, 'different answer')}."
+    return line + ", each triaged on its own below."
 
 
 def render_triage(result: RunTriage) -> str:
-    """Write the section: a summary, one block per distinct answer, and any failure left over.
+    """Write the section: a summary, one block per failure triaged, and any left over.
 
     Args:
         result: The run's triage.
@@ -176,8 +186,8 @@ def render_triage(result: RunTriage) -> str:
         The section's Markdown.
     """
     lines = [HEADING, "", summary_line(result)]
-    for answer in result.answers:
-        lines += ["", *answer_lines(answer)]
+    for number, answer in enumerate(result.answers, start=1):
+        lines += ["", *answer_lines(answer, number, result.distinct_failures)]
     if result.untriaged:
         skipped = ", ".join(
             f"{code(group.description)} ({_plural(len(group.tests), 'test')})"

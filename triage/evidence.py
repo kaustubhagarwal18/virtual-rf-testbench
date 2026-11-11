@@ -155,6 +155,40 @@ def failed_tests(run: SavedRun) -> list[dict[str, Any]]:
     return [test for test in run.results.get("tests", []) if test["outcome"] != "passed"]
 
 
+LEVEL_UNITS = frozenset({"dB", "dBm"})
+"""Units of absolute level and power readings, which an analyzer's alignment error shifts.
+A relative level (dBc) and a frequency (Hz) are left as they were."""
+
+
+def failed_readings(run: SavedRun) -> list[dict[str, Any]]:
+    """List the out-of-limit readings in the tests that didn't pass.
+
+    Args:
+        run: The run.
+
+    Returns:
+        Each failed measurement's record, in the order the tests ran.
+    """
+    return [
+        measurement
+        for test in failed_tests(run)
+        for measurement in test.get("measurements", [])
+        if not measurement["passed"]
+    ]
+
+
+def failed_level_reading(run: SavedRun) -> bool:
+    """Say whether any level or power reading is out of limits in the failed tests.
+
+    Args:
+        run: The run.
+
+    Returns:
+        True when a failed reading is in dB or dBm.
+    """
+    return any(str(reading["unit"]) in LEVEL_UNITS for reading in failed_readings(run))
+
+
 def instrument_errors(run: SavedRun) -> list[str]:
     """List the SCPI errors the instruments reported in the tests that didn't pass.
 
@@ -392,6 +426,11 @@ FOCUS_KEY = "focus"
 """The results entry a focused run carries (triage.failures.focus): how many tests failed its
 way, and the descriptions of the run's other failures."""
 
+NO_LEVEL_READING = "No level or power reading is out of limits in this failure."
+"""Said of a focused failure whose out-of-limit readings are all frequencies or relative
+levels: the run's logs may warn about another failure's levels, such as an analyzer's
+alignment, and that warning is not this failure's cause."""
+
 MAX_OTHER_FAILURES = 5
 """How many of a run's other failures a focused run's evidence names."""
 
@@ -400,7 +439,8 @@ def _consequence_lines(run: SavedRun, failure: FirstFailure) -> list[str]:
     """Say what else failed besides the first failure.
 
     A whole run says how many tests failed after it. A run focused on one failure
-    (triage.failures.focus) says how many tests failed its way, and names the others.
+    (triage.failures.focus) says how many tests failed its way, that no level reading is
+    out of limits when only frequencies are, and names the other failures.
 
     Args:
         run: The run, whole or focused.
@@ -416,6 +456,8 @@ def _consequence_lines(run: SavedRun, failure: FirstFailure) -> list[str]:
         return [f"{failure.consequences} further tests failed after it, which may be consequences."]
     count = int(focused["tests"])
     lines = [f"{count} {'test' if count == 1 else 'tests'} failed this way."]
+    if failed_readings(run) and not failed_level_reading(run):
+        lines.append(NO_LEVEL_READING)
     others = [str(other) for other in focused.get("others", [])]
     if others:
         named = "; ".join(others[:MAX_OTHER_FAILURES])

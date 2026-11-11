@@ -230,7 +230,7 @@ flowchart LR
   command shows up as a timeout. It never reads `label.json`.
 - **In CI**, a run's failed tests are first split into distinct failures (`failures.py`):
   the tests one setup step stopped, or the cases of one test failing the same way. Each of
-  the first five is triaged as a run focused on it, and the same answers share a block
+  the first five is triaged as a run focused on it, and gets its own block in the comment
   (ADR 0020).
 - **Retrieval** embeds each resolved run with `nomic-embed-text` and ranks by cosine
   similarity in memory. A source is cited by a hash of its text (`past-3fa2c1d0`), never by
@@ -240,8 +240,9 @@ flowchart LR
   off-list action is refused, not interpreted.
 - **Checks** compare the verdict with facts the evidence states outright, and turn a
   contradicted one into `UNKNOWN`: `FIRMWARE` naming a release the run didn't run,
-  `FIRMWARE` when the firmware is the same release as the last passing run, and `TIMEOUT`
-  when a failed test reports an SCPI error. A check never picks another action in the
+  `FIRMWARE` when the firmware is the same release as the last passing run, `TIMEOUT`
+  when a failed test reports an SCPI error, and `ALIGNMENT` when no signal reached the
+  analyzer or no level or power reading is out of limits. A check never picks another action in the
   model's place.
 - **Gates** (`abstain.py`) answer `UNKNOWN` before the model is asked. The API applies one:
   the retrieved precedents record different actions. The evaluation also scores a second,
