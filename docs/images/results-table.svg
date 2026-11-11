@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 318" width="900" height="318" role="img" aria-labelledby="title desc">
   <title id="title">Faults solved and wrong answers by configuration</title>
-  <desc id="desc">Error message only: 3 of 9 faults solved (95% interval 1 to 6), 18 of 27 answers wrong. Full evidence: 7 (4 to 8), 6 wrong. Plus the 3 closest past runs and checks: 6 (3 to 8), 3 wrong. Plus the disagreement gate, which is what the API runs: 5 (2 to 7), 0 wrong. Majority vote of the 3 past runs, with no model: 9 (6 to 9), 0 wrong.</desc>
+  <desc id="desc">Error message only: 5 of 13 faults solved (95% interval 2 to 8), 24 of 39 answers wrong. Full evidence: 8 (5 to 11), 15 wrong. Plus the 3 closest past runs and checks: 11 (8 to 12), 3 wrong. Plus the disagreement gate, which is what the API runs: 9 (6 to 11), 0 wrong. Majority vote of the 3 past runs, with no model: 12 (9 to 13), 3 wrong.</desc>
   <defs>
     <filter id="shadow" x="-5%" y="-30%" width="110%" height="160%">
       <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#1f2328" flood-opacity="0.07"/>
@@ -41,8 +41,8 @@
   </defs>
 
   <text x="40" y="34" class="colhead">CONFIGURATION</text>
-  <text x="440" y="34" class="colhead">FAULTS SOLVED, OF 9</text>
-  <text x="700" y="34" class="colhead">WRONG ANSWERS, OF 27</text>
+  <text x="436" y="34" class="colhead">FAULTS SOLVED, OF 13</text>
+  <text x="700" y="34" class="colhead">WRONG ANSWERS, OF 39</text>
 
   <g filter="url(#shadow)">
     <rect x="20" y="48" width="860" height="44" rx="12" class="panel"/>
@@ -53,70 +53,51 @@
   </g>
   <rect x="20" y="216" width="4" height="20" rx="2" class="accent"/>
 
-  <!-- Row 1: error message only, 3 (1-6), 18 wrong -->
+  <!-- Error message only: 5 of 13 (2–8), 24 of 39 wrong -->
   <text x="40" y="75" class="name">Error message only</text>
-  <g transform="translate(446 70)">
-    <circle cx="0" r="6" class="dot-on"/><circle cx="18" r="6" class="dot-on"/><circle cx="36" r="6" class="dot-on"/>
-    <circle cx="54" r="6" class="dot-off"/><circle cx="72" r="6" class="dot-off"/><circle cx="90" r="6" class="dot-off"/>
-    <circle cx="108" r="6" class="dot-off"/><circle cx="126" r="6" class="dot-off"/><circle cx="144" r="6" class="dot-off"/>
-  </g>
-  <text x="610" y="77" class="count ink">3</text>
-  <text x="628" y="76" class="interval">1–6</text>
-  <text x="700" y="77" class="count bad">18</text>
+  <g transform="translate(440 70)"><circle cx="0" r="5" class="dot-on"/> <circle cx="13" r="5" class="dot-on"/> <circle cx="26" r="5" class="dot-on"/> <circle cx="39" r="5" class="dot-on"/> <circle cx="52" r="5" class="dot-on"/> <circle cx="65" r="5" class="dot-off"/> <circle cx="78" r="5" class="dot-off"/> <circle cx="91" r="5" class="dot-off"/> <circle cx="104" r="5" class="dot-off"/> <circle cx="117" r="5" class="dot-off"/> <circle cx="130" r="5" class="dot-off"/> <circle cx="143" r="5" class="dot-off"/> <circle cx="156" r="5" class="dot-off"/></g>
+  <text x="612" y="77" class="count ink">5</text>
+  <text x="630" y="76" class="interval">2–8</text>
+  <text x="700" y="77" class="count bad">24</text>
   <rect x="736" y="65" width="135" height="10" rx="5" class="track"/>
-  <rect x="736" y="65" width="90" height="10" rx="5" class="bar-bad"/>
+  <rect x="736" y="65" width="83.08" height="10" rx="5" class="bar-bad"/>
 
-  <!-- Row 2: full evidence, 7 (4-8), 6 wrong -->
+  <!-- Full evidence: 8 of 13 (5–11), 15 of 39 wrong -->
   <text x="40" y="127" class="name">Full evidence</text>
-  <g transform="translate(446 122)">
-    <circle cx="0" r="6" class="dot-on"/><circle cx="18" r="6" class="dot-on"/><circle cx="36" r="6" class="dot-on"/>
-    <circle cx="54" r="6" class="dot-on"/><circle cx="72" r="6" class="dot-on"/><circle cx="90" r="6" class="dot-on"/>
-    <circle cx="108" r="6" class="dot-on"/><circle cx="126" r="6" class="dot-off"/><circle cx="144" r="6" class="dot-off"/>
-  </g>
-  <text x="610" y="129" class="count ink">7</text>
-  <text x="628" y="128" class="interval">4–8</text>
-  <text x="700" y="129" class="count bad">6</text>
+  <g transform="translate(440 122)"><circle cx="0" r="5" class="dot-on"/> <circle cx="13" r="5" class="dot-on"/> <circle cx="26" r="5" class="dot-on"/> <circle cx="39" r="5" class="dot-on"/> <circle cx="52" r="5" class="dot-on"/> <circle cx="65" r="5" class="dot-on"/> <circle cx="78" r="5" class="dot-on"/> <circle cx="91" r="5" class="dot-on"/> <circle cx="104" r="5" class="dot-off"/> <circle cx="117" r="5" class="dot-off"/> <circle cx="130" r="5" class="dot-off"/> <circle cx="143" r="5" class="dot-off"/> <circle cx="156" r="5" class="dot-off"/></g>
+  <text x="612" y="129" class="count ink">8</text>
+  <text x="630" y="128" class="interval">5–11</text>
+  <text x="700" y="129" class="count bad">15</text>
   <rect x="736" y="117" width="135" height="10" rx="5" class="track"/>
-  <rect x="736" y="117" width="30" height="10" rx="5" class="bar-bad"/>
+  <rect x="736" y="117" width="51.92" height="10" rx="5" class="bar-bad"/>
 
-  <!-- Row 3: + 3 closest past runs + checks, 6 (3-8), 3 wrong -->
+  <!-- + 3 closest past runs + checks: 11 of 13 (8–12), 3 of 39 wrong -->
   <text x="40" y="179" class="name">+ 3 closest past runs + checks</text>
-  <g transform="translate(446 174)">
-    <circle cx="0" r="6" class="dot-on"/><circle cx="18" r="6" class="dot-on"/><circle cx="36" r="6" class="dot-on"/>
-    <circle cx="54" r="6" class="dot-on"/><circle cx="72" r="6" class="dot-on"/><circle cx="90" r="6" class="dot-on"/>
-    <circle cx="108" r="6" class="dot-off"/><circle cx="126" r="6" class="dot-off"/><circle cx="144" r="6" class="dot-off"/>
-  </g>
-  <text x="610" y="181" class="count ink">6</text>
-  <text x="628" y="180" class="interval">3–8</text>
+  <g transform="translate(440 174)"><circle cx="0" r="5" class="dot-on"/> <circle cx="13" r="5" class="dot-on"/> <circle cx="26" r="5" class="dot-on"/> <circle cx="39" r="5" class="dot-on"/> <circle cx="52" r="5" class="dot-on"/> <circle cx="65" r="5" class="dot-on"/> <circle cx="78" r="5" class="dot-on"/> <circle cx="91" r="5" class="dot-on"/> <circle cx="104" r="5" class="dot-on"/> <circle cx="117" r="5" class="dot-on"/> <circle cx="130" r="5" class="dot-on"/> <circle cx="143" r="5" class="dot-off"/> <circle cx="156" r="5" class="dot-off"/></g>
+  <text x="612" y="181" class="count ink">11</text>
+  <text x="640" y="180" class="interval">8–12</text>
   <text x="700" y="181" class="count bad">3</text>
   <rect x="736" y="169" width="135" height="10" rx="5" class="track"/>
-  <rect x="736" y="169" width="15" height="10" rx="5" class="bar-bad"/>
+  <rect x="736" y="169" width="10.38" height="10" rx="5" class="bar-bad"/>
 
-  <!-- Row 4: + disagreement gate (the API), 5 (2-7), 0 wrong -->
+  <!-- + disagreement gate: 9 of 13 (6–11), 0 of 39 wrong -->
   <text x="40" y="231" class="name">+ disagreement gate</text>
-  <rect x="300" y="215" width="64" height="20" rx="10" class="pill"/>
-  <text x="332" y="229" class="pill-text" text-anchor="middle">the API</text>
-  <g transform="translate(446 226)">
-    <circle cx="0" r="6" class="dot-on"/><circle cx="18" r="6" class="dot-on"/><circle cx="36" r="6" class="dot-on"/>
-    <circle cx="54" r="6" class="dot-on"/><circle cx="72" r="6" class="dot-on"/><circle cx="90" r="6" class="dot-off"/>
-    <circle cx="108" r="6" class="dot-off"/><circle cx="126" r="6" class="dot-off"/><circle cx="144" r="6" class="dot-off"/>
-  </g>
-  <text x="610" y="233" class="count ink">5</text>
-  <text x="628" y="232" class="interval">2–7</text>
+  <rect x="300" y="219" width="64" height="20" rx="10" class="pill"/>
+  <text x="332" y="233" class="pill-text" text-anchor="middle">the API</text>
+  <g transform="translate(440 226)"><circle cx="0" r="5" class="dot-on"/> <circle cx="13" r="5" class="dot-on"/> <circle cx="26" r="5" class="dot-on"/> <circle cx="39" r="5" class="dot-on"/> <circle cx="52" r="5" class="dot-on"/> <circle cx="65" r="5" class="dot-on"/> <circle cx="78" r="5" class="dot-on"/> <circle cx="91" r="5" class="dot-on"/> <circle cx="104" r="5" class="dot-on"/> <circle cx="117" r="5" class="dot-off"/> <circle cx="130" r="5" class="dot-off"/> <circle cx="143" r="5" class="dot-off"/> <circle cx="156" r="5" class="dot-off"/></g>
+  <text x="612" y="233" class="count ink">9</text>
+  <text x="630" y="232" class="interval">6–11</text>
   <text x="700" y="233" class="count good">0</text>
   <rect x="736" y="221" width="135" height="10" rx="5" class="track"/>
 
-  <!-- Row 5: majority vote, no model, 9 (6-9), 0 wrong -->
+  <!-- Majority vote of the 3 past runs: 12 of 13 (9–13), 3 of 39 wrong -->
   <text x="40" y="283" class="name">Majority vote of the 3 past runs</text>
-  <rect x="300" y="267" width="72" height="20" rx="10" class="pill"/>
-  <text x="336" y="281" class="pill-text" text-anchor="middle">no model</text>
-  <g transform="translate(446 278)">
-    <circle cx="0" r="6" class="dot-on"/><circle cx="18" r="6" class="dot-on"/><circle cx="36" r="6" class="dot-on"/>
-    <circle cx="54" r="6" class="dot-on"/><circle cx="72" r="6" class="dot-on"/><circle cx="90" r="6" class="dot-on"/>
-    <circle cx="108" r="6" class="dot-on"/><circle cx="126" r="6" class="dot-on"/><circle cx="144" r="6" class="dot-on"/>
-  </g>
-  <text x="610" y="285" class="count ink">9</text>
-  <text x="628" y="284" class="interval">6–9</text>
-  <text x="700" y="285" class="count good">0</text>
+  <rect x="300" y="271" width="72" height="20" rx="10" class="pill"/>
+  <text x="336" y="285" class="pill-text" text-anchor="middle">no model</text>
+  <g transform="translate(440 278)"><circle cx="0" r="5" class="dot-on"/> <circle cx="13" r="5" class="dot-on"/> <circle cx="26" r="5" class="dot-on"/> <circle cx="39" r="5" class="dot-on"/> <circle cx="52" r="5" class="dot-on"/> <circle cx="65" r="5" class="dot-on"/> <circle cx="78" r="5" class="dot-on"/> <circle cx="91" r="5" class="dot-on"/> <circle cx="104" r="5" class="dot-on"/> <circle cx="117" r="5" class="dot-on"/> <circle cx="130" r="5" class="dot-on"/> <circle cx="143" r="5" class="dot-on"/> <circle cx="156" r="5" class="dot-off"/></g>
+  <text x="612" y="285" class="count ink">12</text>
+  <text x="640" y="284" class="interval">9–13</text>
+  <text x="700" y="285" class="count bad">3</text>
   <rect x="736" y="273" width="135" height="10" rx="5" class="track"/>
+  <rect x="736" y="273" width="10.38" height="10" rx="5" class="bar-bad"/>
 </svg>

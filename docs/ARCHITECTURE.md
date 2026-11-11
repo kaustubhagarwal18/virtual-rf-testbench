@@ -249,10 +249,11 @@ flowchart LR
   only, full evidence, full evidence without its firmware line, plus retrieval, plus the
   checks, the same with the question's own fault held out of the history, and both of those
   with the gates. The fault is the unit scored: one is solved when all three
-  of its questions are right, with a 95% interval over the 9 faults (ADR 0012). It counts
+  of its questions are right, with a 95% interval over the 13 faults (ADR 0012). It counts
   right, `UNKNOWN`, confidently wrong and malformed answers apart, scores against the action
   key each label records, and reports how often retrieval offered a past run of the
-  question's own fault. Model answers are cached under `.cache/triage-answers/`, so a rerun
+  question's own fault, and whether a right answer cites and quotes its own fault's past
+  runs (ADR 0019). Model answers are cached under `.cache/triage-answers/`, so a rerun
   asks only the prompts that changed.
 
 The API (ADR 0010) keeps the history in memory, loaded from `triage/data/runs/history/` at

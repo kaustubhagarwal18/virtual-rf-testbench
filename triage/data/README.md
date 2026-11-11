@@ -19,19 +19,24 @@ Each run is a folder:
 
 ## The faults
 
-Nine, with at least two per category, so no answer can be right by always guessing one.
+Thirteen, with at least three per category and every action on the list resolving at least
+one, so no answer can be right by always guessing one.
 
 | Fault | Cause | Sizes in history | Sizes in questions |
 |---|---|---|---|
 | `cable_loss` | bench | 0.8, 1.2, 2.0 dB | 1.5, 1.0, 2.5 dB |
 | `link_down` | bench | nothing to scale | the same |
 | `link_flaky` | bench | every 2, 3, 5 sweeps | every 4, 6, 7 |
+| `analyzer_needs_alignment` | bench | 1.0, 2.0, 4.0 dB | 1.5, 3.0, 5.0 dB |
 | `slow_responses` | test | 2.5, 3.0, 4.0 s | 3.5, 2.2, 5.0 s |
+| `sweep_timeout` | test | 2.5, 3.0, 4.0 s | 3.5, 2.2, 5.0 s |
 | `config_parameter_missing` | test | nothing to scale | the same |
 | `config_parameter_out_of_range` | test | nothing to scale | the same |
 | `config_decimal_error` | test | nothing to scale | the same |
+| `fixture_skips_reset` | test | nothing to scale | the same |
 | `reset_leaks_offset` | firmware | nothing to scale | the same |
 | `output_command_change` | firmware | nothing to scale | the same |
+| `firmware_frequency_error` | firmware | nothing to scale | the same |
 
 Where a fault has a size, its questions use sizes no history run has, so retrieval can't simply
 find an identical run. The other faults have no size dimension: their question repeats the
@@ -50,9 +55,25 @@ retrieval generalises.
   whether the parameter was unset or out of range. `config_decimal_error` and
   `reset_leaks_offset` both fail at "verify level offset" on the generator, which separates
   them from the first two but not from each other — again, only the log says which.
-- **The `slow_responses` runs select only the smoke tests.** With every instrument call
-  waiting out its timeout, the whole suite would take the best part of an hour per run. The
-  results file records what was selected, so a reader can see it.
+- **The `slow_responses` and `sweep_timeout` runs select only the smoke tests.** With
+  every instrument call, or every sweep, waiting out its timeout, the whole suite would take
+  far longer per run. The results file records what was selected, so a reader can see it.
+- **An alignment fault also fails calibration, from the other side.** The analyzer reads high,
+  so the measured path loss falls below its limit where a damaged cable pushes it above; the
+  levels, compared against that calibration, still pass.
+- **The new faults were added to an existing data set.** The 24 runs of
+  `analyzer_needs_alignment`, `sweep_timeout`, `firmware_frequency_error` and
+  `fixture_skips_reset` were built on their own, with the same `run_fault` and folder layout,
+  so the 54 older runs (and the cached answers about them) stayed as they were.
+  `make fault-dataset` rebuilds all 78.
+- **`fixture_skips_reset` and `reset_leaks_offset` fail identically.** Both stop at "verify
+  level offset" with the offset the offset test left; only the version line differs. The
+  defect is switched on by `BENCH_DEFECT_SKIP_RESET`, a hook in
+  `tests/utilities/injected_defects.py` that a real suite wouldn't have, and its restore
+  takes the bench down so the next run starts from fresh instruments.
+- **A fault with identical runs has one past run to retrieve.** The three
+  `fixture_skips_reset` history runs are the same run and are indexed once, so its neighbours
+  outvote it.
 - **A cable fault doesn't fail the level measurements.** Calibration measures the extra loss
   and compensates for it, so the calibration measurements fail instead (ADR 0006).
 - **Three faults leave nothing in `results.json` that explains them.** The configuration

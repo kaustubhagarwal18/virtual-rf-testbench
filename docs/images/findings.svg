@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 250" width="900" height="250" role="img" aria-labelledby="title desc">
   <title id="title">Three findings</title>
-  <desc id="desc">One: stating a fact helps a small model. A line saying the analyzer logged no signal took full evidence from 5 to 7 of 9 faults. Two: past runs can mislead it. With the three closest past runs, faults solved go from 7 to 6: they fix config_parameter_out_of_range, but the model copies "recalibrated" from link_down's history into ALIGNMENT, and reset_leaks_offset becomes CONFIGURATION. Three: safety costs answers. The gate prevents 3 wrong answers and gives up 3 right ones; a wrong action costs hours, an UNKNOWN a minute.</desc>
+  <desc id="desc">One: stating a fact helps a small model. A line saying the analyzer logged no signal took full evidence from 6 to 8 of 13 faults. Two: past runs help, and can mislead. With the three closest past runs, faults solved go from 8 to 11: they fix analyzer_needs_alignment, slow_responses, sweep_timeout and config_parameter_out_of_range, but the model copies "recalibrated" from link_down's history into ALIGNMENT. Three: safety costs answers. The gate prevents 3 wrong answers and gives up 6 right ones; a wrong action costs hours, an UNKNOWN a minute.</desc>
   <defs>
     <filter id="shadow" x="-10%" y="-20%" width="120%" height="150%">
       <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#1f2328" flood-opacity="0.08"/>
@@ -48,35 +48,33 @@
   <!-- 1 -->
   <text x="40" y="50" class="num">FINDING 1</text>
   <text x="40" y="74" class="head">Stating a fact helps</text>
-  <text x="40" y="122" class="big muted">5</text>
+  <text x="40" y="122" class="big muted">6</text>
   <text x="70" y="118" class="head muted">→</text>
-  <text x="96" y="122" class="big good">7</text>
-  <text x="124" y="122" class="unit">of 9 faults, evidence only</text>
+  <text x="96" y="122" class="big good">8</text>
+  <text x="124" y="122" class="unit">of 13 faults, evidence only</text>
   <text x="40" y="160" class="body">One line saying the analyzer logged</text>
   <text x="40" y="177" class="body">"No signal reaching the analyzer"</text>
   <text x="40" y="194" class="body">fixed link_down and link_flaky.</text>
 
   <!-- 2 -->
   <text x="331" y="50" class="num">FINDING 2</text>
-  <text x="331" y="74" class="head">Past runs can mislead</text>
-  <text x="331" y="122" class="big muted">7</text>
+  <text x="331" y="74" class="head">Past runs help, and can mislead</text>
+  <text x="331" y="122" class="big muted">8</text>
   <text x="361" y="118" class="head muted">→</text>
-  <text x="387" y="122" class="big bad">6</text>
-  <text x="415" y="122" class="unit">with the 3 closest runs</text>
-  <text x="331" y="152" class="good" font-size="12" font-weight="700">+1</text>
-  <text x="356" y="152" class="mono">config_parameter_out_of_range</text>
+  <text x="387" y="122" class="big good">11</text>
+  <text x="433" y="122" class="unit">with the 3 closest runs</text>
+  <text x="331" y="152" class="good" font-size="12" font-weight="700">+4</text>
+  <text x="356" y="152" class="mono">alignment, timeouts, out_of_range</text>
   <text x="331" y="172" class="bad" font-size="12" font-weight="700">−1</text>
   <text x="356" y="172" class="mono">link_down → ALIGNMENT</text>
-  <text x="331" y="192" class="bad" font-size="12" font-weight="700">−1</text>
-  <text x="356" y="192" class="mono">reset_leaks_offset → CONFIGURATION</text>
-  <text x="331" y="216" class="body">It copies the odd past run out.</text>
+  <text x="331" y="196" class="body">It copies the odd past run out.</text>
 
   <!-- 3 -->
   <text x="622" y="50" class="num">FINDING 3</text>
   <text x="622" y="74" class="head">Safety costs answers</text>
   <text x="622" y="122" class="big good">3</text>
   <text x="646" y="122" class="unit">wrong prevented</text>
-  <text x="752" y="122" class="big muted">3</text>
+  <text x="752" y="122" class="big muted">6</text>
   <text x="776" y="122" class="unit">right lost</text>
   <text x="622" y="160" class="body">The disagreement gate answers UNKNOWN</text>
   <text x="622" y="177" class="body">when the past runs disagree. A wrong</text>

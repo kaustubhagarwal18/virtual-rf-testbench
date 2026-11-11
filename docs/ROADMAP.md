@@ -17,11 +17,11 @@
 
 ### Faults and the data set
 
-- Nine faults across the three causes: bench faults on the admin ports, configuration
+- Thirteen faults across the three causes: bench faults on the admin ports, configuration
   faults in the station's settings, and firmware regressions as simulated releases
   (ADR 0005). `make fault NAME=...` runs one and saves it with its label.
 - `make fault-dataset` builds the labelled data set: three history runs and three question
-  runs per fault, 54 in all.
+  runs per fault, 78 in all.
 
 ### Triage
 
@@ -39,8 +39,9 @@
 - A majority-vote baseline: five scenarios answered by the precedents' most common action,
   each the twin of a model scenario, so the report shows what the model adds beyond
   retrieval (ADR 0015).
-- Answers state the cause (firmware, bench or test) and quote what fixed each cited past run
-  (ADR 0016).
+- Answers state the cause (firmware, bench or test) and quote what fixed the past runs behind
+  them (ADR 0016): each cited run, then each other offered run resolved by the same action
+  (ADR 0019).
 - A FastAPI service (`make triage-api`): `POST /triage`, `POST /history`, `GET /health`
   (ADR 0010).
 

@@ -38,11 +38,12 @@ Instrument firmware ships only after a regression suite passes on a test bench. 
 fails, an engineer has to decide whether the firmware regressed, the bench is faulty or the
 test is wrong, and what fixed a similar failure last time is often in someone's head. This
 project builds a simulated RF bench, a 20-test regression suite with limits and margins,
-and nine faults injected on purpose, so every failure has a known cause. A triage assistant,
-running locally, names the cause and quotes what fixed the most similar past failures. From
-a run's own evidence it names the right fix for **7 of 9 faults**; behind its safety gate it
-solves **5 with no wrong answers**. A majority vote over the retrieved past runs solves all
-9: on this data set, retrieval does most of the work.
+and thirteen faults injected on purpose, so every failure has a known cause. A triage
+assistant, running locally, names the cause and quotes what fixed the most similar past
+failures. From a run's own evidence it names the right fix for **8 of 13 faults**; with past
+runs and behind its safety gate it solves **9 with no wrong answers**. A majority vote over
+the retrieved past runs solves 12 but answers the last one wrong: on this data set,
+retrieval does most of the work, and the gate is what keeps it from being confidently wrong.
 
 ## 1 · Method
 
@@ -65,14 +66,14 @@ solves **5 with no wrong answers**. A majority vote over the retrieved past runs
 ## 2 · Data
 
 <p align="center">
-  <img src="docs/images/faults.svg" width="860" alt="Nine faults: three bench (cable_loss, link_down, link_flaky), four test (slow_responses and three configuration errors), two firmware (reset_leaks_offset, output_command_change). Three history and three question runs each, 54 in all.">
+  <img src="docs/images/faults.svg" width="860" alt="Thirteen faults: four bench (cable_loss, link_down, link_flaky, analyzer_needs_alignment), six test (slow_responses, sweep_timeout, three configuration errors and fixture_skips_reset), three firmware (reset_leaks_offset, output_command_change, firmware_frequency_error). Three history and three question runs each, 78 in all.">
 </p>
-<p align="center"><sub><b>Figure 3.</b> Nine faults with known causes. The assistant may retrieve the history runs and is scored on the question runs.</sub></p>
+<p align="center"><sub><b>Figure 3.</b> Thirteen faults with known causes. The assistant may retrieve the history runs and is scored on the question runs.</sub></p>
 
 ## 3 · Results
 
 <p align="center">
-  <img src="docs/images/results-table.svg" width="860" alt="Faults solved of 9 and wrong answers of 27. Error message only: 3 (95% interval 1 to 6), 18 wrong. Full evidence: 7 (4 to 8), 6 wrong. Plus the 3 closest past runs and checks: 6 (3 to 8), 3 wrong. Plus the disagreement gate, which the API runs: 5 (2 to 7), 0 wrong. Majority vote of the 3 past runs, no model: 9 (6 to 9), 0 wrong.">
+  <img src="docs/images/results-table.svg" width="860" alt="Faults solved of 13 and wrong answers of 39. Error message only: 5 (95% interval 2 to 8), 24 wrong. Full evidence: 8 (5 to 11), 15 wrong. Plus the 3 closest past runs and checks: 11 (8 to 12), 3 wrong. Plus the disagreement gate, which the API runs: 9 (6 to 11), 0 wrong. Majority vote of the 3 past runs, no model: 12 (9 to 13), 3 wrong.">
 </p>
 <p align="center"><sub><b>Table 1.</b> A fault is solved when all three of its questions are right; the small numbers are 95% intervals.</sub></p>
 
@@ -89,7 +90,7 @@ last time: Replaced the cable and recalibrated the path loss (past-72b3edd9, pas
 ```
 
 <p align="center">
-  <img src="docs/images/findings.svg" width="860" alt="Finding 1, stating a fact helps: a line saying the analyzer logged no signal took full evidence from 5 to 7 of 9 faults, fixing link_down and link_flaky. Finding 2, past runs can mislead: with the three closest past runs, 7 becomes 6; they fix config_parameter_out_of_range, but link_down becomes ALIGNMENT and reset_leaks_offset becomes CONFIGURATION. Finding 3, safety costs answers: the disagreement gate prevents 3 wrong answers and gives up 3 right ones.">
+  <img src="docs/images/findings.svg" width="860" alt="Finding 1, stating a fact helps: a line saying the analyzer logged no signal took full evidence from 6 to 8 of 13 faults, fixing link_down and link_flaky. Finding 2, past runs help and can mislead: with the three closest past runs, 8 becomes 11; they fix the alignment fault, both timeouts and config_parameter_out_of_range, but link_down becomes ALIGNMENT. Finding 3, safety costs answers: the disagreement gate prevents 3 wrong answers and gives up 6 right ones.">
 </p>
 <p align="center"><sub><b>Figure 4.</b> Three findings from the experiments.</sub></p>
 
@@ -98,7 +99,7 @@ last time: Replaced the cable and recalibrated the path loss (past-72b3edd9, pas
 ## 4 · Limitations
 
 <p align="center">
-  <img src="docs/images/limitations.svg" width="860" alt="Four limitations. Small, easy data: 6 of 9 faults repeat a past run, so the vote's 9 of 9 is recall, not reasoning. One small model: qwen2.5:3b at temperature 0, one seed, on an 8 GB laptop; a one-fault difference may be noise. One fault unanswered: with past runs the model wants ALIGNMENT on link_down and a check refuses it, where the vote would say LINK. Simulated bench: no real instruments; noise and errors are modelled, not measured.">
+  <img src="docs/images/limitations.svg" width="860" alt="Four limitations. Small, easy data: 8 of 13 faults repeat a past run, so the vote's 12 of 13 is recall, not reasoning. One small model: qwen2.5:3b at temperature 0, one seed, on an 8 GB laptop; a one-fault difference may be noise. One fault unanswered: with past runs the model wants ALIGNMENT on link_down and a check refuses it, where the vote would say LINK. Simulated bench: no real instruments; noise and errors are modelled, not measured.">
 </p>
 <p align="center"><sub><b>Figure 5.</b> What these results do not show.</sub></p>
 

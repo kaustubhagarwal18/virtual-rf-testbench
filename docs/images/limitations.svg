@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 200" width="900" height="200" role="img" aria-labelledby="title desc">
   <title id="title">Limitations</title>
-  <desc id="desc">Four limitations. Small and easy data: 9 faults, each seen before, and 6 of them have nothing to vary, so their questions repeat a past run; the majority vote's 9 of 9 shows recall, not reasoning. One model, one seed: qwen2.5:3b at temperature 0 on an 8 GB laptop. link_down gets no action with past runs: the model answers UNKNOWN. Simulated instruments, not real hardware.</desc>
+  <desc id="desc">Four limitations. Small and easy data: 13 faults, each seen before, and 8 of them have nothing to vary, so their questions repeat a past run; the majority vote's 12 of 13 shows recall, not reasoning. One model, one seed: qwen2.5:3b at temperature 0 on an 8 GB laptop. link_down gets no action with past runs: the model answers UNKNOWN. Simulated instruments, not real hardware.</desc>
   <defs>
     <filter id="shadow" x="-10%" y="-20%" width="120%" height="150%">
       <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#1f2328" flood-opacity="0.08"/>
@@ -35,11 +35,11 @@
   <rect x="674" y="16" width="206" height="5" rx="2.5" class="bar"/>
 
   <!-- data -->
-  <text x="38" y="64" class="big">6 of 9</text>
+  <text x="38" y="64" class="big">8 of 13</text>
   <text x="38" y="84" class="unit">faults repeat a past run</text>
   <text x="38" y="116" class="head">Small, easy data</text>
-  <text x="38" y="138" class="body">9 faults, each seen before.</text>
-  <text x="38" y="155" class="body">The vote's 9 of 9 is recall,</text>
+  <text x="38" y="138" class="body">13 faults, each seen before.</text>
+  <text x="38" y="155" class="body">The vote's 12 of 13 is recall,</text>
   <text x="38" y="172" class="body">not reasoning.</text>
 
   <!-- model -->
