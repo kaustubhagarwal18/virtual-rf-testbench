@@ -1,5 +1,6 @@
 """Tests for triaging CI's failed bench run and writing the verdict for the pull request comment."""
 
+import argparse
 import json
 import re
 import subprocess
@@ -12,14 +13,16 @@ from tests.unit.tools.test_triage_demo import StubRetriever, UnreachableProvider
 from tests.unit.triage.test_evidence import FAILING_TEST, write_run
 from tools.ci_triage import (
     HEADING,
+    SHOWN_TESTS,
     TEXT_LIMIT,
     main,
+    positive_count,
     render_problem,
-    render_verdict,
-    triage_failed_run,
+    render_triage,
 )
 from triage.answer import PastFix, Verdict
 from triage.evidence import SavedRun
+from triage.failures import FailureAnswer, FailureGroup, RunTriage, triage_like_the_api
 from triage.llm import FakeProvider
 from triage.prompt import Fix, Source
 
@@ -54,6 +57,23 @@ HOSTILE_TEXTS = [
     "x" * (TEXT_LIMIT * 3),
 ]
 """Text a pull request's code could put in the logs, and so steer the model into writing."""
+
+
+LEVEL_GROUP = FailureGroup(
+    "test_level_at_1ghz: Failed", ("tests/bench/test_bench.py::test_level_at_1ghz",)
+)
+
+
+def render_verdict(verdict: Verdict, group: FailureGroup = LEVEL_GROUP) -> str:
+    """Render the section for a run with one failure that got this verdict."""
+    return render_triage(
+        RunTriage([FailureAnswer((group,), verdict)], failed_tests=1, distinct_failures=1)
+    )
+
+
+def failing_test(name: str) -> dict[str, object]:
+    """Return FAILING_TEST under another test name, so it is a failure of its own."""
+    return {**FAILING_TEST, "id": f"tests/bench/test_bench.py::{name}"}
 
 
 def outside_code_spans(markdown: str) -> str:
@@ -154,7 +174,7 @@ def test_the_failed_run_is_triaged_as_the_api_triages_it(tmp_path: Path) -> None
     """Agreeing past runs reach the model; both share its action, so both are quoted."""
     run = SavedRun.load(write_run(tmp_path / "run", [FAILING_TEST]))
     provider = FakeProvider([CABLE_REPLY])
-    verdict = triage_failed_run(run, provider, StubRetriever(*AGREEING))
+    verdict = triage_like_the_api(run, provider, StubRetriever(*AGREEING))
     assert verdict.fix is Fix.CABLE
     assert verdict.past_fixes == (
         PastFix("past-1", "Replaced the cable"),
@@ -167,7 +187,7 @@ def test_disagreeing_past_runs_answer_unknown_without_asking_the_model(tmp_path:
     """The API's disagreement gate applies in CI too: no model call, an UNKNOWN with a reason."""
     run = SavedRun.load(write_run(tmp_path / "run", [FAILING_TEST]))
     provider = FakeProvider([])
-    verdict = triage_failed_run(run, provider, StubRetriever(*DISAGREEING))
+    verdict = triage_like_the_api(run, provider, StubRetriever(*DISAGREEING))
     assert verdict.fix is Fix.UNKNOWN
     assert verdict.gate_reason
     assert not provider.prompts
@@ -228,3 +248,116 @@ def test_an_answer_says_what_to_do_in_the_action_list_words() -> None:
 def test_an_unknown_has_nothing_to_do(verdict: Verdict) -> None:
     """UNKNOWN is no action, so there is no 'What to do' line."""
     assert "What to do" not in render_verdict(verdict)
+
+
+def test_a_single_failure_names_its_tests_and_says_it_is_one() -> None:
+    """With one failure, the summary says so and the answer lists the failed test."""
+    section = render_verdict(answered())
+    assert "1 failed test: 1 distinct failure." in section
+    assert "- **Tests (1):** `test_level_at_1ghz`" in section
+
+
+def test_each_answer_lists_the_tests_it_covers_and_counts_the_rest() -> None:
+    """Many tests are named up to a few, then counted, so the block stays short."""
+    tests = tuple(f"tests/x.py::test_case[{number}]" for number in range(SHOWN_TESTS + 2))
+    section = render_verdict(answered(), FailureGroup("test_case: Failed", tests))
+    assert f"- **Tests ({SHOWN_TESTS + 2}):** `test_case[0]`" in section
+    assert "and 2 more" in section
+    assert "`test_case[3]`" not in section
+
+
+def test_several_answers_each_get_a_block_under_one_summary() -> None:
+    """Two different answers each say what to do, under a summary of how the run split."""
+    alignment = Verdict(Fix.ALIGNMENT, "analyzer", "reads high", [])
+    other = FailureGroup("test_other: Failed", ("tests/x.py::test_other",))
+    result = RunTriage(
+        [FailureAnswer((LEVEL_GROUP,), answered()), FailureAnswer((other,), alignment)],
+        failed_tests=4,
+        distinct_failures=2,
+    )
+    section = render_triage(result)
+    assert "4 failed tests: 2 distinct failures, each triaged on its own; 2 different" in section
+    assert section.count("- **What to do:**") == len(result.answers)
+    assert section.index("`CABLE`") < section.index("`ALIGNMENT`")
+
+
+def test_failures_past_the_cap_are_named_as_not_triaged() -> None:
+    """A failure left out by the cap is listed with its test count, as code."""
+    skipped = FailureGroup("<b>test_x</b>: Failed", ("a::test_x", "a::test_y"))
+    result = RunTriage(
+        [FailureAnswer((LEVEL_GROUP,), answered())],
+        untriaged=[skipped],
+        failed_tests=3,
+        distinct_failures=2,
+        limit=1,
+    )
+    section = render_triage(result)
+    assert "**Not triaged** (at most 1 failure per run): `<b>test_x</b>: Failed` (2 tests)" in (
+        section
+    )
+    assert "<b>" not in outside_code_spans(section)
+
+
+def test_a_failure_without_a_usable_reply_says_why_and_keeps_the_others() -> None:
+    """An unusable reply for one failure is that block's problem; the other block stands."""
+    result = RunTriage(
+        [
+            FailureAnswer((LEVEL_GROUP,), None, "the model's answer: not JSON"),
+            FailureAnswer((FailureGroup("t: Failed", ("a::t",)),), answered()),
+        ],
+        failed_tests=2,
+        distinct_failures=2,
+    )
+    section = render_triage(result)
+    assert "**No answer**" in section
+    assert "- **Problem:** `the model's answer: not JSON`" in section
+    assert "`CABLE`" in section
+
+
+@pytest.mark.parametrize("hostile", HOSTILE_TEXTS)
+def test_test_names_are_only_ever_shown_as_code(hostile: str) -> None:
+    """A test name the pull request chose can't add markup to the comment."""
+    group = FailureGroup(hostile, (f"tests/x.py::{hostile}",))
+    section = render_verdict(answered(), group)
+    baseline = render_verdict(answered(), FailureGroup("z", ("tests/x.py::z",)))
+    assert outside_code_spans(section) == outside_code_spans(baseline)
+
+
+def test_main_asks_once_per_failure_and_merges_the_same_answer(tmp_path: Path) -> None:
+    """Two failures that both get CABLE cost two prompts and show one block."""
+    tests = [failing_test("test_a"), failing_test("test_b")]
+    folder = write_run(tmp_path / "run", tests)
+    out = tmp_path / "triage.md"
+    provider = FakeProvider([CABLE_REPLY])
+    code = main([str(folder), "--out", str(out)], provider, StubRetriever(*AGREEING))
+    section = out.read_text(encoding="utf-8")
+    assert code == 0
+    assert len(provider.prompts) == len(tests)
+    assert section.count("`CABLE`") == 1
+    assert "- **Tests (2):** `test_a`, `test_b`" in section
+
+
+def test_main_triages_only_as_many_failures_as_asked(tmp_path: Path) -> None:
+    """--max-failures 1 asks about the first failure and lists the second."""
+    folder = write_run(tmp_path / "run", [failing_test("test_a"), failing_test("test_b")])
+    out = tmp_path / "triage.md"
+    provider = FakeProvider([CABLE_REPLY])
+    arguments = [str(folder), "--out", str(out), "--max-failures", "1"]
+    assert main(arguments, provider, StubRetriever(*AGREEING)) == 0
+    assert len(provider.prompts) == 1
+    assert "**Not triaged**" in out.read_text(encoding="utf-8")
+
+
+def test_main_writes_a_problem_when_no_test_failed(tmp_path: Path) -> None:
+    """A run with nothing failed has nothing to triage; the section says so."""
+    folder = write_run(tmp_path / "run", [])
+    out = tmp_path / "triage.md"
+    assert main([str(folder), "--out", str(out)], FakeProvider([]), StubRetriever()) == 1
+    assert "no failed test" in out.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("text", ["0", "-1", "two", ""])
+def test_the_cap_must_be_a_whole_number_of_at_least_one(text: str) -> None:
+    """A cap of nothing, or not a number, is refused with a message."""
+    with pytest.raises(argparse.ArgumentTypeError, match="at least 1"):
+        positive_count(text)

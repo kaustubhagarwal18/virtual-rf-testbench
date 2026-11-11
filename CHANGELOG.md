@@ -9,6 +9,10 @@ it, so the package version moves only with a release.
 
 ### Added
 
+- **An answer for each distinct failure in CI** (ADR 0020): the failed tests are grouped by
+  setup step, or by test function and kind of failure, and each of the first five groups is
+  triaged on its own; the comment has one block per distinct answer, listing its tests, and
+  names the failures past the cap.
 - **Four faults** (ADR 0019): `analyzer_needs_alignment` (the analyzer reads high and warns
   its alignment is out of date), `sweep_timeout` (only the sweep outlives the timeout),
   `firmware_frequency_error` (release `0.2.0-rc3`, 4 ppm high) and `fixture_skips_reset` (a

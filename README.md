@@ -60,8 +60,9 @@ retrieval does most of the work, and the gate is what keeps it from being confid
   refuse a verdict the evidence contradicts.
 - **Local and private**: `qwen2.5:3b` and `nomic-embed-text` on Ollama; nothing leaves the
   machine.
-- **In CI**: when the bench job fails, the verdict and what fixed the cited past runs go
-  into the pull request comment.
+- **In CI**: when the bench job fails, each distinct failure (up to five) is triaged on its
+  own, and the answers, with what fixed the cited past runs, go into the pull request
+  comment.
 
 ## 2 · Data
 

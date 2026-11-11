@@ -51,7 +51,8 @@
   scan over the full history, and a results comment on each pull request.
 - Triage in CI: when the bench job fails, a job allowed to fail triages the saved run as the
   API does and adds the verdict, with what fixed the cited past runs, to the pull request
-  comment (ADR 0018).
+  comment (ADR 0018). Each distinct failure, up to five per run, gets its own answer
+  (ADR 0020).
 - The image is built once, scanned with Trivy, benched as built, and pushed to GitHub
   Container Registry from `main` (ADR 0011).
 

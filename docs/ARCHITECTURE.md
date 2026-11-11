@@ -228,6 +228,10 @@ flowchart LR
 - **Evidence** leads with the first failure, because a run with nineteen errors has one
   cause, and puts any SCPI error the instruments reported ahead of it, because a rejected
   command shows up as a timeout. It never reads `label.json`.
+- **In CI**, a run's failed tests are first split into distinct failures (`failures.py`):
+  the tests one setup step stopped, or the cases of one test failing the same way. Each of
+  the first five is triaged as a run focused on it, and the same answers share a block
+  (ADR 0020).
 - **Retrieval** embeds each resolved run with `nomic-embed-text` and ranks by cosine
   similarity in memory. A source is cited by a hash of its text (`past-3fa2c1d0`), never by
   its folder, because folder names name the fault (ADR 0009).
@@ -326,7 +330,7 @@ flowchart LR
 | Checks on a verdict | `triage/checks.py` |
 | Abstaining from retrieval, and its threshold | `triage/abstain.py`, `tools/calibrate_abstention.py` |
 | The HTTP API | `triage/api.py` |
-| Triage of a failed bench run in CI, and its comment section | `tools/save_failed_run.py`, `tools/ci_triage.py`, the `triage` job in `.github/workflows/ci.yml` |
+| Triage of a failed bench run in CI, and its comment section | `tools/save_failed_run.py`, `triage/failures.py`, `tools/ci_triage.py`, the `triage` job in `.github/workflows/ci.yml` |
 | Evaluation scenarios and running them | `triage/evaluate.py` |
 | Outcomes, scores and the 95% interval | `triage/scores.py` |
 | The report and its findings | `triage/report.py`, `triage/results/rag.md`, `docs/EVALUATION.md` |
