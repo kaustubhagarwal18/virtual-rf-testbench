@@ -105,14 +105,43 @@ RF bench's, and a pack for payments, wafer test or a device fleet has the same p
   with a `reason`, which may quote the fact's values such as `{error}`. A refused answer
   becomes `UNKNOWN`; a check never picks another action.
 
+- **`[evidence]`** (optional): how the evidence words your things. `versions_fact` names a
+  `versions_unchanged` fact to compare versions with; `versions_unrecorded`,
+  `versions_unchanged` and `versions_changed` word the versions line (`{versions}`);
+  `errors` words the errors line (`{errors}`, `{reporting}`, `{failed}`); `logs` names
+  the logs. Each `[[evidence.notes]]` states a sentence (`say`) when a `fact` holds, either
+  before the first failure (`place = "lead"`) or among a focused failure's lines
+  (`place = "focus"`). Left out, the wording is neutral: "Versions: …", "Errors reported:
+  …", "Logs".
+
 A mistake is refused when the pack loads, with one line naming the file. Then pass it:
 
 ```
 uv run python -m triage.service path/to/run --pack path/to/your-pack.toml
 ```
 
-`python -m tools.ci_triage` takes `--pack` too. The evidence builder still reads this
-repository's results format; a generic case format is next on the roadmap.
+`python -m tools.ci_triage` takes `--pack` too.
+
+**Your data, as a case.** A run folder can hold `case.json` in place of a bench results
+file; `triage/case.py` defines it. Only `format` and `items` are required:
+
+```json
+{
+  "format": "triage-case/1",
+  "items": [
+    {"id": "batch-7/settlement", "outcome": "failed", "message": "3 of 120 payments rejected",
+     "errors": ["E17 file truncated"],
+     "readings": [{"name": "rejected", "value": 3, "unit": "payments", "low": 0, "high": 0,
+                   "margin": -3, "passed": false}]}
+  ],
+  "steps": [{"number": "1", "action": "load the rules", "target": "", "failed": false}],
+  "logs": [{"text": "mapping v2 deployed", "level": "INFO"}],
+  "versions": {"mapping": "v2"}
+}
+```
+
+Write one per failure from whatever your system records, put a `label.json` beside the
+resolved ones, and the pipeline reads them as it reads the bench's runs.
 
 ## 3 · Drive real instruments
 

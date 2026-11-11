@@ -211,7 +211,7 @@ run, the HTTP API (`triage/api.py`, `make triage-api`), and the evaluation
 
 ```mermaid
 flowchart LR
-    run["Failed run<br/>results.json, logs, sequence.log"] --> ev["evidence.py<br/>first failure first"]
+    run["Failed run<br/>case.json, or a bench run read by bench_run.py"] --> ev["evidence.py<br/>first failure first"]
     hist[("History<br/>resolved runs, neutral ids")] --> ret["retrieval.py<br/>top 3 by cosine"]
     run --> ret
     ev --> pr["prompt.py<br/>actions from the domain pack"]
@@ -327,7 +327,9 @@ flowchart LR
 | The fault catalogue, `make fault` and the data set | `tools/faults.py`, `tools/fault_run.py`, `tools/bench_control.py` |
 | The evidence a run gives the model | `triage/evidence.py` |
 | The prompt | `triage/prompt.py` |
-| The domain pack: description, causes and actions | `triage/pack.py`, `triage/packs/rf-bench.toml` |
+| The domain pack: description, causes, actions, facts, checks and evidence wording | `triage/pack.py`, `triage/packs/rf-bench.toml` |
+| The case the pipeline reads, and its case.json format | `triage/case.py` |
+| Reading a bench run as a case | `triage/bench_run.py` |
 | The lock that proves a refactor changed no prompt, evidence, check or vote | `tests/unit/triage/test_behaviour_lock.py` |
 | How a reply is parsed, and its schema | `triage/answer.py` |
 | Retrieval and source ids | `triage/retrieval.py`, `triage/embed.py` |

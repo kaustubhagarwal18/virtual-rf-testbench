@@ -80,7 +80,7 @@ def triage_run(
     reason = reason_to_abstain(sources, gates)
     if reason:
         return Verdict.gated(reason)
-    evidence = build_evidence(run, level)
+    evidence = build_evidence(run, level, pack)
     system, user = build_prompt(evidence, sources, pack)
     source_ids = [source.source_id for source in sources]
     reply = provider.complete(system, user, _schema_for(source_ids, pack))

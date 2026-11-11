@@ -180,6 +180,17 @@ class Case:
         return [item for item in self.items if item.failed]
 
     @property
+    def failed_readings(self) -> list[Reading]:
+        """The out-of-limit readings of the items that didn't pass.
+
+        Returns:
+            Each failed reading, in the order the items ran.
+        """
+        return [
+            reading for item in self.failed_items for reading in item.readings if not reading.passed
+        ]
+
+    @property
     def failed_steps(self) -> list[Step]:
         """The setup steps that failed, in order.
 

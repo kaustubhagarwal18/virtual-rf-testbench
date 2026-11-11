@@ -6,8 +6,7 @@ import pytest
 
 from triage.bench_run import load_case
 from triage.case import Case, Context, Item, LogLine, Reading, save_case
-from triage.evidence import BASELINE_VERSION, LEVEL_UNITS, NO_SIGNAL_LOG
-from triage.facts import LogContains, ReadingFailedIn, VersionsUnchanged
+from triage.facts import ReadingFailedIn, ReadingsFailedOnlyOutside
 from triage.pack import (
     DEFAULT_PACK,
     UNKNOWN,
@@ -234,12 +233,79 @@ def test_a_pack_needs_no_facts_or_checks(tmp_path: Path) -> None:
     assert not pack.checks
 
 
-def test_the_rf_facts_match_what_the_evidence_builder_states() -> None:
-    """Until the evidence moves into the pack, its baseline, phrase and units must agree."""
-    facts = DEFAULT_PACK.facts
-    assert isinstance(facts["firmware_unchanged"], VersionsUnchanged)
-    assert facts["firmware_unchanged"].baseline == BASELINE_VERSION
-    assert isinstance(facts["no_signal"], LogContains)
-    assert facts["no_signal"].text == NO_SIGNAL_LOG
-    assert isinstance(facts["level_reading_failed"], ReadingFailedIn)
-    assert set(facts["level_reading_failed"].units) == LEVEL_UNITS
+def test_the_rf_level_units_agree_between_the_check_and_the_note() -> None:
+    """The alignment check and the focused note must mean the same thing by a level."""
+    check_fact = DEFAULT_PACK.facts["level_reading_failed"]
+    note_fact = DEFAULT_PACK.facts["only_other_readings_failed"]
+    assert isinstance(check_fact, ReadingFailedIn)
+    assert isinstance(note_fact, ReadingsFailedOnlyOutside)
+    assert set(check_fact.units) == set(note_fact.units)
+
+
+def test_the_rf_evidence_wording_comes_from_its_pack() -> None:
+    """The RF pack states versions, errors and its two notes in its own words."""
+    wording = DEFAULT_PACK.evidence
+    assert wording.versions_fact == "firmware_unchanged"
+    assert wording.versions_changed.startswith("Firmware:")
+    assert wording.logs == "Instrument logs"
+    assert [(note.name, note.place) for note in wording.notes] == [
+        ("no_signal", "lead"),
+        ("no_level_reading", "focus"),
+    ]
+
+
+def test_a_pack_without_evidence_wording_gets_neutral_words(tmp_path: Path) -> None:
+    """A new domain needn't write any: versions, errors and logs get plain defaults."""
+    wording = load_pack(write_pack(tmp_path, VALID)).evidence
+    assert wording.versions_fact is None
+    assert "firmware" not in f"{wording.versions_changed} {wording.errors}".lower()
+    assert wording.logs == "Logs"
+    assert not wording.notes
+
+
+WITH_EVIDENCE = (
+    WITH_CHECKS
+    + """
+[evidence]
+logs = "Gateway logs"
+
+[[evidence.notes]]
+name = "mapping_deployed"
+fact = "mapping_changed_message"
+place = "lead"
+say = "Mapping change: logged {times}."
+"""
+)
+"""The payments pack with evidence wording of its own."""
+
+
+BROKEN_EVIDENCE = {
+    "note on an unknown fact": WITH_EVIDENCE.replace(
+        'fact = "mapping_changed_message"', 'fact = "weather"'
+    ),
+    "note in an unknown place": WITH_EVIDENCE.replace('place = "lead"', 'place = "footer"'),
+    "note quotes a value its fact lacks": WITH_EVIDENCE.replace("{times}", "{amount}"),
+    "note named like the versions line": WITH_EVIDENCE.replace(
+        'name = "mapping_deployed"', 'name = "versions"'
+    ),
+    "versions fact of the wrong kind": WITH_EVIDENCE.replace(
+        'logs = "Gateway logs"', 'logs = "Gateway logs"\nversions_fact = "feed_error"'
+    ),
+    "unknown evidence entry": WITH_EVIDENCE.replace(
+        'logs = "Gateway logs"', 'logs = "Gateway logs"\nfooter = "x"'
+    ),
+    "template quotes an unknown value": WITH_EVIDENCE.replace(
+        'logs = "Gateway logs"', 'logs = "Gateway logs"\nerrors = "Errors: {amount}"'
+    ),
+}
+"""Packs whose evidence wording has one mistake each."""
+
+
+@pytest.mark.parametrize("problem", sorted(BROKEN_EVIDENCE))
+def test_broken_evidence_wording_is_refused_with_one_line(tmp_path: Path, problem: str) -> None:
+    """Each mistake is refused at load, naming the file."""
+    path = write_pack(tmp_path, BROKEN_EVIDENCE[problem])
+    with pytest.raises(PackError) as refused:
+        load_pack(path)
+    assert str(path) in str(refused.value)
+    assert "\n" not in str(refused.value)

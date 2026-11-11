@@ -10,7 +10,6 @@ from triage.answer import MalformedAnswerError, Verdict
 from triage.bench_run import SEQUENCE_FILE, load_case
 from triage.case import Case
 from triage.evidence import (
-    NO_LEVEL_READING,
     first_failure,
     full_evidence,
 )
@@ -237,6 +236,12 @@ def test_a_message_naming_no_exception_is_grouped_by_its_outcome(tmp_path: Path)
     """A message without an exception class falls back to the outcome as its kind."""
     plain = failing("test_plain", "the reading never settled", outcome="error")
     assert failure_groups(load(tmp_path, [plain]))[0].description == "test_plain: error"
+
+
+NO_LEVEL_READING = next(
+    note.say for note in DEFAULT_PACK.evidence.notes if note.name == "no_level_reading"
+)
+"""The RF pack's sentence for a focused failure with no level reading out of limits."""
 
 
 def with_reading(test_id: str, unit: str) -> dict[str, object]:

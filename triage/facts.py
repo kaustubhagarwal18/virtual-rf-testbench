@@ -17,7 +17,6 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from triage.case import Case
-from triage.evidence import failed_readings
 
 FactValues = dict[str, str]
 """What a fact that holds can say about itself, for a check's reason to quote."""
@@ -167,7 +166,7 @@ class LogContains:
     """
 
     text: str
-    provides: tuple[str, ...] = ("count",)
+    provides: tuple[str, ...] = ("count", "times")
 
     def __post_init__(self) -> None:
         """Check the parameters."""
@@ -181,11 +180,14 @@ class LogContains:
             said: The answer's words, unused.
 
         Returns:
-            How many lines contain it; None when none does.
+            How many lines contain it, as a number and in words ('once', '3 times'); None
+            when none does.
         """
         del said
         count = sum(1 for line in run.logs if self.text in line.text)
-        return {"count": str(count)} if count else None
+        if not count:
+            return None
+        return {"count": str(count), "times": "once" if count == 1 else f"{count} times"}
 
 
 @dataclass(frozen=True)
@@ -221,8 +223,43 @@ class ReadingFailedIn:
             No values when it holds; None otherwise.
         """
         del said
-        hit = any(reading.unit in self.units for reading in failed_readings(run))
+        hit = any(reading.unit in self.units for reading in run.failed_readings)
         return {} if hit else None
+
+
+@dataclass(frozen=True)
+class ReadingsFailedOnlyOutside:
+    """Readings are out of limits, and none of them is in these units.
+
+    Said of a failure whose readings rule a cause out: frequencies alone out of limits rule
+    out an error that only shifts levels.
+
+    Attributes:
+        units: The units, such as dB and dBm for levels.
+    """
+
+    units: tuple[str, ...] | list[str]
+    provides: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        """Check the parameters."""
+        ReadingFailedIn(self.units)
+
+    def __call__(self, run: Case, said: str) -> FactValues | None:
+        """Hold when some reading failed and none of the failed ones is in the units.
+
+        Args:
+            run: The run.
+            said: The answer's words, unused.
+
+        Returns:
+            No values when it holds; None otherwise.
+        """
+        del said
+        readings = run.failed_readings
+        if not readings or any(reading.unit in self.units for reading in readings):
+            return None
+        return {}
 
 
 FACT_KINDS: dict[str, Callable[..., Fact]] = {
@@ -231,6 +268,7 @@ FACT_KINDS: dict[str, Callable[..., Fact]] = {
     "errors_reported": ErrorsReported,
     "log_contains": LogContains,
     "reading_failed_in": ReadingFailedIn,
+    "readings_failed_only_outside": ReadingsFailedOnlyOutside,
 }
 """Each kind a pack can name, by its name; a new kind is a new entry."""
 

@@ -6,9 +6,10 @@ from pathlib import Path
 import pytest
 
 from tests.unit.tools.test_triage_demo import StubRetriever
-from tests.unit.triage.test_pack import WITH_CHECKS, payments_case, write_pack
+from tests.unit.triage.test_pack import WITH_CHECKS, WITH_EVIDENCE, payments_case, write_pack
 from triage.answer import MalformedAnswerError, verdict_schema
 from triage.case import Case
+from triage.evidence import build_evidence
 from triage.failures import triage_like_the_api
 from triage.llm import FakeProvider
 from triage.pack import Pack, load_pack
@@ -71,3 +72,27 @@ def test_triage_like_the_api_applies_the_packs_checks(tmp_path: Path) -> None:
     )
     assert verdict.fix.key == "UNKNOWN"
     assert verdict.overruled == "no mapping change was deployed"
+
+
+def test_the_evidence_speaks_the_packs_words(tmp_path: Path) -> None:
+    """A payments case's evidence has payments notes and labels, and no RF wording."""
+    pack = load_pack(write_pack(tmp_path, WITH_EVIDENCE))
+    case = payments_case(tmp_path, ("mapping v2 deployed", "batch 7 rejected"))
+    evidence = build_evidence(case, pack=pack)
+    assert evidence.startswith("Mapping change: logged once.")
+    assert "Errors reported: E17 file truncated, by 1 of 1 failed items." in evidence
+    assert "Versions: mapping v1." in evidence
+    assert "Gateway logs: 2 lines" in evidence
+    for rf_word in ("Firmware", "Instrument", "analyzer", "signal"):
+        assert rf_word not in evidence
+
+
+def test_the_model_is_shown_evidence_in_the_packs_words(tmp_path: Path) -> None:
+    """triage_run builds the evidence with its pack, so the prompt has no RF labels."""
+    pack = load_pack(write_pack(tmp_path, WITH_EVIDENCE))
+    provider = FakeProvider([reply("REQUEST_FEED")])
+    triage_run(payments_case(tmp_path, ("mapping v2 deployed",)), provider, pack=pack)
+    _, user = provider.prompts[0]
+    assert "Mapping change: logged once." in user
+    assert "Gateway logs:" in user
+    assert "Instrument" not in user

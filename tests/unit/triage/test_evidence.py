@@ -13,12 +13,12 @@ from triage.evidence import (
     FULL_WITHOUT_FIRMWARE,
     FULL_WITHOUT_SIGNAL,
     LEVELS,
-    NO_SIGNAL_LOG,
     build_evidence,
-    firmware_changed,
-    firmware_note,
     first_failure,
+    versions_note,
 )
+from triage.facts import LogContains
+from triage.pack import DEFAULT_PACK
 
 PASSING_TEST: dict[str, object] = {
     "id": "tests/bench/test_bench.py::test_passes",
@@ -186,7 +186,7 @@ def test_consequences_are_counted_in_the_evidence(tmp_path: Path) -> None:
         ({}, None),
     ],
 )
-def test_firmware_changed_is_unknown_when_no_version_was_recorded(
+def test_the_versions_line_is_unknown_when_no_version_was_recorded(
     tmp_path: Path, versions: dict[str, str], changed: bool | None
 ) -> None:
     """A run with no recorded versions is unknown, never reported as unchanged."""
@@ -196,8 +196,7 @@ def test_firmware_changed_is_unknown_when_no_version_was_recorded(
         json.dumps({**results, "firmware_versions": versions}), encoding="utf-8"
     )
     run = load_case(folder)
-    assert firmware_changed(run) is changed
-    note = firmware_note(run)
+    note = versions_note(run)
     assert ("unknown" in note) is (changed is None)
     assert ("the same as the last passing run" in note) is (changed is False)
     assert ("firmware" in note.casefold()) is (changed is not False)
@@ -304,4 +303,6 @@ def test_a_missing_signal_leads_the_full_evidence(tmp_path: Path, count: int) ->
 def test_the_no_signal_note_matches_what_the_analyzer_logs() -> None:
     """The phrase the evidence looks for is the one the analyzer writes, so they can't drift."""
     source = Path("simulators/spectrum_analyzer/link.py").read_text(encoding="utf-8")
-    assert NO_SIGNAL_LOG in source
+    fact = DEFAULT_PACK.facts["no_signal"]
+    assert isinstance(fact, LogContains)
+    assert fact.text in source

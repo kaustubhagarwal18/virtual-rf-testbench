@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from triage.facts import Fact, make_fact
+from triage.facts import Fact, VersionsUnchanged, make_fact
 
 PACKS = Path(__file__).with_name("packs")
 """Where the packs that ship with the project live."""
@@ -88,6 +88,66 @@ class CheckRule:
     reason: str
 
 
+VERSIONS_LINE = "versions"
+"""The name of the evidence's versions line, which an ablation can leave out like a note."""
+
+NOTE_PLACES = ("lead", "focus")
+"""Where a note goes: before the first failure, or among a focused failure's lines."""
+
+TEMPLATE_VALUES = {
+    "versions_unrecorded": frozenset(),
+    "versions_unchanged": frozenset({"versions"}),
+    "versions_changed": frozenset({"versions"}),
+    "errors": frozenset({"errors", "reporting", "failed"}),
+    "logs": frozenset(),
+}
+"""Each evidence template, and the values it may quote."""
+
+
+@dataclass(frozen=True)
+class EvidenceNote:
+    """A sentence the evidence states when a fact holds.
+
+    Attributes:
+        name: A short name, which an ablation can leave out.
+        fact: The pack's fact it states.
+        place: 'lead', before the first failure, or 'focus', in a focused failure's lines.
+        say: The sentence; it may quote the fact's values, as in "logged {times}".
+    """
+
+    name: str
+    fact: str
+    place: str
+    say: str
+
+
+@dataclass(frozen=True)
+class EvidenceWording:
+    """How a domain words the lines of the evidence that name its things.
+
+    Attributes:
+        versions_fact: The versions_unchanged fact whose baseline the versions line compares
+            with; None to state the versions without comparing.
+        versions_unrecorded: Said when the case recorded no versions.
+        versions_unchanged: Said when every version is the baseline; quotes {versions}.
+        versions_changed: Said otherwise, and when there is no baseline; quotes {versions}.
+        errors: Said when failed items reported errors; quotes {errors}, {reporting} and
+            {failed}.
+        logs: What the log lines are called.
+        notes: Sentences stated when facts hold.
+    """
+
+    versions_fact: str | None = None
+    versions_unrecorded: str = (
+        "Versions: not recorded, so whether they changed since the last passing run is unknown."
+    )
+    versions_unchanged: str = "Versions: {versions}, the same as the last passing run."
+    versions_changed: str = "Versions: {versions}."
+    errors: str = "Errors reported: {errors}, by {reporting} of {failed} failed items."
+    logs: str = "Logs"
+    notes: tuple[EvidenceNote, ...] = ()
+
+
 @dataclass(frozen=True)
 class Pack:
     """A domain's description, causes, actions, facts and checks.
@@ -97,8 +157,9 @@ class Pack:
         description: What the domain is and what its failures are caused by, for the model.
         categories: The causes a failure can have, such as firmware, bench and test.
         actions: The actions in the order the file lists them, then UNKNOWN.
-        facts: The named facts its checks read.
+        facts: The named facts its checks and evidence notes read.
         checks: The checks, in the order they apply.
+        evidence: How its evidence names its things.
     """
 
     name: str
@@ -107,6 +168,7 @@ class Pack:
     actions: tuple[Action, ...]
     facts: dict[str, Fact] = field(default_factory=dict)
     checks: tuple[CheckRule, ...] = ()
+    evidence: EvidenceWording = field(default_factory=EvidenceWording)
 
     @property
     def keys(self) -> tuple[str, ...]:
@@ -281,6 +343,84 @@ def _checks(
     return tuple(rules)
 
 
+def _quoted(template: str) -> set[str]:
+    """Name the values a template quotes.
+
+    Args:
+        template: Text with {name} placeholders.
+
+    Returns:
+        The names.
+    """
+    return {name for _, name, _, _ in string.Formatter().parse(template) if name}
+
+
+def _note(table: dict[str, Any], facts: dict[str, Fact], where: str) -> EvidenceNote:
+    """Read and check one evidence note.
+
+    Args:
+        table: The note's table.
+        facts: The pack's facts.
+        where: Where the note is, for messages.
+
+    Returns:
+        The note.
+
+    Raises:
+        PackError: If it is named like the versions line, names an unknown fact or place,
+            or quotes a value its fact can't give.
+    """
+    name = _text(table, "name", where)
+    if name == VERSIONS_LINE:
+        raise PackError(f"{where}: the name {name!r} is the versions line's")
+    fact_name = _text(table, "fact", where)
+    fact = facts.get(fact_name)
+    if fact is None:
+        raise PackError(f"{where}: no fact named {fact_name!r}; known: {', '.join(sorted(facts))}")
+    place = _text(table, "place", where)
+    if place not in NOTE_PLACES:
+        raise PackError(f"{where}: place {place!r} isn't one of {list(NOTE_PLACES)}")
+    say = _text(table, "say", where)
+    if not _quoted(say) <= set(fact.provides):
+        raise PackError(
+            f"{where}: says {sorted(_quoted(say))}, but the fact gives {list(fact.provides)}"
+        )
+    return EvidenceNote(name, fact_name, place, say)
+
+
+def _evidence(raw: dict[str, Any], facts: dict[str, Fact], path: Path) -> EvidenceWording:
+    """Read a pack file's evidence wording, keeping the neutral defaults it doesn't change.
+
+    Args:
+        raw: The parsed file.
+        facts: The pack's facts.
+        path: The file, for messages.
+
+    Returns:
+        The wording.
+
+    Raises:
+        PackError: If the versions fact isn't a versions_unchanged fact, or a template
+            quotes a value it can't have; each note's own mistakes are raised by _note.
+    """
+    table = dict(raw.get("evidence", {}))
+    where = f"{path}, [evidence]"
+    notes = tuple(
+        _note(note, facts, f"{where} note {number}")
+        for number, note in enumerate(table.pop("notes", []), start=1)
+    )
+    versions_fact = table.pop("versions_fact", None)
+    if versions_fact is not None and not isinstance(facts.get(versions_fact), VersionsUnchanged):
+        raise PackError(f"{where}: versions_fact {versions_fact!r} isn't a versions_unchanged fact")
+    for name, value in table.items():
+        allowed = TEMPLATE_VALUES.get(name)
+        if allowed is None or not isinstance(value, str):
+            raise PackError(f"{where}: unknown entry {name!r}; known: {sorted(TEMPLATE_VALUES)}")
+        if not _quoted(value) <= allowed:
+            raise PackError(f"{where}: {name} quotes {sorted(_quoted(value) - allowed)}")
+    return EvidenceWording(versions_fact=versions_fact, notes=notes, **table)
+
+
 def load_pack(path: Path) -> Pack:
     """Read a pack file and check it, so a mistake is found before anything uses it.
 
@@ -313,6 +453,7 @@ def load_pack(path: Path) -> Pack:
         actions=actions,
         facts=facts,
         checks=_checks(raw, tuple(action.key for action in actions), facts, path),
+        evidence=_evidence(raw, facts, path),
     )
 
 

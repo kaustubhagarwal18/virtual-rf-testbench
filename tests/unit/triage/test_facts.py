@@ -14,6 +14,7 @@ from triage.facts import (
     LogContains,
     NamesOtherVersion,
     ReadingFailedIn,
+    ReadingsFailedOnlyOutside,
     VersionsUnchanged,
     make_fact,
 )
@@ -68,7 +69,7 @@ def test_log_contains_counts_the_lines(tmp_path: Path) -> None:
     run = run_with(tmp_path)
     (run.folder / "logs.txt").write_text("a\ncard declined\nb\ncard declined\n", encoding="utf-8")
     run = load_case(run.folder)
-    assert LogContains(text="card declined")(run, "") == {"count": "2"}
+    assert LogContains(text="card declined")(run, "") == {"count": "2", "times": "2 times"}
     assert LogContains(text="timeout")(run, "") is None
 
 
@@ -87,6 +88,7 @@ def test_every_kind_is_registered_by_its_name() -> None:
         "errors_reported",
         "log_contains",
         "reading_failed_in",
+        "readings_failed_only_outside",
     }
 
 
@@ -109,3 +111,13 @@ def test_a_bad_fact_is_refused_with_a_reason(
     """Unknown kinds, wrong or missing parameters and bad values are refused at load time."""
     with pytest.raises(ValueError, match=message):
         make_fact(kind, params)
+
+
+def test_readings_failed_only_outside_needs_a_failed_reading_none_in_the_units(
+    tmp_path: Path,
+) -> None:
+    """A dBm failure is inside dBm; a run with no failed reading says nothing either way."""
+    run = run_with(tmp_path)
+    assert ReadingsFailedOnlyOutside(units=["Hz"])(run, "") == {}
+    assert ReadingsFailedOnlyOutside(units=["dBm"])(run, "") is None
+    assert ReadingsFailedOnlyOutside(units=["Hz"])(run_with(tmp_path, measurements=[]), "") is None
