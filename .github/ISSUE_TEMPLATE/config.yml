@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: How to adapt the project to your own bench
+    url: https://github.com/kaustubhagarwal18/virtual-rf-testbench/blob/main/docs/ADAPTING.md
+    about: Your own failures, new faults and real instruments.
+  - name: Architecture and design decisions
+    url: https://github.com/kaustubhagarwal18/virtual-rf-testbench/blob/main/docs/ARCHITECTURE.md
+    about: How the pieces fit, and why.

@@ -1,0 +1,58 @@
+name: Bug report
+description: Something doesn't work as the docs say.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for reporting. A short, exact report is the fastest to fix.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Simulators or drivers
+        - Bench suite (tests/bench)
+        - Faults and the data set
+        - Triage assistant (CLI, API or evaluation)
+        - CI, Docker or setup
+        - Docs
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: The error message or wrong result, pasted as text.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The commands you ran, in order.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, the commit (`git rev-parse --short HEAD`), and for triage the Ollama model.
+      placeholder: |
+        macOS 26, Apple M1, 8 GB
+        commit abc1234
+        qwen2.5:3b
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant output, such as `make bench-logs` or the pytest summary.
+      render: text
