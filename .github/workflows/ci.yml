@@ -136,15 +136,6 @@ jobs:
         run: |
           docker load --input simulators.tar
           make bench-up BENCH_BUILD=--no-build
-      - name: TEMPORARY two unrelated faults, to show one answer per distinct failure
-        # Revert before merging. Release 0.2.0-rc3 puts the generator's frequency 4 ppm high
-        # (firmware); a 3 dB alignment error makes the analyzer read high (bench).
-        run: |
-          make bench-down
-          echo "FIRMWARE_VERSION=0.2.0-rc3" >> "$GITHUB_ENV"
-          FIRMWARE_VERSION=0.2.0-rc3 make bench-up BENCH_BUILD=--build
-          uv run python -c "from tools.bench_control import ComposeBench;
-          print(ComposeBench().send_admin('analyzer', 'FAULT ALIGNMENT_ERROR_DB 3'))"
       - name: Bench suite against the containers
         run: make bench-test
       - name: Results summary on the run page
