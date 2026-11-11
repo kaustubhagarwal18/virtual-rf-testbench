@@ -18,7 +18,7 @@ from collections.abc import Sequence
 from functools import partial
 from pathlib import Path
 
-from triage.answer import VERDICT_SCHEMA, Verdict, grouped_past_fixes
+from triage.answer import Verdict, grouped_past_fixes, verdict_schema
 from triage.evidence import SavedRun
 from triage.failures import (
     DEFAULT_MAX_FAILURES,
@@ -28,7 +28,7 @@ from triage.failures import (
     triage_like_the_api,
 )
 from triage.llm import DEFAULT_MODEL, LLMProvider, ModelUnavailableError, OllamaProvider
-from triage.pack import UNKNOWN
+from triage.pack import DEFAULT_PACK_FILE, UNKNOWN, PackError, load_pack
 from triage.retrieval import DEFAULT_HISTORY, Retriever, history_index
 from triage.textfmt import clip
 
@@ -247,8 +247,8 @@ def main(
 
     Returns:
         0 with an answer for each failure triaged, even one whose reply couldn't be used;
-        1 when the run is missing or has no failed test, or the model or embedder can't be
-        reached.
+        1 when the pack can't be used, the run is missing or has no failed test, or the
+        model or embedder can't be reached.
     """
     parser = argparse.ArgumentParser(
         prog="python -m tools.ci_triage", description="Triage CI's failed bench run."
@@ -258,24 +258,30 @@ def main(
     parser.add_argument("--history", type=Path, default=DEFAULT_HISTORY, help="history runs")
     parser.add_argument("--model", default=DEFAULT_MODEL, help="Ollama model to ask")
     parser.add_argument(
+        "--pack", type=Path, default=DEFAULT_PACK_FILE, help="domain pack (default: the RF bench)"
+    )
+    parser.add_argument(
         "--max-failures",
         type=positive_count,
         default=DEFAULT_MAX_FAILURES,
         help=f"distinct failures to triage, each one prompt (default: {DEFAULT_MAX_FAILURES})",
     )
     parsed = parser.parse_args(arguments)
-    provider = provider or OllamaProvider(model=parsed.model, response_format=VERDICT_SCHEMA)
     try:
+        pack = load_pack(parsed.pack)
+        model = provider or OllamaProvider(
+            model=parsed.model, response_format=verdict_schema(pack=pack)
+        )
         run = SavedRun.load(parsed.run)
         index = retriever or history_index(parsed.history)
-        answer = partial(triage_like_the_api, provider=provider, retriever=index)
+        answer = partial(triage_like_the_api, provider=model, retriever=index, pack=pack)
         result = triage_failures(run, answer, parsed.max_failures)
         section, exit_code = render_triage(result), 0
         if not result.distinct_failures:
             section, exit_code = render_problem("the saved run has no failed test to triage"), 1
     except FileNotFoundError:
         section, exit_code = render_problem("the bench failed before the suite saved a run"), 1
-    except ModelUnavailableError as error:
+    except (ModelUnavailableError, PackError) as error:
         section, exit_code = render_problem(str(error)), 1
     parsed.out.parent.mkdir(parents=True, exist_ok=True)
     parsed.out.write_text(section, encoding="utf-8")

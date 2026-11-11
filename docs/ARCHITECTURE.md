@@ -242,8 +242,9 @@ flowchart LR
   contradicted one into `UNKNOWN`: `FIRMWARE` naming a release the run didn't run,
   `FIRMWARE` when the firmware is the same release as the last passing run, `TIMEOUT`
   when a failed test reports an SCPI error, and `ALIGNMENT` when no signal reached the
-  analyzer or no level or power reading is out of limits. A check never picks another action in the
-  model's place.
+  analyzer or no level or power reading is out of limits. A check never picks another
+  action in the model's place. The checks are rules in the domain pack, each reading a
+  named fact built from a domain-free kind in `facts.py` (ADR 0022).
 - **Gates** (`abstain.py`) answer `UNKNOWN` before the model is asked. The API applies one:
   the retrieved precedents record different actions. The evaluation also scores a second,
   the closest precedent below a similarity threshold that `tools/calibrate_abstention.py`
@@ -330,7 +331,7 @@ flowchart LR
 | The lock that proves a refactor changed no prompt, evidence, check or vote | `tests/unit/triage/test_behaviour_lock.py` |
 | How a reply is parsed, and its schema | `triage/answer.py` |
 | Retrieval and source ids | `triage/retrieval.py`, `triage/embed.py` |
-| Checks on a verdict | `triage/checks.py` |
+| Checks on a verdict | the `[[checks]]` and `[facts.*]` in `triage/packs/rf-bench.toml`; `triage/checks.py` applies them, `triage/facts.py` holds the fact kinds |
 | Abstaining from retrieval, and its threshold | `triage/abstain.py`, `tools/calibrate_abstention.py` |
 | The HTTP API | `triage/api.py` |
 | Triage of a failed bench run in CI, and its comment section | `tools/save_failed_run.py`, `triage/failures.py`, `tools/ci_triage.py`, the `triage` job in `.github/workflows/ci.yml` |

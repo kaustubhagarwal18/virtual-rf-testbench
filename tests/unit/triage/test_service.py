@@ -221,3 +221,14 @@ def test_the_cli_names_one_fix_once_however_many_runs_recorded_it() -> None:
     out = describe(verdict)
     assert out.count("last time:") == 1
     assert f"last time: {fix} (past-1, past-2)" in out
+
+
+def test_main_refuses_a_broken_pack_in_one_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A missing pack file is one line of output and exit 1, before any model is asked."""
+    folder = write_run(tmp_path / "run", [FAILING_TEST])
+    provider = FakeProvider([])
+    assert main([str(folder), "--pack", str(tmp_path / "absent.toml")], provider) == 1
+    assert "no pack file" in capsys.readouterr().out
+    assert not provider.prompts

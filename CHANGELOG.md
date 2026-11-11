@@ -9,6 +9,10 @@ it, so the package version moves only with a release.
 
 ### Added
 
+- **Checks as pack rules** (ADR 0022): the five checks are `[[checks]]` in the pack over
+  named facts of five domain-free kinds (`triage/facts.py`); the pipeline, the vote and CI
+  take a pack, and `python -m triage.service` and `tools.ci_triage` take `--pack`. The
+  behaviour lock, widened so every check fires, passes unchanged.
 - **Domain packs** (ADR 0021): the actions, their causes and the domain's description move
   from code to `triage/packs/rf-bench.toml`, checked on load. A behaviour lock hashes 231
   parts of triage's behaviour and proves the move changed no prompt, evidence, check or vote.

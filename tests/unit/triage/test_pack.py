@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pytest
 
+from triage.evidence import BASELINE_VERSION, LEVEL_UNITS, NO_SIGNAL_LOG
+from triage.facts import LogContains, ReadingFailedIn, VersionsUnchanged
 from triage.pack import (
     DEFAULT_PACK,
     UNKNOWN,
@@ -110,3 +112,115 @@ def test_a_pack_is_a_plain_value() -> None:
     """Packs compare by content, so two loads of one file are equal."""
     assert isinstance(DEFAULT_PACK, Pack)
     assert load_pack(Path("triage/packs/rf-bench.toml")) == DEFAULT_PACK
+
+
+WITH_CHECKS = (
+    VALID
+    + """
+[facts.feed_error]
+kind = "errors_reported"
+field = "feed_errors"
+
+[facts.mapping_changed_message]
+kind = "log_contains"
+text = "mapping v2 deployed"
+
+[[checks]]
+name = "mapping-needs-a-change"
+refuse = "FIX_MAPPING"
+unless = "mapping_changed_message"
+reason = "no mapping change was deployed"
+
+[[checks]]
+name = "feed-error-is-not-mapping"
+refuse = "FIX_MAPPING"
+when = "feed_error"
+reason = "the feed reported {error}"
+"""
+)
+"""The payments pack with two facts and two checks."""
+
+
+def test_a_pack_loads_its_facts_and_checks_in_order(tmp_path: Path) -> None:
+    """Facts are named; checks keep the file's order, which is the order they apply in."""
+    pack = load_pack(write_pack(tmp_path, WITH_CHECKS))
+    assert sorted(pack.facts) == ["feed_error", "mapping_changed_message"]
+    assert [rule.name for rule in pack.checks] == [
+        "mapping-needs-a-change",
+        "feed-error-is-not-mapping",
+    ]
+    first, second = pack.checks
+    assert (first.refuse, first.fact, first.when) == (
+        "FIX_MAPPING",
+        "mapping_changed_message",
+        False,
+    )
+    assert (second.refuse, second.fact, second.when) == ("FIX_MAPPING", "feed_error", True)
+
+
+def test_the_rf_pack_has_its_five_checks_in_their_old_order() -> None:
+    """The RF checks apply in the order the code applied them before they moved."""
+    assert [rule.name for rule in DEFAULT_PACK.checks] == [
+        "foreign-release",
+        "firmware-unchanged",
+        "timeout-with-instrument-error",
+        "alignment-without-signal",
+        "alignment-without-level-reading",
+    ]
+
+
+BROKEN_CHECKS = {
+    "unknown fact kind": WITH_CHECKS.replace('kind = "errors_reported"', 'kind = "psychic"'),
+    "fact not a table": WITH_CHECKS.replace(
+        '[facts.feed_error]\nkind = "errors_reported"\nfield = "feed_errors"',
+        "[facts]\nfeed_error = 3",
+    ),
+    "fact missing a parameter": WITH_CHECKS.replace('field = "feed_errors"', ""),
+    "refuses an action the pack lacks": WITH_CHECKS.replace(
+        'refuse = "FIX_MAPPING"\nwhen', 'refuse = "REBOOT"\nwhen'
+    ),
+    "refuses UNKNOWN": WITH_CHECKS.replace(
+        'refuse = "FIX_MAPPING"\nwhen', 'refuse = "UNKNOWN"\nwhen'
+    ),
+    "names no fact": WITH_CHECKS.replace('when = "feed_error"', ""),
+    "both when and unless": WITH_CHECKS.replace(
+        'when = "feed_error"', 'when = "feed_error"\nunless = "feed_error"'
+    ),
+    "unknown fact": WITH_CHECKS.replace('when = "feed_error"', 'when = "weather"'),
+    "reason quotes a value the fact lacks": WITH_CHECKS.replace("{error}", "{amount}"),
+    "unless-check quotes a value": WITH_CHECKS.replace(
+        '"no mapping change was deployed"', '"seen {count} times"'
+    ),
+    "repeated check name": WITH_CHECKS.replace(
+        'name = "feed-error-is-not-mapping"', 'name = "mapping-needs-a-change"'
+    ),
+}
+"""Packs whose facts or checks have one mistake each."""
+
+
+@pytest.mark.parametrize("problem", sorted(BROKEN_CHECKS))
+def test_a_broken_fact_or_check_is_refused_with_one_line(tmp_path: Path, problem: str) -> None:
+    """Each mistake is refused at load, naming the file and the fact or check."""
+    path = write_pack(tmp_path, BROKEN_CHECKS[problem])
+    with pytest.raises(PackError) as refused:
+        load_pack(path)
+    assert str(path) in str(refused.value)
+    assert "\n" not in str(refused.value)
+
+
+def test_a_pack_needs_no_facts_or_checks(tmp_path: Path) -> None:
+    """A new domain can start with actions only and add checks once it has measured a need."""
+    pack = load_pack(write_pack(tmp_path, VALID))
+    assert not pack.facts
+    assert not pack.checks
+
+
+def test_the_rf_facts_match_what_the_evidence_builder_states() -> None:
+    """Until the evidence moves into the pack, its baseline, phrase and units must agree."""
+    facts = DEFAULT_PACK.facts
+    assert isinstance(facts["firmware_unchanged"], VersionsUnchanged)
+    assert facts["firmware_unchanged"].baseline == BASELINE_VERSION
+    assert isinstance(facts["no_signal"], LogContains)
+    assert facts["no_signal"].text == NO_SIGNAL_LOG
+    assert isinstance(facts["level_reading_failed"], ReadingFailedIn)
+    assert set(facts["level_reading_failed"].units) == LEVEL_UNITS

@@ -9,7 +9,7 @@ rather than what retrieval adds.
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from triage.pack import DEFAULT_PACK, system_prompt
+from triage.pack import DEFAULT_PACK, Pack, system_prompt
 
 
 @dataclass(frozen=True)
@@ -43,12 +43,15 @@ SYSTEM_PROMPT = system_prompt(DEFAULT_PACK)
 """The instructions for the default pack, identical in every scenario."""
 
 
-def build_prompt(evidence: str, sources: Sequence[Source] = ()) -> tuple[str, str]:
+def build_prompt(
+    evidence: str, sources: Sequence[Source] = (), pack: Pack = DEFAULT_PACK
+) -> tuple[str, str]:
     """Build the system and user messages for one question.
 
     Args:
         evidence: The run's evidence, from triage.evidence.
         sources: Past runs and documents retrieval found; none for the baseline scenarios.
+        pack: The domain pack, which describes the domain and lists the actions.
 
     Returns:
         The system prompt and the user prompt.
@@ -59,4 +62,5 @@ def build_prompt(evidence: str, sources: Sequence[Source] = ()) -> tuple[str, st
         parts.append(f"SOURCES\n{listed}")
     else:
         parts.append("SOURCES\nNone. Answer from the evidence alone, and cite nothing.")
-    return SYSTEM_PROMPT, "\n\n".join(parts)
+    system = SYSTEM_PROMPT if pack == DEFAULT_PACK else system_prompt(pack)
+    return system, "\n\n".join(parts)

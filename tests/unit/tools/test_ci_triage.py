@@ -11,6 +11,7 @@ import pytest
 
 from tests.unit.tools.test_triage_demo import StubRetriever, UnreachableProvider
 from tests.unit.triage.test_evidence import FAILING_TEST, write_run
+from tests.unit.triage.test_pack import VALID, write_pack
 from tools.ci_triage import (
     HEADING,
     NO_SAFE_ANSWER,
@@ -382,3 +383,27 @@ def test_the_cap_must_be_a_whole_number_of_at_least_one(text: str) -> None:
     """A cap of nothing, or not a number, is refused with a message."""
     with pytest.raises(argparse.ArgumentTypeError, match="at least 1"):
         positive_count(text)
+
+
+def test_main_triages_with_another_domains_pack(tmp_path: Path) -> None:
+    """--pack swaps the RF actions for the pack's: the answer names a payments action."""
+    folder = write_run(tmp_path / "run", [FAILING_TEST])
+    pack = write_pack(tmp_path, VALID)
+    out = tmp_path / "triage.md"
+    payment_reply = json.dumps(
+        {"fix": "REQUEST_FEED", "where": "the feed", "because": "short", "cited": []}
+    )
+    arguments = [str(folder), "--out", str(out), "--pack", str(pack)]
+    assert main(arguments, FakeProvider([payment_reply]), StubRetriever()) == 0
+    section = out.read_text(encoding="utf-8")
+    assert "`REQUEST_FEED`" in section
+    assert "ask the provider to resend the file" in section
+
+
+def test_main_writes_a_problem_when_the_pack_is_broken(tmp_path: Path) -> None:
+    """A pack that can't be used leaves a one-line problem in the comment, not a traceback."""
+    folder = write_run(tmp_path / "run", [FAILING_TEST])
+    out = tmp_path / "triage.md"
+    arguments = [str(folder), "--out", str(out), "--pack", str(tmp_path / "absent.toml")]
+    assert main(arguments, FakeProvider([]), StubRetriever()) == 1
+    assert "no pack file" in out.read_text(encoding="utf-8")

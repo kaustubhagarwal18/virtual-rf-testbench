@@ -11,10 +11,13 @@ UNKNOWN belongs to every pack and is added here, so no pack can leave it out or 
 """
 
 import re
+import string
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+from triage.facts import Fact, make_fact
 
 PACKS = Path(__file__).with_name("packs")
 """Where the packs that ship with the project live."""
@@ -64,20 +67,46 @@ UNKNOWN = Action(UNKNOWN_KEY, "insufficient evidence to act", UNKNOWN_CATEGORY)
 
 
 @dataclass(frozen=True)
+class CheckRule:
+    """Refuse an action when a fact holds, or unless it does: the answer becomes UNKNOWN.
+
+    A check never picks another action in the model's place; that would be a guess.
+
+    Attributes:
+        name: A short name, such as firmware-unchanged.
+        refuse: The key of the action it refuses.
+        fact: The name of the pack's fact it reads.
+        when: True to refuse when the fact holds, False to refuse unless it holds.
+        reason: Why, for the person reading the answer; it may quote the fact's values, as
+            in "the instruments reported {error}".
+    """
+
+    name: str
+    refuse: str
+    fact: str
+    when: bool
+    reason: str
+
+
+@dataclass(frozen=True)
 class Pack:
-    """A domain's description, causes and actions.
+    """A domain's description, causes, actions, facts and checks.
 
     Attributes:
         name: A short name, such as rf-bench.
         description: What the domain is and what its failures are caused by, for the model.
         categories: The causes a failure can have, such as firmware, bench and test.
         actions: The actions in the order the file lists them, then UNKNOWN.
+        facts: The named facts its checks read.
+        checks: The checks, in the order they apply.
     """
 
     name: str
     description: str
     categories: tuple[str, ...]
     actions: tuple[Action, ...]
+    facts: dict[str, Fact] = field(default_factory=dict)
+    checks: tuple[CheckRule, ...] = ()
 
     @property
     def keys(self) -> tuple[str, ...]:
@@ -106,12 +135,12 @@ class Pack:
         raise KeyError(f"{key!r} isn't an action of the {self.name} pack: {', '.join(self.keys)}")
 
 
-def _text(raw: dict[str, Any], field: str, where: str) -> str:
+def _text(raw: dict[str, Any], name: str, where: str) -> str:
     """Read one required, non-empty text field of a pack file.
 
     Args:
         raw: The parsed table.
-        field: The field's name.
+        name: The field's name.
         where: Where the table is, for the message.
 
     Returns:
@@ -120,9 +149,9 @@ def _text(raw: dict[str, Any], field: str, where: str) -> str:
     Raises:
         PackError: If the field is missing, empty or not text.
     """
-    value = raw.get(field)
+    value = raw.get(name)
     if not isinstance(value, str) or not value.strip():
-        raise PackError(f"{where}: {field!r} is missing or empty")
+        raise PackError(f"{where}: {name!r} is missing or empty")
     return value
 
 
@@ -159,6 +188,99 @@ def _actions(raw: dict[str, Any], categories: tuple[str, ...], path: Path) -> tu
     return (*actions, UNKNOWN)
 
 
+def _facts(raw: dict[str, Any], path: Path) -> dict[str, Fact]:
+    """Read a pack file's facts.
+
+    Args:
+        raw: The parsed file.
+        path: The file, for messages.
+
+    Returns:
+        Each fact by its name; none when the file has no [facts] table.
+
+    Raises:
+        PackError: If a fact isn't a table, or its kind or parameters are wrong.
+    """
+    facts: dict[str, Fact] = {}
+    for name, table in raw.get("facts", {}).items():
+        where = f"{path}, fact {name!r}"
+        if not isinstance(table, dict):
+            raise PackError(f"{where}: must be a table with a 'kind'")
+        params = dict(table)
+        kind = params.pop("kind", None)
+        try:
+            facts[name] = make_fact(str(kind), params)
+        except ValueError as error:
+            raise PackError(f"{where}: {error}") from error
+    return facts
+
+
+def _rule(
+    table: dict[str, Any], keys: tuple[str, ...], facts: dict[str, Fact], where: str
+) -> CheckRule:
+    """Read and check one check rule.
+
+    Args:
+        table: The rule's table.
+        keys: The pack's action keys.
+        facts: The pack's facts.
+        where: Where the rule is, for messages.
+
+    Returns:
+        The rule.
+
+    Raises:
+        PackError: If it refuses an action the pack lacks or UNKNOWN, names no fact or two,
+            names a fact the pack lacks, or its reason quotes a value the fact can't give.
+    """
+    refuse = _text(table, "refuse", where)
+    if refuse not in keys or refuse == UNKNOWN_KEY:
+        raise PackError(f"{where}: refuses {refuse!r}, which isn't one of the pack's actions")
+    if ("when" in table) == ("unless" in table):
+        raise PackError(f"{where}: give exactly one of 'when' and 'unless', naming a fact")
+    when = "when" in table
+    fact_name = _text(table, "when" if when else "unless", where)
+    fact = facts.get(fact_name)
+    if fact is None:
+        raise PackError(f"{where}: no fact named {fact_name!r}; known: {', '.join(sorted(facts))}")
+    reason = _text(table, "reason", where)
+    quoted = {name for _, name, _, _ in string.Formatter().parse(reason) if name}
+    available = set(fact.provides) if when else set()
+    if not quoted <= available:
+        raise PackError(
+            f"{where}: the reason quotes {sorted(quoted - available)}, but the fact gives "
+            f"{sorted(available) or 'nothing'} when the check refuses"
+        )
+    return CheckRule(_text(table, "name", where), refuse, fact_name, when, reason)
+
+
+def _checks(
+    raw: dict[str, Any], keys: tuple[str, ...], facts: dict[str, Fact], path: Path
+) -> tuple[CheckRule, ...]:
+    """Read a pack file's checks, in the order they apply.
+
+    Args:
+        raw: The parsed file.
+        keys: The pack's action keys.
+        facts: The pack's facts.
+        path: The file, for messages.
+
+    Returns:
+        The rules; none when the file lists no [[checks]].
+
+    Raises:
+        PackError: If two checks share a name; each rule's own mistakes are raised by
+            _rule.
+    """
+    rules: list[CheckRule] = []
+    for number, table in enumerate(raw.get("checks", []), start=1):
+        rule = _rule(table, keys, facts, f"{path}, check {number}")
+        if rule.name in (earlier.name for earlier in rules):
+            raise PackError(f"{path}, check {number}: the name {rule.name!r} is already used")
+        rules.append(rule)
+    return tuple(rules)
+
+
 def load_pack(path: Path) -> Pack:
     """Read a pack file and check it, so a mistake is found before anything uses it.
 
@@ -169,8 +291,9 @@ def load_pack(path: Path) -> Pack:
         The pack.
 
     Raises:
-        PackError: If the file is missing, isn't TOML, or breaks one of the pack's rules;
-            the message is one line naming the file.
+        PackError: If the file is missing, isn't TOML, or its categories aren't a list;
+            the other rules a pack must keep are raised by the helpers that read each part.
+            Every message is one line naming the file.
     """
     if not path.is_file():
         raise PackError(f"{path}: no pack file there; the shipped packs are in {PACKS}")
@@ -181,11 +304,15 @@ def load_pack(path: Path) -> Pack:
     categories = raw.get("categories")
     if not isinstance(categories, list) or not all(isinstance(item, str) for item in categories):
         raise PackError(f"{path}: 'categories' must be a list of names")
+    actions = _actions(raw, tuple(categories), path)
+    facts = _facts(raw, path)
     return Pack(
         name=_text(raw, "name", str(path)),
         description=_text(raw, "description", str(path)),
         categories=tuple(categories),
-        actions=_actions(raw, tuple(categories), path),
+        actions=actions,
+        facts=facts,
+        checks=_checks(raw, tuple(action.key for action in actions), facts, path),
     )
 
 

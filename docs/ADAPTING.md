@@ -86,6 +86,34 @@ and `tests/unit/triage/test_behaviour_lock.py` fails until its hashes are record
 `UPDATE_BEHAVIOUR_LOCK=1`. Expect that to take a while
 on a laptop.
 
+## Write a pack for another domain
+
+The pipeline knows no domain; a pack file tells it one. `triage/packs/rf-bench.toml` is the
+RF bench's, and a pack for payments, wafer test or a device fleet has the same parts:
+
+- **`description`:** two or three sentences for the model: what the system is, and what its
+  failures are caused by.
+- **`categories`:** the causes, such as `["feed", "mapping", "counterparty"]`.
+- **`[[actions]]`:** what an engineer would do, each with an upper-case `key`, the
+  `category` it answers and what it `says` to do. `UNKNOWN` is added for you.
+- **`[facts.<name>]`** (optional): statements about a run, each of a kind the core provides:
+  `versions_unchanged` (a version field equals a baseline), `names_other_version` (the answer
+  names a version the run didn't record), `errors_reported` (a failed test lists errors),
+  `log_contains` (a log line has a phrase) and `reading_failed_in` (a reading in some units
+  is out of limits).
+- **`[[checks]]`** (optional): `refuse` an action `when` a fact holds, or `unless` it does,
+  with a `reason`, which may quote the fact's values such as `{error}`. A refused answer
+  becomes `UNKNOWN`; a check never picks another action.
+
+A mistake is refused when the pack loads, with one line naming the file. Then pass it:
+
+```
+uv run python -m triage.service path/to/run --pack path/to/your-pack.toml
+```
+
+`python -m tools.ci_triage` takes `--pack` too. The evidence builder still reads this
+repository's results format; a generic case format is next on the roadmap.
+
 ## 3 · Drive real instruments
 
 The drivers in `drivers/` speak SCPI through RsInstrument, so the same code can reach a

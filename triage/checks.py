@@ -1,26 +1,24 @@
-"""Rules that check the model's verdict against facts the evidence states outright.
+"""Checks that turn an answer the evidence contradicts into UNKNOWN.
 
 A small model has fallback answers: when unsure, it blames the firmware or the timeout, or
-copies a precedent's diagnosis whole. But some facts are not judgements, they are in the
-results file: which releases the run ran, whether that changed, and whether the instruments
-reported an SCPI error. A check turns a verdict that contradicts
-such a fact into UNKNOWN. It never picks a different action in its place: that would be a
-guess, and a confident wrong action is the failure that costs an engineer hours.
+copies a precedent's diagnosis whole. But some facts are not judgements, they are recorded:
+which versions the run ran, whether that changed, which errors were reported. A check turns
+an answer that contradicts such a fact into UNKNOWN. It never picks a different action in
+its place: that would be a guess, and a confident wrong action is the failure that costs
+an engineer hours.
+
+Which actions to refuse, on which facts, is domain knowledge, so it lives in the domain
+pack as rules (`[[checks]]` in `triage/packs/rf-bench.toml`); this module applies them. A
+check too subtle for a rule can still be a class with a review method.
 """
 
-import re
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import Protocol
 
 from triage.answer import Verdict
-from triage.evidence import (
-    SavedRun,
-    failed_level_reading,
-    firmware_changed,
-    instrument_errors,
-    no_signal_note,
-)
-from triage.pack import UNKNOWN
+from triage.evidence import SavedRun
+from triage.facts import Fact
+from triage.pack import DEFAULT_PACK, UNKNOWN, CheckRule, Pack
 
 
 class VerdictCheck(Protocol):
@@ -38,178 +36,50 @@ class VerdictCheck(Protocol):
         """
 
 
-class FirmwareUnchangedCheck:
-    """Refuse a firmware verdict when the firmware is the same as the last passing run's.
+@dataclass(frozen=True)
+class RuleCheck:
+    """A pack's check rule, with the fact it reads.
 
-    A regression needs a release that changed. When the versions are not recorded, whether
-    they changed is unknown, so the verdict is left alone rather than overruled on a guess.
+    Attributes:
+        rule: The rule: which action it refuses, on which fact, and why.
+        fact: The fact the rule names.
     """
 
-    def review(self, run: SavedRun, verdict: Verdict) -> Verdict:
-        """Overrule FIRMWARE when the run's firmware is known to be unchanged.
-
-        Args:
-            run: The run the verdict is about.
-            verdict: The model's verdict.
-
-        Returns:
-            The verdict, or UNKNOWN with the reason it was overruled.
-        """
-        if verdict.fix.key != "FIRMWARE" or firmware_changed(run) is not False:
-            return verdict
-        return replace(
-            verdict,
-            fix=UNKNOWN,
-            overruled=(
-                "the model chose FIRMWARE, but the firmware is unchanged since the last "
-                "passing run, so a firmware regression is not what the evidence shows"
-            ),
-        )
-
-
-RELEASE_PATTERN = re.compile(r"\b\d+\.\d+\.\d+(?:-[0-9A-Za-z]+(?:\.[0-9A-Za-z]+)*)?\b")
-"""A release number such as 0.2.0 or 0.2.0-rc2, as the bench's firmware versions are written."""
-
-
-class ForeignReleaseCheck:
-    """Refuse a firmware verdict that blames a release this run didn't run.
-
-    With retrieval, the model sometimes copies a precedent's diagnosis whole, release number
-    included: 'release 0.2.0-rc2 doesn't clear the offset' for a run still on 0.1.0. The run
-    records which releases it ran, so a verdict naming another one is contradicted by the
-    evidence. When the run recorded no versions, nothing can be compared and the verdict is
-    left alone.
-    """
+    rule: CheckRule
+    fact: Fact
 
     def review(self, run: SavedRun, verdict: Verdict) -> Verdict:
-        """Overrule FIRMWARE when it names a release that isn't one of the run's own.
-
-        Args:
-            run: The run the verdict is about.
-            verdict: The model's verdict.
-
-        Returns:
-            The verdict, or UNKNOWN with the reason it was overruled.
-        """
-        versions = run.results.get("firmware_versions") or {}
-        if verdict.fix.key != "FIRMWARE" or not versions:
-            return verdict
-        named = RELEASE_PATTERN.findall(f"{verdict.where} {verdict.because}")
-        foreign = [release for release in named if release not in versions.values()]
-        if not foreign:
-            return verdict
-        ran = ", ".join(f"{role} {version}" for role, version in sorted(versions.items()))
-        return replace(
-            verdict,
-            fix=UNKNOWN,
-            overruled=(
-                f"the model blamed release {foreign[0]}, but this run ran {ran}: the "
-                "diagnosis belongs to another run"
-            ),
-        )
-
-
-class TimeoutWithInstrumentErrorCheck:
-    """Refuse a timeout verdict when the instruments reported an error in the failed tests.
-
-    A slow instrument answers late but accepts the command, so it queues no SCPI error. A
-    test that timed out and also reports one, such as -113 "Undefined header", is waiting
-    for an answer to a command the instrument refused: raising the timeout would not help.
-    """
-
-    def review(self, run: SavedRun, verdict: Verdict) -> Verdict:
-        """Overrule TIMEOUT when a failed test reports an instrument error.
-
-        Args:
-            run: The run the verdict is about.
-            verdict: The model's verdict.
-
-        Returns:
-            The verdict, or UNKNOWN with the reason it was overruled.
-        """
-        errors = instrument_errors(run)
-        if verdict.fix.key != "TIMEOUT" or not errors:
-            return verdict
-        return replace(
-            verdict,
-            fix=UNKNOWN,
-            overruled=(
-                f"the model chose TIMEOUT, but the instruments reported {errors[0]}: a "
-                "rejected command, not a slow instrument"
-            ),
-        )
-
-
-class AlignmentWithoutSignalCheck:
-    """Refuse a self-alignment verdict when the analyzer logged that no signal reached it.
-
-    Self-alignment corrects an instrument's own measurement error; it can't bring back a
-    signal that never arrives. With retrieval, the model chose ALIGNMENT on a disconnected
-    cable, drawn by precedents whose fix reads "reconnected the cable and recalibrated"
-    (ADR 0017).
-    """
-
-    def review(self, run: SavedRun, verdict: Verdict) -> Verdict:
-        """Overrule ALIGNMENT when the analyzer logged no signal.
-
-        Args:
-            run: The run the verdict is about.
-            verdict: The model's verdict.
-
-        Returns:
-            The verdict, or UNKNOWN with the reason it was overruled.
-        """
-        if verdict.fix.key != "ALIGNMENT" or not no_signal_note(run):
-            return verdict
-        return replace(
-            verdict,
-            fix=UNKNOWN,
-            overruled=(
-                "the model chose ALIGNMENT, but the analyzer logged that no signal reached "
-                "it: self-alignment can't restore a missing signal"
-            ),
-        )
-
-
-class AlignmentWithoutLevelReadingCheck:
-    """Refuse a self-alignment verdict when no level or power reading is out of limits.
-
-    An analyzer's alignment error shifts the levels it reads; it doesn't move a frequency,
-    stop a setup step or time out a query. In CI, a run with two faults (a release putting
-    the frequency 4 ppm high, and a 3 dB alignment error) had its frequency failures
-    answered ALIGNMENT, drawn by the alignment warning in the run's logs (ADR 0020).
-    """
-
-    def review(self, run: SavedRun, verdict: Verdict) -> Verdict:
-        """Overrule ALIGNMENT when no failed reading is a level or a power.
+        """Overrule the rule's action when its fact holds, or unless it does.
 
         Args:
             run: The run the verdict is about, whole or focused on one failure.
             verdict: The model's verdict.
 
         Returns:
-            The verdict, or UNKNOWN with the reason it was overruled.
+            The verdict, or UNKNOWN with the rule's reason, quoting the fact's values.
         """
-        if verdict.fix.key != "ALIGNMENT" or failed_level_reading(run):
+        if verdict.fix.key != self.rule.refuse:
             return verdict
-        return replace(
-            verdict,
-            fix=UNKNOWN,
-            overruled=(
-                "the model chose ALIGNMENT, but no level or power reading is out of limits "
-                "in this failure: an alignment error shifts levels, not frequencies"
-            ),
-        )
+        values = self.fact(run, f"{verdict.where} {verdict.because}")
+        if (values is not None) != self.rule.when:
+            return verdict
+        return replace(verdict, fix=UNKNOWN, overruled=self.rule.reason.format(**(values or {})))
 
 
-DEFAULT_CHECKS: tuple[VerdictCheck, ...] = (
-    ForeignReleaseCheck(),
-    FirmwareUnchangedCheck(),
-    TimeoutWithInstrumentErrorCheck(),
-    AlignmentWithoutSignalCheck(),
-    AlignmentWithoutLevelReadingCheck(),
-)
-"""The checks the service applies to every verdict."""
+def checks_for(pack: Pack) -> tuple[VerdictCheck, ...]:
+    """Build a pack's checks, in the order its file lists them.
+
+    Args:
+        pack: The domain pack.
+
+    Returns:
+        One check per rule.
+    """
+    return tuple(RuleCheck(rule, pack.facts[rule.fact]) for rule in pack.checks)
+
+
+DEFAULT_CHECKS: tuple[VerdictCheck, ...] = checks_for(DEFAULT_PACK)
+"""The default pack's checks, which the service applies to every verdict."""
 
 
 def apply_checks(run: SavedRun, verdict: Verdict, checks: tuple[VerdictCheck, ...]) -> Verdict:

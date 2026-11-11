@@ -19,9 +19,10 @@ from typing import Any
 
 from triage.abstain import SERVICE_GATES
 from triage.answer import MalformedAnswerError, Verdict
-from triage.checks import DEFAULT_CHECKS
+from triage.checks import DEFAULT_CHECKS, checks_for
 from triage.evidence import FOCUS_KEY, FULL, SavedRun, failed_steps, failed_tests, sequence_fields
 from triage.llm import LLMProvider
+from triage.pack import DEFAULT_PACK, Pack
 from triage.retrieval import DEFAULT_TOP_K, Retriever
 from triage.service import triage_run
 
@@ -219,16 +220,20 @@ def triage_failures(
     )
 
 
-def triage_like_the_api(run: SavedRun, provider: LLMProvider, retriever: Retriever) -> Verdict:
+def triage_like_the_api(
+    run: SavedRun, provider: LLMProvider, retriever: Retriever, pack: Pack = DEFAULT_PACK
+) -> Verdict:
     """Triage a run as the API does: past runs, the disagreement gate, the model, the checks.
 
     Args:
         run: The run, whole or focused on one failure.
         provider: The answering model.
         retriever: The source of past runs.
+        pack: The domain pack, which supplies the actions and the checks.
 
     Returns:
         The verdict, UNKNOWN when the gate or a check found no safe answer.
     """
     sources = retriever.similar_to(run, DEFAULT_TOP_K)
-    return triage_run(run, provider, FULL, sources, checks=DEFAULT_CHECKS, gates=SERVICE_GATES)
+    checks = DEFAULT_CHECKS if pack == DEFAULT_PACK else checks_for(pack)
+    return triage_run(run, provider, FULL, sources, checks=checks, gates=SERVICE_GATES, pack=pack)
