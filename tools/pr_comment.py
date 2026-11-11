@@ -61,10 +61,13 @@ def parse_job(text: str) -> JobResult:
 def render_comment(
     summary: str, jobs: Sequence[JobResult], run_url: str, commit: str, triage: str = ""
 ) -> str:
-    """Write the comment: marker, test results, triage, a table of CI jobs and a run link.
+    """Write the comment: marker, test results, a table of CI jobs and a run link.
+
+    A triage section goes straight under the results headline, before the tables and the
+    list of failures, so the likely cause is the first thing a reviewer reads.
 
     Args:
-        summary: The Markdown test results summary.
+        summary: The Markdown test results summary; its first line is the headline.
         jobs: Every CI job the comment reports, in order.
         run_url: The CI run's page.
         commit: The commit the run tested.
@@ -73,10 +76,13 @@ def render_comment(
     Returns:
         The comment's Markdown.
     """
-    lines = [MARKER, summary.rstrip("\n"), ""]
+    headline, _, details = summary.rstrip("\n").partition("\n")
+    lines = [MARKER, headline]
     if triage:
-        lines += [triage.rstrip("\n"), ""]
-    lines += ["### CI jobs", ""]
+        lines += ["", triage.rstrip("\n")]
+    if details:
+        lines.append(details)
+    lines += ["", "### CI jobs", ""]
     lines += ["| Job | Result |", "|---|---|"]
     lines += [f"| {job.name} | {_job_label(job.result)} |" for job in jobs]
     lines += ["", f"Commit `{commit[:7]}` · [CI run]({run_url})"]

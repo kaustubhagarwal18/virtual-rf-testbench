@@ -24,7 +24,8 @@ bench job just failed.
 - **Ollama runs on the runner, on localhost.** The release is pinned and its checksum
   verified, like Trivy and gitleaks; only its CPU libraries are kept, and they are cached
   with both models under one key, so the download happens once per version.
-- **A section of the existing comment**, between the test results and the job table: the
+- **A section of the existing comment**, straight under its results headline and above the
+  tables and the failure list, which can run to dozens of lines and buried it there: the
   action, its cause (firmware, bench or test), the model's reason, the cited past runs and
   each one's recorded fix, quoted, with identical fixes on one line. When a gate or a check
   stood in for the model, its reason replaces the model's words, which are no longer the

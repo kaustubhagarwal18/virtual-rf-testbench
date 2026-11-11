@@ -101,19 +101,22 @@ def test_runs_as_a_module(tmp_path: Path) -> None:
     assert completed.stdout.startswith(MARKER)
 
 
-def test_a_triage_section_sits_between_the_results_and_the_jobs() -> None:
-    """The triage verdict follows the test results, so a failed bench's cause is read first."""
+def test_a_triage_section_comes_straight_after_the_results_headline() -> None:
+    """The verdict sits above the tables and the failures, so a long failure list can't bury it."""
+    summary = "## Test results: 19 failed\n\n| Suite | Run |\n|---|--:|\n\n### Failures\n\n- x\n"
     comment = render_comment(
-        "## Test results: 1 failed\n",
+        summary,
         [JobResult("Bench", "failure")],
         RUN_URL,
         COMMIT,
         triage="### Triage of the failed bench run\n\nVerdict here\n",
     )
-    results_at = comment.index("## Test results")
+    lines = comment.splitlines()
+    assert lines[1] == "## Test results: 19 failed"
+    assert lines[3] == "### Triage of the failed bench run"
     triage_at = comment.index("### Triage of the failed bench run")
-    jobs_at = comment.index("### CI jobs")
-    assert results_at < triage_at < jobs_at
+    assert triage_at < comment.index("| Suite | Run |") < comment.index("### Failures")
+    assert comment.index("### Failures") < comment.index("### CI jobs")
 
 
 def test_main_includes_the_triage_file_when_given(
