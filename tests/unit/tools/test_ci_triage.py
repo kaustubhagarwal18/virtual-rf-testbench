@@ -11,12 +11,13 @@ import pytest
 
 from tests.unit.tools.test_triage_demo import StubRetriever, UnreachableProvider
 from tests.unit.triage.test_evidence import FAILING_TEST, write_run
-from tests.unit.triage.test_pack import VALID, write_pack
+from tests.unit.triage.test_pack import VALID, payments_case, write_pack
 from tools.ci_triage import (
     HEADING,
     NO_SAFE_ANSWER,
     SHOWN_TESTS,
     TEXT_LIMIT,
+    history_for,
     main,
     positive_count,
     render_problem,
@@ -26,8 +27,9 @@ from triage.answer import PastFix, Verdict
 from triage.bench_run import load_case
 from triage.failures import FailureAnswer, FailureGroup, RunTriage, triage_like_the_api
 from triage.llm import FakeProvider
-from triage.pack import DEFAULT_PACK, UNKNOWN
+from triage.pack import DEFAULT_PACK, UNKNOWN, load_pack
 from triage.prompt import Source
+from triage.retrieval import DEFAULT_HISTORY
 
 CABLE_REPLY = json.dumps(
     {
@@ -407,3 +409,40 @@ def test_main_writes_a_problem_when_the_pack_is_broken(tmp_path: Path) -> None:
     arguments = [str(folder), "--out", str(out), "--pack", str(tmp_path / "absent.toml")]
     assert main(arguments, FakeProvider([]), StubRetriever()) == 1
     assert "no pack file" in out.read_text(encoding="utf-8")
+
+
+def test_another_pack_needs_its_own_history(tmp_path: Path) -> None:
+    """Without --history, a non-RF pack would be offered the RF past runs; it is refused."""
+    folder = write_run(tmp_path / "run", [FAILING_TEST])
+    out = tmp_path / "triage.md"
+    arguments = [str(folder), "--out", str(out), "--pack", str(write_pack(tmp_path, VALID))]
+    assert main(arguments, FakeProvider([])) == 1
+    assert "--history" in out.read_text(encoding="utf-8")
+
+
+def test_a_generic_case_is_triaged_and_grouped_by_its_own_ids(tmp_path: Path) -> None:
+    """A payments batch saved as case.json goes through the CI tool with the payments pack."""
+    folder = payments_case(tmp_path).folder
+    out = tmp_path / "triage.md"
+    payment_reply = json.dumps(
+        {"fix": "REQUEST_FEED", "where": "the feed", "because": "short", "cited": []}
+    )
+    arguments = [str(folder), "--out", str(out), "--pack", str(write_pack(tmp_path, VALID))]
+    assert main(arguments, FakeProvider([payment_reply]), StubRetriever()) == 0
+    section = out.read_text(encoding="utf-8")
+    assert "`batch-7/settlement: failed`" in section
+    assert "`REQUEST_FEED`" in section
+
+
+def test_a_broken_case_json_is_a_problem_line(tmp_path: Path) -> None:
+    """A case.json that can't be read leaves a one-line problem, not a traceback."""
+    (tmp_path / "case.json").write_text('{"format": "triage-case/9"}', encoding="utf-8")
+    out = tmp_path / "triage.md"
+    assert main([str(tmp_path), "--out", str(out)], FakeProvider([]), StubRetriever()) == 1
+    assert "triage-case/9" in out.read_text(encoding="utf-8")
+
+
+def test_the_history_is_the_one_given_or_the_rf_benchs_for_the_rf_pack(tmp_path: Path) -> None:
+    """--history wins; without it only the RF pack falls back to the RF history."""
+    assert history_for(tmp_path, load_pack(write_pack(tmp_path, VALID))) == tmp_path
+    assert history_for(None, DEFAULT_PACK) == DEFAULT_HISTORY

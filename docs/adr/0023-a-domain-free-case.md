@@ -40,6 +40,13 @@ lot or a device fleet could not be triaged without imitating a pytest bench run.
 - The tests triage a payments batch written as `case.json`, with its own pack: its prompt
   and evidence carry payments notes and labels, and no RF word.
 - The neutral wording still says "tests" in a few lines ("First failure", "N tests failed
-  this way", the selection line). Retrieval and `tools/calibrate_abstention.py` build the
-  history's evidence with the default pack, the API accepts the bench format only, and
-  `make eval` uses the default pack.
+  this way", the selection line). `tools/calibrate_abstention.py` builds the history's
+  evidence with the default pack, the API accepts the bench format only, and `make eval`
+  uses the default pack.
+- After review: retrieval words both the history and the query with the chosen pack, and
+  CI refuses a pack other than the RF bench's without its own `--history`. `case.json`
+  refuses repeated item ids (a focused failure selects its items by id) and flags that
+  aren't JSON booleans ("false" as text would read as true). Only pytest ids
+  (`file.py::test[case]`) group their parametrized cases; any other id, such as
+  `payment[1]`, is its own failure. A pack refuses sections of the wrong TOML type and
+  template fields `str.format` would fail on (`{}`, `{0}`, `{times.real}`, a nested spec).

@@ -46,6 +46,11 @@ FAILING_TEST: dict[str, object] = {
 }
 
 
+def failing_tests(count: int) -> list[dict[str, object]]:
+    """Return FAILING_TEST as several cases with their own ids, as pytest would name them."""
+    return [{**FAILING_TEST, "id": f"{FAILING_TEST['id']}[{number}]"} for number in range(count)]
+
+
 def write_run(folder: Path, tests: list[dict[str, object]], sequence: str = "") -> Path:
     """Write a saved run with the given tests, and a sequence log when one is given."""
     folder.mkdir(parents=True, exist_ok=True)
@@ -118,7 +123,7 @@ def test_a_failed_setup_step_comes_before_any_test(tmp_path: Path) -> None:
         "17:00:00.002 ERROR step=2 action=verify level offset instrument=generator "
         "parameter=level_offset_db expected=0.0 reason=AssertionError: it carries -2 dB\n"
     )
-    run = load_case(write_run(tmp_path / "leak", [FAILING_TEST, FAILING_TEST], sequence))
+    run = load_case(write_run(tmp_path / "leak", failing_tests(2), sequence))
     failure = first_failure(run)
     assert failure is not None
     assert failure.source == "sequence.log"
@@ -173,7 +178,7 @@ def test_evidence_for_a_clean_run_says_so(tmp_path: Path) -> None:
 
 def test_consequences_are_counted_in_the_evidence(tmp_path: Path) -> None:
     """When failures follow the first, the evidence says how many may be consequences."""
-    run = load_case(write_run(tmp_path / "many", [FAILING_TEST, FAILING_TEST, FAILING_TEST]))
+    run = load_case(write_run(tmp_path / "many", failing_tests(3)))
     assert "2 further tests failed after it" in build_evidence(run, FULL)
 
 

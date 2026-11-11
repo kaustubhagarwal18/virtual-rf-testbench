@@ -17,7 +17,8 @@ one model prompt, which takes 20 to 60 s on a CPU runner.
 - **Group the failed tests** (`triage/failures.py`). The tests a failed setup step stopped
   are one failure. The other tests are grouped by test function and kind of failure (the
   exception's class, or `Failed`), so the parametrized cases of one test that fail the same
-  way are asked about once. On the recorded runs this gives 1 failure in 24 runs, 3 in 6,
+  way are asked about once. Only pytest ids group by function; any other item, such as a
+  payment, is its own failure (ADR 0023). On the recorded runs this gives 1 failure in 24 runs, 3 in 6,
   and 4 to 11 in the other 9: 116 in all.
 - **Focus the run on each group** and triage the focused copy with the API's pipeline:
   retrieval, the disagreement gate, the model, the checks. The focused run keeps the passed

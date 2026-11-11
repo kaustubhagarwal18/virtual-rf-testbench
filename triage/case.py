@@ -20,6 +20,11 @@ CASE_FILE = "case.json"
 CASE_FORMAT = "triage-case/1"
 """The format a case.json declares, so a later format can be told apart."""
 
+
+class CaseError(ValueError):
+    """A case that can't be used, with one line saying what is wrong and where."""
+
+
 NOTABLE_LOG_LEVELS = ("WARNING", "ERROR")
 """Log levels worth showing: a healthy run's INFO lines are noise."""
 
@@ -170,6 +175,18 @@ class Case:
     context: Context = field(default_factory=Context)
     focus: Focus | None = None
 
+    def __post_init__(self) -> None:
+        """Refuse repeated item ids: a focused failure selects its items by id.
+
+        Raises:
+            CaseError: If two items share an id; the message names it.
+        """
+        seen: set[str] = set()
+        for item in self.items:
+            if item.id in seen:
+                raise CaseError(f"{self.folder}: two items share the id {item.id!r}")
+            seen.add(item.id)
+
     @property
     def failed_items(self) -> list[Item]:
         """The items that didn't pass, in the order they ran.
@@ -200,6 +217,28 @@ class Case:
         return [step for step in self.steps if step.failed]
 
 
+def _flag(raw: dict[str, Any], name: str, default: bool | None = None) -> bool:
+    """Read a true-or-false field, refusing anything that isn't a JSON boolean.
+
+    Python reads the text "false" as true, so a producer's slip would flip a result.
+
+    Args:
+        raw: The object holding the field.
+        name: The field's name.
+        default: The value when the field is absent; None makes it required.
+
+    Returns:
+        The flag.
+
+    Raises:
+        CaseError: If the field is missing and required, or isn't true or false.
+    """
+    value = raw.get(name, default)
+    if not isinstance(value, bool):
+        raise CaseError(f"{name!r} must be true or false, not {value!r}")
+    return value
+
+
 def _reading(raw: dict[str, Any]) -> Reading:
     """Read one reading from case.json.
 
@@ -216,7 +255,7 @@ def _reading(raw: dict[str, Any]) -> Reading:
         low=raw.get("low"),
         high=raw.get("high"),
         margin=raw.get("margin"),
-        passed=bool(raw["passed"]),
+        passed=_flag(raw, "passed"),
     )
 
 
@@ -231,12 +270,29 @@ def case_from_dict(raw: dict[str, Any], folder: Path) -> Case:
         The case.
 
     Raises:
-        ValueError: If the file declares another format; the message names both.
+        CaseError: If the file declares another format, or a field is wrong; the message
+            names the file.
     """
     if raw.get("format") != CASE_FORMAT:
-        raise ValueError(
+        raise CaseError(
             f"{folder / CASE_FILE} declares format {raw.get('format')!r}, not {CASE_FORMAT!r}"
         )
+    try:
+        return _case(raw, folder)
+    except CaseError as error:
+        raise CaseError(f"{folder / CASE_FILE}: {error}") from error
+
+
+def _case(raw: dict[str, Any], folder: Path) -> Case:
+    """Build a case from case.json's contents, once its format is known.
+
+    Args:
+        raw: The parsed file.
+        folder: Where it was read from.
+
+    Returns:
+        The case.
+    """
     return Case(
         folder=folder,
         items=tuple(
@@ -254,7 +310,7 @@ def case_from_dict(raw: dict[str, Any], folder: Path) -> Case:
                 number=str(step.get("number", "?")),
                 action=str(step.get("action", "unknown")),
                 target=str(step.get("target", "")),
-                failed=bool(step.get("failed", False)),
+                failed=_flag(step, "failed", default=False),
                 reason=str(step.get("reason", "")),
                 params=tuple(
                     (str(name), str(value)) for name, value in step.get("params", {}).items()

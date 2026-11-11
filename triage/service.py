@@ -20,7 +20,7 @@ from triage.answer import (
     with_past_fixes,
 )
 from triage.bench_run import load_case
-from triage.case import Case
+from triage.case import Case, CaseError
 from triage.checks import VerdictCheck, apply_checks, checks_for
 from triage.evidence import ERROR_ONLY, FULL, build_evidence
 from triage.llm import LLMProvider, ModelUnavailableError, OllamaProvider
@@ -120,8 +120,8 @@ def main(arguments: Sequence[str] | None = None, provider: LLMProvider | None = 
         provider: The answering model; None uses Ollama.
 
     Returns:
-        0 when a verdict was produced, 1 if the pack can't be used, or the model couldn't
-        be reached or answered unusably.
+        0 when a verdict was produced, 1 if the pack or the case can't be used, or the
+        model couldn't be reached or answered unusably.
     """
     parser = argparse.ArgumentParser(
         prog="python -m triage.service", description="Explain one failed bench run."
@@ -142,7 +142,7 @@ def main(arguments: Sequence[str] | None = None, provider: LLMProvider | None = 
         verdict = triage_run(
             load_case(parsed.run), provider, parsed.level, checks=checks_for(pack), pack=pack
         )
-    except ModelUnavailableError as error:
+    except (ModelUnavailableError, CaseError, FileNotFoundError) as error:
         sys.stdout.write(f"{error}\n")
         return 1
     except MalformedAnswerError as error:

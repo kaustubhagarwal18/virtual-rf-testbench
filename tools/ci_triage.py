@@ -20,6 +20,7 @@ from pathlib import Path
 
 from triage.answer import Verdict, grouped_past_fixes, verdict_schema
 from triage.bench_run import load_case
+from triage.case import CaseError
 from triage.failures import (
     DEFAULT_MAX_FAILURES,
     FailureAnswer,
@@ -28,7 +29,7 @@ from triage.failures import (
     triage_like_the_api,
 )
 from triage.llm import DEFAULT_MODEL, LLMProvider, ModelUnavailableError, OllamaProvider
-from triage.pack import DEFAULT_PACK_FILE, UNKNOWN, PackError, load_pack
+from triage.pack import DEFAULT_PACK, DEFAULT_PACK_FILE, UNKNOWN, Pack, PackError, load_pack
 from triage.retrieval import DEFAULT_HISTORY, Retriever, history_index
 from triage.textfmt import clip
 
@@ -214,6 +215,32 @@ def render_problem(reason: str) -> str:
     return f"{HEADING}\n\nNo verdict: {code(reason)}\n"
 
 
+def history_for(history: Path | None, pack: Pack) -> Path:
+    """Choose the history to retrieve from, refusing the RF bench's for another pack.
+
+    Past runs of another domain would be offered to the model as precedents, and their
+    actions would make the disagreement gate answer UNKNOWN for reasons of their own.
+
+    Args:
+        history: The folder given with --history, or None.
+        pack: The domain pack.
+
+    Returns:
+        The folder of resolved runs.
+
+    Raises:
+        PackError: If no history was given for a pack other than the RF bench's.
+    """
+    if history is not None:
+        return history
+    if pack == DEFAULT_PACK:
+        return DEFAULT_HISTORY
+    raise PackError(
+        f"the {pack.name} pack needs --history: a folder of its own resolved runs; the "
+        "default history is the RF bench's"
+    )
+
+
 def positive_count(text: str) -> int:
     """Read a command-line count that must be at least one.
 
@@ -255,7 +282,9 @@ def main(
     )
     parser.add_argument("run", type=Path, help="the saved run folder")
     parser.add_argument("--out", type=Path, required=True, help="the Markdown file to write")
-    parser.add_argument("--history", type=Path, default=DEFAULT_HISTORY, help="history runs")
+    parser.add_argument(
+        "--history", type=Path, help="resolved runs to retrieve from (default: the RF bench's)"
+    )
     parser.add_argument("--model", default=DEFAULT_MODEL, help="Ollama model to ask")
     parser.add_argument(
         "--pack", type=Path, default=DEFAULT_PACK_FILE, help="domain pack (default: the RF bench)"
@@ -273,7 +302,7 @@ def main(
             model=parsed.model, response_format=verdict_schema(pack=pack)
         )
         run = load_case(parsed.run)
-        index = retriever or history_index(parsed.history)
+        index = retriever or history_index(history_for(parsed.history, pack), pack=pack)
         answer = partial(triage_like_the_api, provider=model, retriever=index, pack=pack)
         result = triage_failures(run, answer, parsed.max_failures)
         section, exit_code = render_triage(result), 0
@@ -281,7 +310,7 @@ def main(
             section, exit_code = render_problem("the saved run has no failed test to triage"), 1
     except FileNotFoundError:
         section, exit_code = render_problem("the bench failed before the suite saved a run"), 1
-    except (ModelUnavailableError, PackError) as error:
+    except (ModelUnavailableError, PackError, CaseError) as error:
         section, exit_code = render_problem(str(error)), 1
     parsed.out.parent.mkdir(parents=True, exist_ok=True)
     parsed.out.write_text(section, encoding="utf-8")

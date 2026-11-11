@@ -129,7 +129,8 @@ class NamesOtherVersion:
         versions = run.context.versions
         if not versions:
             return None
-        foreign = [name for name in re.findall(self.pattern, said) if name not in versions.values()]
+        named = [match.group(0) for match in re.finditer(self.pattern, said)]
+        foreign = [name for name in named if name not in versions.values()]
         if not foreign:
             return None
         ran = ", ".join(f"{role} {version}" for role, version in sorted(versions.items()))

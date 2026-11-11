@@ -217,6 +217,79 @@ def _text(raw: dict[str, Any], name: str, where: str) -> str:
     return value
 
 
+def _section(raw: dict[str, Any], name: str, where: str) -> dict[str, Any]:
+    """Read an optional table, refusing one of another TOML type.
+
+    Args:
+        raw: The parsed table holding it.
+        name: Its name.
+        where: Where it is, for the message.
+
+    Returns:
+        The table; empty when absent.
+
+    Raises:
+        PackError: If it is present but not a table.
+    """
+    value = raw.get(name, {})
+    if not isinstance(value, dict):
+        raise PackError(f"{where}: {name!r} must be a table, not {type(value).__name__}")
+    return value
+
+
+def _entries(raw: dict[str, Any], name: str, where: str) -> list[dict[str, Any]]:
+    """Read an optional array of tables, refusing anything else.
+
+    Args:
+        raw: The parsed table holding it.
+        name: Its name, as in [[name]].
+        where: Where it is, for the message.
+
+    Returns:
+        The tables; empty when absent.
+
+    Raises:
+        PackError: If it is present but not an array of tables.
+    """
+    value = raw.get(name, [])
+    if not isinstance(value, list) or not all(isinstance(entry, dict) for entry in value):
+        raise PackError(f"{where}: {name!r} must be written as [[{name}]] tables")
+    return value
+
+
+def _quoted(template: str, where: str) -> set[str]:
+    """Name the values a template quotes, refusing fields str.format would fail on.
+
+    Only plain names are allowed, such as {error}: a positional {} or {0}, an attribute or
+    index ({times.real}, {times[0]}), or a field nested in a format spec would raise when
+    the template is filled, long after the pack loaded.
+
+    Args:
+        template: Text with {name} placeholders.
+        where: Where the template is, for the message.
+
+    Returns:
+        The names.
+
+    Raises:
+        PackError: If the template's braces don't parse, or a field isn't a plain name.
+    """
+    try:
+        fields = list(string.Formatter().parse(template))
+    except ValueError as error:
+        raise PackError(f"{where}: {template!r} isn't a valid template: {error}") from error
+    names = set()
+    for _, name, spec, _ in fields:
+        if name is None:
+            continue
+        if not name.isidentifier() or "{" in (spec or ""):
+            raise PackError(
+                f"{where}: use plain names in braces, such as {{error}}, not {{{name}}}"
+            )
+        names.add(name)
+    return names
+
+
 def _actions(raw: dict[str, Any], categories: tuple[str, ...], path: Path) -> tuple[Action, ...]:
     """Read and check a pack file's actions.
 
@@ -232,8 +305,8 @@ def _actions(raw: dict[str, Any], categories: tuple[str, ...], path: Path) -> tu
         PackError: If there are no actions, or one has a bad or repeated key, a missing
             field, or a category the pack doesn't list.
     """
-    tables = raw.get("actions")
-    if not isinstance(tables, list) or not tables:
+    tables = _entries(raw, "actions", str(path))
+    if not tables:
         raise PackError(f"{path}: the pack lists no [[actions]]")
     actions: list[Action] = []
     for number, table in enumerate(tables, start=1):
@@ -264,7 +337,7 @@ def _facts(raw: dict[str, Any], path: Path) -> dict[str, Fact]:
         PackError: If a fact isn't a table, or its kind or parameters are wrong.
     """
     facts: dict[str, Fact] = {}
-    for name, table in raw.get("facts", {}).items():
+    for name, table in _section(raw, "facts", str(path)).items():
         where = f"{path}, fact {name!r}"
         if not isinstance(table, dict):
             raise PackError(f"{where}: must be a table with a 'kind'")
@@ -306,7 +379,7 @@ def _rule(
     if fact is None:
         raise PackError(f"{where}: no fact named {fact_name!r}; known: {', '.join(sorted(facts))}")
     reason = _text(table, "reason", where)
-    quoted = {name for _, name, _, _ in string.Formatter().parse(reason) if name}
+    quoted = _quoted(reason, where)
     available = set(fact.provides) if when else set()
     if not quoted <= available:
         raise PackError(
@@ -335,24 +408,12 @@ def _checks(
             _rule.
     """
     rules: list[CheckRule] = []
-    for number, table in enumerate(raw.get("checks", []), start=1):
+    for number, table in enumerate(_entries(raw, "checks", str(path)), start=1):
         rule = _rule(table, keys, facts, f"{path}, check {number}")
         if rule.name in (earlier.name for earlier in rules):
             raise PackError(f"{path}, check {number}: the name {rule.name!r} is already used")
         rules.append(rule)
     return tuple(rules)
-
-
-def _quoted(template: str) -> set[str]:
-    """Name the values a template quotes.
-
-    Args:
-        template: Text with {name} placeholders.
-
-    Returns:
-        The names.
-    """
-    return {name for _, name, _, _ in string.Formatter().parse(template) if name}
 
 
 def _note(table: dict[str, Any], facts: dict[str, Fact], where: str) -> EvidenceNote:
@@ -381,10 +442,9 @@ def _note(table: dict[str, Any], facts: dict[str, Fact], where: str) -> Evidence
     if place not in NOTE_PLACES:
         raise PackError(f"{where}: place {place!r} isn't one of {list(NOTE_PLACES)}")
     say = _text(table, "say", where)
-    if not _quoted(say) <= set(fact.provides):
-        raise PackError(
-            f"{where}: says {sorted(_quoted(say))}, but the fact gives {list(fact.provides)}"
-        )
+    quoted = _quoted(say, where)
+    if not quoted <= set(fact.provides):
+        raise PackError(f"{where}: says {sorted(quoted)}, but the fact gives {list(fact.provides)}")
     return EvidenceNote(name, fact_name, place, say)
 
 
@@ -403,12 +463,13 @@ def _evidence(raw: dict[str, Any], facts: dict[str, Fact], path: Path) -> Eviden
         PackError: If the versions fact isn't a versions_unchanged fact, or a template
             quotes a value it can't have; each note's own mistakes are raised by _note.
     """
-    table = dict(raw.get("evidence", {}))
     where = f"{path}, [evidence]"
+    table = dict(_section(raw, "evidence", str(path)))
     notes = tuple(
         _note(note, facts, f"{where} note {number}")
-        for number, note in enumerate(table.pop("notes", []), start=1)
+        for number, note in enumerate(_entries(table, "notes", where), start=1)
     )
+    table.pop("notes", None)
     versions_fact = table.pop("versions_fact", None)
     if versions_fact is not None and not isinstance(facts.get(versions_fact), VersionsUnchanged):
         raise PackError(f"{where}: versions_fact {versions_fact!r} isn't a versions_unchanged fact")
@@ -416,8 +477,9 @@ def _evidence(raw: dict[str, Any], facts: dict[str, Fact], path: Path) -> Eviden
         allowed = TEMPLATE_VALUES.get(name)
         if allowed is None or not isinstance(value, str):
             raise PackError(f"{where}: unknown entry {name!r}; known: {sorted(TEMPLATE_VALUES)}")
-        if not _quoted(value) <= allowed:
-            raise PackError(f"{where}: {name} quotes {sorted(_quoted(value) - allowed)}")
+        quoted = _quoted(value, f"{where} {name}")
+        if not quoted <= allowed:
+            raise PackError(f"{where}: {name} quotes {sorted(quoted - allowed)}")
     return EvidenceWording(versions_fact=versions_fact, notes=notes, **table)
 
 

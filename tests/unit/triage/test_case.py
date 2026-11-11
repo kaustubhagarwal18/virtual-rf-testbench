@@ -9,6 +9,7 @@ from triage.bench_run import RESULTS_FILE, load_case
 from triage.case import (
     CASE_FILE,
     Case,
+    CaseError,
     Item,
     LogLine,
     Reading,
@@ -53,7 +54,7 @@ def test_case_json_wins_over_a_results_file(tmp_path: Path) -> None:
 def test_another_format_is_refused_by_name(tmp_path: Path) -> None:
     """A case.json from a later format isn't read as this one."""
     (tmp_path / CASE_FILE).write_text(json.dumps({"format": "triage-case/9"}), encoding="utf-8")
-    with pytest.raises(ValueError, match="triage-case/9"):
+    with pytest.raises(CaseError, match="triage-case/9"):
         load_case(tmp_path)
 
 
@@ -97,3 +98,30 @@ def test_a_reading_round_trips_through_json(tmp_path: Path) -> None:
     reading = Reading("rejected", 3, "payments", 0, 0, -3, passed=False)
     case = Case(tmp_path, items=(Item("b", "failed", readings=(reading,)),))
     assert case_from_dict(json.loads(json.dumps(case_to_dict(case))), tmp_path).items == case.items
+
+
+def test_two_items_with_one_id_are_refused(tmp_path: Path) -> None:
+    """Focusing selects items by id, so a repeated id would mix two failures' evidence."""
+    with pytest.raises(CaseError, match="batch-7"):
+        Case(tmp_path, items=(Item("batch-7", "failed"), Item("batch-7", "failed")))
+    raw = {"format": "triage-case/1", "items": [{"id": "a", "outcome": "failed"}] * 2}
+    with pytest.raises(CaseError, match="'a'"):
+        case_from_dict(raw, tmp_path)
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        {"items": [{"id": "a", "outcome": "failed"}], "steps": [{"failed": "false"}]},
+        {
+            "items": [
+                {"id": "a", "outcome": "failed", "readings": [{"name": "x", "passed": "false"}]}
+            ]
+        },
+        {"items": [{"id": "a", "outcome": "failed", "readings": [{"name": "x", "passed": 0}]}]},
+    ],
+)
+def test_a_flag_that_isnt_a_json_boolean_is_refused(tmp_path: Path, raw: dict[str, object]) -> None:
+    """'false' as text is true in Python; a producer's mistake must not flip a result."""
+    with pytest.raises(CaseError, match="true or false"):
+        case_from_dict({"format": "triage-case/1", **raw}, tmp_path)

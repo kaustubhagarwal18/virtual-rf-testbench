@@ -8,9 +8,11 @@ import numpy as np
 import pytest
 
 from tests.unit.triage.test_evidence import FAILING_TEST, write_run
+from tests.unit.triage.test_pack import WITH_EVIDENCE, payments_case, write_pack
 from triage.bench_run import load_case
 from triage.embed import FakeEmbedder, OllamaEmbedder
 from triage.label import load_label
+from triage.pack import load_pack
 from triage.retrieval import InMemoryRetriever, history_index, history_source, neutral_id
 
 
@@ -192,12 +194,31 @@ def test_history_index_defaults_to_the_ollama_embedder(
     used: list[object] = []
     empty = InMemoryRetriever([], np.zeros((0, 0)), FakeEmbedder())
 
-    def record(history: Path, embedder: object) -> InMemoryRetriever:
+    def record(history: Path, embedder: object, pack: object) -> InMemoryRetriever:
         """Record the embedder instead of indexing."""
-        del history
+        del history, pack
         used.append(embedder)
         return empty
 
     monkeypatch.setattr(InMemoryRetriever, "from_history", record)
     assert history_index(tmp_path) is empty
     assert isinstance(used[0], OllamaEmbedder)
+
+
+def test_history_and_query_are_worded_by_the_chosen_pack(tmp_path: Path) -> None:
+    """A payments index words both its past runs and its query with the payments pack."""
+    pack = load_pack(write_pack(tmp_path, WITH_EVIDENCE))
+    folder = payments_case(tmp_path, ("mapping v2 deployed",)).folder
+    (folder / "label.json").write_text(
+        json.dumps({"fault": "mapping", "cause": "a mapping change", "fix": "Fixed the mapping"}),
+        encoding="utf-8",
+    )
+    history = tmp_path / "history"
+    history.mkdir()
+    folder.rename(history / "batch")
+    embedder = FakeEmbedder()
+    retriever = InMemoryRetriever.from_history(history, embedder, pack)
+    assert "Gateway logs" in retriever.sources[0].text
+    retriever.similar_to(payments_case(tmp_path / "question"), 1)
+    assert "Gateway logs" in embedder.calls[-1][0]
+    assert "Instrument" not in embedder.calls[-1][0]

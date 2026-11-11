@@ -66,7 +66,7 @@
    domain-free case with a `case.json` format, bench runs as one adapter, and the
    evidence's wording in the pack (ADR 0023). Next: a second pack from another domain,
    with its own data set and evaluation, to prove it; the API taking cases and a pack;
-   retrieval and `make eval` taking a pack.
+   `make eval` and `tools/calibrate_abstention.py` taking a pack.
 1. **Triage unit and integration failures, not only bench failures.** CI triages only a
    failed bench run: when a pull request breaks a unit or integration test, the comment lists
    the failure but doesn't explain it. These failures have no measurements, instrument logs

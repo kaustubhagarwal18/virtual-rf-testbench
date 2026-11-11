@@ -121,3 +121,11 @@ def test_readings_failed_only_outside_needs_a_failed_reading_none_in_the_units(
     assert ReadingsFailedOnlyOutside(units=["Hz"])(run, "") == {}
     assert ReadingsFailedOnlyOutside(units=["dBm"])(run, "") is None
     assert ReadingsFailedOnlyOutside(units=["Hz"])(run_with(tmp_path, measurements=[]), "") is None
+
+
+def test_a_pattern_with_groups_is_compared_by_its_whole_match(tmp_path: Path) -> None:
+    """Capturing groups don't turn '1.0.0' into a tuple that never equals a recorded version."""
+    fact = NamesOtherVersion(pattern=r"\b(\d+)\.(\d+)\.(\d+)\b")
+    run = run_with(tmp_path, versions={"api": "1.0.0"})
+    assert fact(run, "1.0.0 broke it") is None
+    assert fact(run, "2.0.0 broke it") == {"mentioned": "2.0.0", "ran": "api 1.0.0"}

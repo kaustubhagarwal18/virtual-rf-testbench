@@ -234,3 +234,16 @@ def test_main_refuses_a_broken_pack_in_one_line(
     assert main([str(folder), "--pack", str(tmp_path / "absent.toml")], provider) == 1
     assert "no pack file" in capsys.readouterr().out
     assert not provider.prompts
+
+
+@pytest.mark.parametrize("contents", [None, '{"format": "triage-case/9"}'])
+def test_main_reports_a_case_it_cant_read_in_one_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], contents: str | None
+) -> None:
+    """A folder with no case, or a case.json in another format, is one line and exit 1."""
+    if contents is not None:
+        (tmp_path / "case.json").write_text(contents, encoding="utf-8")
+    provider = FakeProvider([])
+    assert main([str(tmp_path)], provider) == 1
+    assert len(capsys.readouterr().out.strip().splitlines()) == 1
+    assert not provider.prompts

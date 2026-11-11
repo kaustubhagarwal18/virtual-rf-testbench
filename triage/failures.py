@@ -76,12 +76,30 @@ def _failure_kind(test: Item) -> str:
     return head.strip().rsplit(".", 1)[-1]
 
 
+def _function(item_id: str) -> str:
+    """Name what an item is a case of, so a test's parametrized cases group together.
+
+    A pytest id ('file.py::test_level[-30.0]') names a test function and, in brackets, one
+    case of it. Any other id is its own thing: 'payment[1]' and 'payment[2]' are two
+    payments, not two cases of one test.
+
+    Args:
+        item_id: The item's id.
+
+    Returns:
+        The test function for a pytest id, or the whole id otherwise.
+    """
+    if "::" not in item_id:
+        return item_id
+    return item_id.rsplit("::", maxsplit=1)[-1].split("[", maxsplit=1)[0]
+
+
 def failure_groups(run: Case) -> list[FailureGroup]:
     """Group a run's failed tests by how they failed.
 
     Failed setup steps come first, as first_failure puts them first: every test such a step
-    stopped joins its group. Each remaining test joins the group of its test function and
-    kind of failure, in the order the tests ran.
+    stopped joins its group. Each remaining item joins the group of its test function (for a
+    pytest id; any other item is its own) and kind of failure, in the order they ran.
 
     Args:
         run: The run.
@@ -99,7 +117,7 @@ def failure_groups(run: Case) -> list[FailureGroup]:
         if stopped:
             steps.setdefault((stopped["action"], stopped["instrument"]), []).append(test_id)
             continue
-        function = test_id.rsplit("::", maxsplit=1)[-1].split("[", maxsplit=1)[0]
+        function = _function(test_id)
         tests.setdefault((function, _failure_kind(test)), []).append(test_id)
     return [
         FailureGroup(f"setup step '{action}' on the {instrument}", tuple(ids), (action, instrument))

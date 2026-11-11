@@ -91,6 +91,7 @@ on a laptop.
 The pipeline knows no domain; a pack file tells it one. `triage/packs/rf-bench.toml` is the
 RF bench's, and a pack for payments, wafer test or a device fleet has the same parts:
 
+- **`name`:** a short name for the pack, such as `payments`.
 - **`description`:** two or three sentences for the model: what the system is, and what its
   failures are caused by.
 - **`categories`:** the causes, such as `["feed", "mapping", "counterparty"]`.
@@ -120,7 +121,9 @@ A mistake is refused when the pack loads, with one line naming the file. Then pa
 uv run python -m triage.service path/to/run --pack path/to/your-pack.toml
 ```
 
-`python -m tools.ci_triage` takes `--pack` too.
+`python -m tools.ci_triage` takes `--pack` too, and with any pack but the RF bench's it
+needs `--history`, a folder of that domain's resolved runs: the RF bench's past runs would
+otherwise be offered as precedents.
 
 **Your data, as a case.** A run folder can hold `case.json` in place of a bench results
 file; `triage/case.py` defines it. Only `format` and `items` are required:

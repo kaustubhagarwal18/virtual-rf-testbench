@@ -8,7 +8,7 @@ import pytest
 from tests.unit.triage.test_evidence import PASSING_TEST, write_run
 from triage.answer import MalformedAnswerError, Verdict
 from triage.bench_run import SEQUENCE_FILE, load_case
-from triage.case import Case
+from triage.case import Case, Item, save_case
 from triage.evidence import (
     first_failure,
     full_evidence,
@@ -270,3 +270,22 @@ def test_a_whole_run_never_gets_the_reading_line(tmp_path: Path) -> None:
     """The line is for focused runs only, so history and the evaluation keep their evidence."""
     run = load(tmp_path, [with_reading("test_frequency", "Hz")])
     assert NO_LEVEL_READING not in full_evidence(run)
+
+
+def test_generic_items_with_brackets_stay_apart(tmp_path: Path) -> None:
+    """payment[1] and payment[2] are two payments, not cases of one parametrized test."""
+    case = Case(
+        tmp_path,
+        items=(
+            Item("payment[1]", "failed", "Failed: rejected"),
+            Item("payment[2]", "failed", "Failed: rejected"),
+        ),
+    )
+    assert [group.test_ids for group in failure_groups(case)] == [("payment[1]",), ("payment[2]",)]
+
+
+def test_pytest_cases_of_one_test_still_group_from_case_json(tmp_path: Path) -> None:
+    """A bench run saved as case.json keeps its pytest ids, and their cases still group."""
+    run = load(tmp_path, LEVEL_CASES)
+    reloaded = load_case(save_case(run, tmp_path / "saved").parent)
+    assert len(failure_groups(reloaded)) == 1

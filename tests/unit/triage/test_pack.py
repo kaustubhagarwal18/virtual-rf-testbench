@@ -291,6 +291,12 @@ BROKEN_EVIDENCE = {
     "versions fact of the wrong kind": WITH_EVIDENCE.replace(
         'logs = "Gateway logs"', 'logs = "Gateway logs"\nversions_fact = "feed_error"'
     ),
+    "positional field": WITH_EVIDENCE.replace("{times}", "{}"),
+    "unbalanced brace": WITH_EVIDENCE.replace("{times}", "{times"),
+    "numbered field": WITH_EVIDENCE.replace("{times}", "{0}"),
+    "nested field in a format spec": WITH_EVIDENCE.replace("{times}", "{times:{width}}"),
+    "attribute of a field": WITH_EVIDENCE.replace("{times}", "{times.real}"),
+    "check reason with a positional field": WITH_EVIDENCE.replace("{error}", "{}"),
     "unknown evidence entry": WITH_EVIDENCE.replace(
         'logs = "Gateway logs"', 'logs = "Gateway logs"\nfooter = "x"'
     ),
@@ -309,3 +315,27 @@ def test_broken_evidence_wording_is_refused_with_one_line(tmp_path: Path, proble
         load_pack(path)
     assert str(path) in str(refused.value)
     assert "\n" not in str(refused.value)
+
+
+WRONG_SHAPES = {
+    "facts as a list": ("top", "facts = []"),
+    "checks as a table": ("top", "checks = {x = 1}"),
+    "evidence as a list": ("top", "evidence = []"),
+    "notes as text": ("top", 'evidence = {notes = "x"}'),
+    "a fact entry not a table": ("top", "facts = {x = 1}"),
+    "a check entry not a table": ("top", "checks = [1]"),
+    "an action entry not a table": ("actions", 'actions = ["CABLE"]'),
+    "actions as text": ("actions", 'actions = "CABLE"'),
+}
+"""Sections and entries of the wrong TOML type, each valid TOML: either an extra top-level
+key, or the actions written as something other than [[actions]] tables."""
+
+
+@pytest.mark.parametrize("problem", sorted(WRONG_SHAPES))
+def test_a_section_of_the_wrong_type_is_a_pack_error(tmp_path: Path, problem: str) -> None:
+    """Valid TOML with the wrong shape is refused as a pack error, never an AttributeError."""
+    where, line = WRONG_SHAPES[problem]
+    head = VALID.split("[[actions]]", maxsplit=1)[0]
+    text = f"{line}\n{VALID}" if where == "top" else f"{head}{line}\n"
+    with pytest.raises(PackError):
+        load_pack(write_pack(tmp_path, text))
