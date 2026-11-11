@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 420" width="900" height="420" role="img" aria-labelledby="title desc">
+  <title id="title">The nine labelled faults</title>
+  <desc id="desc">Nine faults with known causes. Bench: cable_loss, extra loss in the cable; link_down, nothing connected; link_flaky, a loose connector that drops one sweep in a few. Test: slow_responses, every call outlives the session timeout; config_parameter_missing, a parameter nobody set; config_parameter_out_of_range, a value beyond the generator's range; config_decimal_error, 15 dB where 1.5 dB was meant. Firmware: reset_leaks_offset, release 0.2.0-rc2 stops clearing the level offset on reset; output_command_change, release 0.2.0-rc1 rejects the short OUTP form. Each fault has three history runs and three question runs, 54 in all; faults with a size are asked at sizes no history run has.</desc>
+  <defs>
+    <filter id="shadow" x="-10%" y="-20%" width="120%" height="150%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#1f2328" flood-opacity="0.08"/>
+    </filter>
+    <style>
+      text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; }
+      .panel { fill: #ffffff; stroke: #d0d7de; stroke-width: 1; }
+      .head { font-size: 13px; font-weight: 700; letter-spacing: 0.08em; }
+      .bench-head { fill: #0969da; }
+      .test-head { fill: #9a6700; }
+      .fw-head { fill: #cf222e; }
+      .bench-bar { fill: #54aeff; }
+      .test-bar { fill: #d4a72c; }
+      .fw-bar { fill: #ff8182; }
+      .count { font-size: 11.5px; fill: #59636e; }
+      .card { fill: #f6f8fa; stroke: #eaeef2; stroke-width: 1; }
+      .name { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; font-weight: 600; fill: #1f2328; }
+      .what { font-size: 11.5px; fill: #59636e; }
+      .size { font-size: 10.5px; font-weight: 600; fill: #1a7f37; }
+      .foot { font-size: 12px; fill: #59636e; }
+      @media (prefers-color-scheme: dark) {
+        .panel { fill: #161b22; stroke: #30363d; }
+        .bench-head { fill: #58a6ff; }
+        .test-head { fill: #d29922; }
+        .fw-head { fill: #ff7b72; }
+        .bench-bar { fill: #388bfd; }
+        .test-bar { fill: #9e6a03; }
+        .fw-bar { fill: #da3633; }
+        .count, .what, .foot { fill: #9198a1; }
+        .card { fill: #21262d; stroke: #30363d; }
+        .name { fill: #e6edf3; }
+        .size { fill: #56d364; }
+      }
+    </style>
+  </defs>
+
+  <g filter="url(#shadow)">
+    <rect x="20" y="16" width="278" height="356" rx="16" class="panel"/>
+    <rect x="311" y="16" width="278" height="356" rx="16" class="panel"/>
+    <rect x="602" y="16" width="278" height="356" rx="16" class="panel"/>
+  </g>
+  <rect x="20" y="16" width="278" height="6" rx="3" class="bench-bar"/>
+  <rect x="311" y="16" width="278" height="6" rx="3" class="test-bar"/>
+  <rect x="602" y="16" width="278" height="6" rx="3" class="fw-bar"/>
+
+  <!-- Bench -->
+  <text x="38" y="50" class="head bench-head">BENCH</text>
+  <text x="280" y="50" text-anchor="end" class="count">3 faults</text>
+  <rect x="34" y="64" width="250" height="66" rx="10" class="card"/>
+  <text x="48" y="87" class="name">cable_loss</text>
+  <text x="48" y="105" class="what">extra loss in a damaged cable</text>
+  <text x="48" y="121" class="size">sized: 0.8 to 2.5 dB</text>
+  <rect x="34" y="140" width="250" height="66" rx="10" class="card"/>
+  <text x="48" y="163" class="name">link_down</text>
+  <text x="48" y="181" class="what">nothing connected: no signal</text>
+  <rect x="34" y="216" width="250" height="66" rx="10" class="card"/>
+  <text x="48" y="239" class="name">link_flaky</text>
+  <text x="48" y="257" class="what">loose connector drops a sweep</text>
+  <text x="48" y="273" class="size">sized: every 2 to 7 sweeps</text>
+
+  <!-- Test -->
+  <text x="329" y="50" class="head test-head">TEST</text>
+  <text x="571" y="50" text-anchor="end" class="count">4 faults</text>
+  <rect x="325" y="64" width="250" height="66" rx="10" class="card"/>
+  <text x="339" y="87" class="name">slow_responses</text>
+  <text x="339" y="105" class="what">calls outlive the session timeout</text>
+  <text x="339" y="121" class="size">sized: 2.2 to 5 s</text>
+  <rect x="325" y="140" width="250" height="66" rx="10" class="card"/>
+  <text x="339" y="163" class="name">config_parameter_missing</text>
+  <text x="339" y="181" class="what">a parameter nobody set</text>
+  <rect x="325" y="216" width="250" height="66" rx="10" class="card"/>
+  <text x="339" y="239" class="name">config_parameter_out_of_range</text>
+  <text x="339" y="257" class="what">beyond the generator's range</text>
+  <rect x="325" y="292" width="250" height="66" rx="10" class="card"/>
+  <text x="339" y="315" class="name">config_decimal_error</text>
+  <text x="339" y="333" class="what">15 dB where 1.5 dB was meant</text>
+
+  <!-- Firmware -->
+  <text x="620" y="50" class="head fw-head">FIRMWARE</text>
+  <text x="862" y="50" text-anchor="end" class="count">2 faults</text>
+  <rect x="616" y="64" width="250" height="66" rx="10" class="card"/>
+  <text x="630" y="87" class="name">reset_leaks_offset</text>
+  <text x="630" y="105" class="what">0.2.0-rc2: *RST keeps the offset</text>
+  <rect x="616" y="140" width="250" height="66" rx="10" class="card"/>
+  <text x="630" y="163" class="name">output_command_change</text>
+  <text x="630" y="181" class="what">0.2.0-rc1: OUTP ON gives -113</text>
+
+  <text x="450" y="400" text-anchor="middle" class="foot">3 history runs + 3 question runs per fault · 54 runs · sized faults are asked at sizes no history run has</text>
+</svg>
