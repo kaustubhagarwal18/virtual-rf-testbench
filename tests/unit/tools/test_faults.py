@@ -7,6 +7,7 @@ import pytest
 from tests.unit.tools.fakes import FakeBench
 from tests.utilities.bench_config import CHANNEL_BANDWIDTH_VARIABLE, LEVEL_OFFSET_VARIABLE
 from tests.utilities.injected_defects import SKIP_RESET_VARIABLE
+from tools.bench_control import BenchControlError
 from tools.faults import (
     ANALYZER,
     CATALOGUE,
@@ -137,3 +138,13 @@ def test_a_configuration_fault_leaves_the_bench_running() -> None:
     bench = FakeBench()
     CATALOGUE["config_decimal_error"].restore(bench, "0.1.0")
     assert ("down", "") not in bench.calls
+
+
+def test_a_code_defect_takes_the_bench_down_even_when_clearing_fails() -> None:
+    """An admin port that stopped answering must not leave the dirty containers running."""
+    fault = CATALOGUE["fixture_skips_reset"]
+    bench = FakeBench(clear_fails_after=2)
+    fault.apply(bench, None, "0.1.0")
+    with pytest.raises(BenchControlError):
+        fault.restore(bench, "0.1.0")
+    assert bench.calls[-1] == ("down", "")

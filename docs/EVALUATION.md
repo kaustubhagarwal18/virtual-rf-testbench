@@ -5,7 +5,7 @@ answer is kept from being confidently wrong, how it scores on the labelled fault
 the evaluation was made harder to fool. `make eval` reproduces every number here; each
 question's answer is in [`triage/results/rag.md`](../triage/results/rag.md).
 
-The data set is 27 failed runs of 9 known faults, three per fault, scored per fault with a
+The data set is 39 failed runs of 13 known faults, three per fault, scored per fault with a
 95% interval ([`triage/data/README.md`](../triage/data/README.md) describes it). The answering
 model is `qwen2.5:3b` on local Ollama, at temperature 0 with a fixed seed, on one machine.
 

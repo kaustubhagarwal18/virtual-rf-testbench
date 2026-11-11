@@ -275,15 +275,18 @@ class CodeDefectFault(ConfigFault):
         """Switch every fault off and take the bench down.
 
         The defect leaves the instruments in whatever state its last test left them, and
-        nothing resets them; fresh containers are the only clean start for the next run.
+        nothing resets them; fresh containers are the only clean start for the next run, so
+        the bench goes down even when an instrument doesn't answer the clear.
 
         Args:
             bench: The bench.
             default_version: The bench's normal release, unused: the next start rebuilds it.
         """
         del default_version
-        clear_all(bench)
-        bench.down()
+        try:
+            clear_all(bench)
+        finally:
+            bench.down()
 
 
 def clear_all(bench: Bench) -> None:
