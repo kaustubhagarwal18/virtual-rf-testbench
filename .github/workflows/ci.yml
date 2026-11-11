@@ -136,11 +136,11 @@ jobs:
         run: |
           docker load --input simulators.tar
           make bench-up BENCH_BUILD=--no-build
-      - name: TEMPORARY a 3 dB alignment error on the analyzer, to show the triage comment
+      - name: TEMPORARY a disconnected cable, to show one answer per distinct failure
         # Revert before merging.
         run: >-
           uv run python -c "from tools.bench_control import ComposeBench;
-          print(ComposeBench().send_admin('analyzer', 'FAULT ALIGNMENT_ERROR_DB 3'))"
+          print(ComposeBench().send_admin('analyzer', 'FAULT LINK_DOWN 1'))"
       - name: Bench suite against the containers
         run: make bench-test
       - name: Results summary on the run page
