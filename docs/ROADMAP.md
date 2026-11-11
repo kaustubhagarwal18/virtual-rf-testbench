@@ -53,20 +53,24 @@
 
 ## Next, in order
 
-1. **Infrastructure failures as a fourth cause.** Three faults reproduced on compose, labelled
-   `infrastructure`: an instrument container OOM-killed, a service name that doesn't resolve,
-   and an image tag that doesn't exist. Each run records the containers' state, which the
-   evidence would need to tell an OOM kill from a dropped link.
-2. **The cluster.** k3s runs the same images through Helm charts, deployed by Argo CD from
+1. **The cluster.** k3s runs the same images through Helm charts, deployed by Argo CD from
    Git, with secrets from OpenBao and observability.
-3. **The tag-bump pull request.** Once a chart's values file pins the image, CI opens a pull
+2. **The tag-bump pull request.** Once a chart's values file pins the image, CI opens a pull
    request that bumps it to the tag the publish job just pushed. It waits for the chart: there
    is no file to bump yet.
-4. **Triage in CI.** When the bench job fails, a separate job (allowed to fail) triages the
+3. **Triage in CI.** When the bench job fails, a separate job (allowed to fail) triages the
    run with a local model and adds the verdict to the pull request comment.
-5. **The rest of the planned triage service.** An ingestion worker, Redis, and Postgres with
+4. **The rest of the planned triage service.** An ingestion worker, Redis, and Postgres with
    pgvector behind the existing `Retriever` interface, once the history is large enough for
    an in-memory index to matter (ADR 0010).
+
+## Out of scope for now
+
+- **Infrastructure failures as a fourth cause.** Cut to keep the project focused on firmware,
+  bench and test; nothing is built. The idea: three faults on compose, labelled
+  `infrastructure` (an instrument container OOM-killed, a service name that doesn't resolve,
+  and an image tag that doesn't exist), with each run recording the containers' state, which
+  the evidence would need to tell an OOM kill from a dropped link.
 
 ## Known issues
 

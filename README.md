@@ -170,10 +170,12 @@ job.
 | | |
 |---|---|
 | [Usage](docs/USAGE.md) | instruments, Docker bench, faults, Python drivers, HTTP API |
+| [Adapting](docs/ADAPTING.md) | triage your own failures, add a fault, drive real instruments |
 | [Evaluation](docs/EVALUATION.md) | every scenario, the guardrails, and what each experiment taught |
 | [Architecture](docs/ARCHITECTURE.md) | how the pieces fit, and where to look in the code |
 | [Roadmap](docs/ROADMAP.md) | what's done and what comes next |
 | [Decision records](docs/adr/) | why the main choices were made |
+| [Contributing](CONTRIBUTING.md) | setup, workflow, the checks and the project's rules |
 
 ## License
 
