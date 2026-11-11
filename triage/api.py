@@ -28,8 +28,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from triage.abstain import SERVICE_GATES, SourceGate
 from triage.answer import VERDICT_SCHEMA, MalformedAnswerError
+from triage.bench_run import case_from_bench
+from triage.case import Case
 from triage.checks import DEFAULT_CHECKS, VerdictCheck
-from triage.evidence import SavedRun
 from triage.llm import DEFAULT_MODEL, LLMProvider, ModelUnavailableError, OllamaProvider
 from triage.retrieval import (
     DEFAULT_HISTORY,
@@ -188,17 +189,14 @@ class Evidence(BaseModel):
     logs: list[Line] = Field(default_factory=list, max_length=MAX_LINES)
     sequence: list[Line] = Field(default_factory=list, max_length=MAX_LINES)
 
-    def saved_run(self) -> SavedRun:
+    def saved_run(self) -> Case:
         """Turn the request's evidence into the run the pipeline reads.
 
         Returns:
             The run, with the request's evidence and no folder of its own.
         """
-        return SavedRun(
-            folder=REQUEST_FOLDER,
-            results=self.results.model_dump(),
-            logs=list(self.logs),
-            sequence=list(self.sequence),
+        return case_from_bench(
+            self.results.model_dump(), list(self.logs), list(self.sequence), REQUEST_FOLDER
         )
 
 

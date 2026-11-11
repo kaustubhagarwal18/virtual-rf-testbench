@@ -4,7 +4,7 @@ A check refuses an answer the evidence contradicts. What counts as a contradicti
 domain knowledge, but the shapes of the facts behind it recur in every domain: a recorded
 version equals its baseline; the answer names a version the run didn't record; a failed test
 carries an error; a log line contains a phrase; a reading in some unit is out of limits. Each
-shape is a kind here, and a pack names instances of them with its own field names, phrases
+shape is a kind here, and a pack names instances of them with its own baselines, phrases
 and units (`[facts.no_signal]` with `kind = "log_contains"`).
 
 A fact returns None when it doesn't hold, and otherwise the values a check's reason may
@@ -16,7 +16,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from triage.evidence import SavedRun, failed_readings, failed_tests
+from triage.case import Case
+from triage.evidence import failed_readings
 
 FactValues = dict[str, str]
 """What a fact that holds can say about itself, for a check's reason to quote."""
@@ -29,7 +30,7 @@ class Fact(Protocol):
     def provides(self) -> tuple[str, ...]:
         """The names of the values it returns when it holds."""
 
-    def __call__(self, run: SavedRun, said: str) -> FactValues | None:
+    def __call__(self, run: Case, said: str) -> FactValues | None:
         """Say whether the fact holds.
 
         Args:
@@ -66,20 +67,17 @@ class VersionsUnchanged:
     No versions recorded means unknown, which is not unchanged, so the fact doesn't hold.
 
     Attributes:
-        field: The results entry mapping each component to its version.
         baseline: The version the last passing run used.
     """
 
-    field: str
     baseline: str
     provides: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         """Check the parameters."""
-        _text(self.field, "field")
         _text(self.baseline, "baseline")
 
-    def __call__(self, run: SavedRun, said: str) -> FactValues | None:
+    def __call__(self, run: Case, said: str) -> FactValues | None:
         """Hold when versions were recorded and all equal the baseline.
 
         Args:
@@ -90,7 +88,7 @@ class VersionsUnchanged:
             No values when it holds; None otherwise.
         """
         del said
-        versions = run.results.get(self.field) or {}
+        versions = run.context.versions
         if not versions or any(version != self.baseline for version in versions.values()):
             return None
         return {}
@@ -101,11 +99,9 @@ class NamesOtherVersion:
     """The answer names a version this run didn't record, so it is about another run.
 
     Attributes:
-        field: The results entry mapping each component to its version.
         pattern: A regular expression for a version as the answer would write it.
     """
 
-    field: str
     pattern: str
     provides: tuple[str, ...] = ("mentioned", "ran")
 
@@ -115,13 +111,12 @@ class NamesOtherVersion:
         Raises:
             ValueError: If the pattern isn't a valid regular expression.
         """
-        _text(self.field, "field")
         try:
             re.compile(_text(self.pattern, "pattern"))
         except re.error as error:
             raise ValueError(f"'pattern' isn't a valid regular expression: {error}") from error
 
-    def __call__(self, run: SavedRun, said: str) -> FactValues | None:
+    def __call__(self, run: Case, said: str) -> FactValues | None:
         """Hold when the answer names a version none of the run's components ran.
 
         Args:
@@ -132,7 +127,7 @@ class NamesOtherVersion:
             The first such version and what the run ran; None when the run recorded no
             versions or the answer names none of another run's.
         """
-        versions = run.results.get(self.field) or {}
+        versions = run.context.versions
         if not versions:
             return None
         foreign = [name for name in re.findall(self.pattern, said) if name not in versions.values()]
@@ -144,20 +139,11 @@ class NamesOtherVersion:
 
 @dataclass(frozen=True)
 class ErrorsReported:
-    """A failed test carries errors the system under test reported.
+    """A failed item carries errors the system under test reported."""
 
-    Attributes:
-        field: The entry of a test's record that lists its errors.
-    """
-
-    field: str
     provides: tuple[str, ...] = ("error",)
 
-    def __post_init__(self) -> None:
-        """Check the parameters."""
-        _text(self.field, "field")
-
-    def __call__(self, run: SavedRun, said: str) -> FactValues | None:
+    def __call__(self, run: Case, said: str) -> FactValues | None:
         """Hold when any failed test lists an error.
 
         Args:
@@ -168,7 +154,7 @@ class ErrorsReported:
             The first error; None when no failed test lists one.
         """
         del said
-        errors = [str(error) for test in failed_tests(run) for error in test.get(self.field, [])]
+        errors = [error for item in run.failed_items for error in item.errors]
         return {"error": errors[0]} if errors else None
 
 
@@ -187,7 +173,7 @@ class LogContains:
         """Check the parameters."""
         _text(self.text, "text")
 
-    def __call__(self, run: SavedRun, said: str) -> FactValues | None:
+    def __call__(self, run: Case, said: str) -> FactValues | None:
         """Hold when at least one log line contains the phrase.
 
         Args:
@@ -198,7 +184,7 @@ class LogContains:
             How many lines contain it; None when none does.
         """
         del said
-        count = sum(1 for line in run.logs if self.text in line)
+        count = sum(1 for line in run.logs if self.text in line.text)
         return {"count": str(count)} if count else None
 
 
@@ -224,7 +210,7 @@ class ReadingFailedIn:
         for unit in self.units:
             _text(unit, "units")
 
-    def __call__(self, run: SavedRun, said: str) -> FactValues | None:
+    def __call__(self, run: Case, said: str) -> FactValues | None:
         """Hold when any failed reading is in one of the units.
 
         Args:
@@ -235,7 +221,7 @@ class ReadingFailedIn:
             No values when it holds; None otherwise.
         """
         del said
-        hit = any(str(reading["unit"]) in self.units for reading in failed_readings(run))
+        hit = any(reading.unit in self.units for reading in failed_readings(run))
         return {} if hit else None
 
 

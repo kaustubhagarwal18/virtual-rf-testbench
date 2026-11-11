@@ -19,7 +19,7 @@ from functools import partial
 from pathlib import Path
 
 from triage.answer import Verdict, grouped_past_fixes, verdict_schema
-from triage.evidence import SavedRun
+from triage.bench_run import load_case
 from triage.failures import (
     DEFAULT_MAX_FAILURES,
     FailureAnswer,
@@ -272,7 +272,7 @@ def main(
         model = provider or OllamaProvider(
             model=parsed.model, response_format=verdict_schema(pack=pack)
         )
-        run = SavedRun.load(parsed.run)
+        run = load_case(parsed.run)
         index = retriever or history_index(parsed.history)
         answer = partial(triage_like_the_api, provider=model, retriever=index, pack=pack)
         result = triage_failures(run, answer, parsed.max_failures)

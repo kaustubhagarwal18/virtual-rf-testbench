@@ -19,8 +19,10 @@ from triage.answer import (
     verdict_schema,
     with_past_fixes,
 )
+from triage.bench_run import load_case
+from triage.case import Case
 from triage.checks import VerdictCheck, apply_checks, checks_for
-from triage.evidence import ERROR_ONLY, FULL, SavedRun, build_evidence
+from triage.evidence import ERROR_ONLY, FULL, build_evidence
 from triage.llm import LLMProvider, ModelUnavailableError, OllamaProvider
 from triage.pack import DEFAULT_PACK, DEFAULT_PACK_FILE, Pack, PackError, load_pack
 from triage.prompt import Source, build_prompt
@@ -45,7 +47,7 @@ def _schema_for(source_ids: Sequence[str], pack: Pack) -> dict[str, object] | No
 
 
 def triage_run(
-    run: SavedRun,
+    run: Case,
     provider: LLMProvider,
     level: str = FULL,
     sources: Sequence[Source] = (),
@@ -138,7 +140,7 @@ def main(arguments: Sequence[str] | None = None, provider: LLMProvider | None = 
     provider = provider or OllamaProvider(response_format=verdict_schema(pack=pack))
     try:
         verdict = triage_run(
-            SavedRun.load(parsed.run), provider, parsed.level, checks=checks_for(pack), pack=pack
+            load_case(parsed.run), provider, parsed.level, checks=checks_for(pack), pack=pack
         )
     except ModelUnavailableError as error:
         sys.stdout.write(f"{error}\n")

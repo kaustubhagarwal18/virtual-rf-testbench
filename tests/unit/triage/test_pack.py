@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pytest
 
+from triage.bench_run import load_case
+from triage.case import Case, Context, Item, LogLine, Reading, save_case
 from triage.evidence import BASELINE_VERSION, LEVEL_UNITS, NO_SIGNAL_LOG
 from triage.facts import LogContains, ReadingFailedIn, VersionsUnchanged
 from triage.pack import (
@@ -119,7 +121,6 @@ WITH_CHECKS = (
     + """
 [facts.feed_error]
 kind = "errors_reported"
-field = "feed_errors"
 
 [facts.mapping_changed_message]
 kind = "log_contains"
@@ -139,6 +140,24 @@ reason = "the feed reported {error}"
 """
 )
 """The payments pack with two facts and two checks."""
+
+
+def payments_case(tmp_path: Path, logs: tuple[str, ...] = ("batch 7 rejected",)) -> Case:
+    """Save a failed payments batch as a generic case.json, with no bench format, and load it."""
+    batch = Item(
+        id="batch-7/settlement",
+        outcome="failed",
+        message="3 of 120 payments rejected",
+        errors=("E17 file truncated",),
+        readings=(Reading("rejected", 3, "payments", 0, 0, -3, passed=False),),
+    )
+    case = Case(
+        folder=tmp_path / "batch",
+        items=(batch, Item("batch-7/fx", "passed")),
+        logs=tuple(LogLine(line) for line in logs),
+        context=Context(versions={"mapping": "v1"}),
+    )
+    return load_case(save_case(case, tmp_path / "batch").parent)
 
 
 def test_a_pack_loads_its_facts_and_checks_in_order(tmp_path: Path) -> None:
@@ -172,10 +191,10 @@ def test_the_rf_pack_has_its_five_checks_in_their_old_order() -> None:
 BROKEN_CHECKS = {
     "unknown fact kind": WITH_CHECKS.replace('kind = "errors_reported"', 'kind = "psychic"'),
     "fact not a table": WITH_CHECKS.replace(
-        '[facts.feed_error]\nkind = "errors_reported"\nfield = "feed_errors"',
+        '[facts.feed_error]\nkind = "errors_reported"',
         "[facts]\nfeed_error = 3",
     ),
-    "fact missing a parameter": WITH_CHECKS.replace('field = "feed_errors"', ""),
+    "fact missing a parameter": WITH_CHECKS.replace('text = "mapping v2 deployed"', ""),
     "refuses an action the pack lacks": WITH_CHECKS.replace(
         'refuse = "FIX_MAPPING"\nwhen', 'refuse = "REBOOT"\nwhen'
     ),

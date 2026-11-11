@@ -12,7 +12,8 @@ from pathlib import Path
 import pytest
 
 from triage.answer import VERDICT_SCHEMA
-from triage.evidence import FULL, SavedRun
+from triage.bench_run import load_case
+from triage.evidence import FULL
 from triage.llm import OllamaProvider
 from triage.pack import DEFAULT_PACK
 from triage.service import triage_run
@@ -34,7 +35,7 @@ def fixture_provider() -> OllamaProvider:
 
 def test_the_model_answers_in_the_shape_the_pipeline_demands(provider: OllamaProvider) -> None:
     """The reply parses, names an action from the list, and cites nothing it wasn't given."""
-    verdict = triage_run(SavedRun.load(QUESTION_RUN), provider, FULL)
+    verdict = triage_run(load_case(QUESTION_RUN), provider, FULL)
     assert verdict.fix in set(DEFAULT_PACK.actions)
     assert not verdict.cited
     assert verdict.because

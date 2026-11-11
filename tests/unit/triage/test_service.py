@@ -10,8 +10,10 @@ import pytest
 from tests.unit.triage.test_evidence import FAILING_TEST, write_run
 from triage.abstain import DEFAULT_GATES
 from triage.answer import MalformedAnswerError, PastFix, Verdict
+from triage.bench_run import load_case
+from triage.case import Case
 from triage.checks import DEFAULT_CHECKS
-from triage.evidence import ERROR_ONLY, FULL, SavedRun
+from triage.evidence import ERROR_ONLY, FULL
 from triage.llm import FakeProvider, ModelUnavailableError
 from triage.pack import DEFAULT_PACK, UNKNOWN
 from triage.prompt import Source
@@ -22,9 +24,9 @@ VERDICT = json.dumps(
 )
 
 
-def saved_run(tmp_path: Path) -> SavedRun:
+def saved_run(tmp_path: Path) -> Case:
     """Return a saved run with one failing measurement."""
-    return SavedRun.load(write_run(tmp_path / "run", [FAILING_TEST]))
+    return load_case(write_run(tmp_path / "run", [FAILING_TEST]))
 
 
 def test_the_chosen_action_comes_back_as_the_verdict(tmp_path: Path) -> None:
@@ -142,7 +144,7 @@ def test_the_cli_says_when_a_check_overruled_the_model(
 
 def test_checks_are_off_unless_asked_for(tmp_path: Path) -> None:
     """The pipeline applies no checks by default, so the evaluation can measure the model alone."""
-    run = SavedRun.load(unchanged_firmware_run(tmp_path))
+    run = load_case(unchanged_firmware_run(tmp_path))
     assert triage_run(run, FakeProvider([FIRMWARE_REPLY])).fix is DEFAULT_PACK.action("FIRMWARE")
     checked = triage_run(run, FakeProvider([FIRMWARE_REPLY]), checks=DEFAULT_CHECKS)
     assert checked.fix is UNKNOWN

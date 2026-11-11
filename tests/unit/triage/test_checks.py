@@ -7,10 +7,11 @@ from pathlib import Path
 import pytest
 
 from tests.unit.triage.test_evidence import FAILING_TEST, NO_SIGNAL_LINE, write_run
-from tests.unit.triage.test_pack import WITH_CHECKS, write_pack
+from tests.unit.triage.test_pack import WITH_CHECKS, payments_case, write_pack
 from triage.answer import Verdict
+from triage.bench_run import load_case
+from triage.case import Case
 from triage.checks import DEFAULT_CHECKS, RuleCheck, VerdictCheck, apply_checks, checks_for
-from triage.evidence import SavedRun
 from triage.pack import DEFAULT_PACK, UNKNOWN, Action, load_pack
 
 
@@ -31,13 +32,13 @@ FIRMWARE_STATES: dict[str, dict[str, str]] = {
 """The three things a run can say about its firmware."""
 
 
-def run_with_firmware(tmp_path: Path, versions: dict[str, str]) -> SavedRun:
+def run_with_firmware(tmp_path: Path, versions: dict[str, str]) -> Case:
     """Return a failed run that recorded the given firmware versions."""
     folder = write_run(tmp_path / "run", [FAILING_TEST])
     results = json.loads((folder / "results.json").read_text(encoding="utf-8"))
     results["firmware_versions"] = versions
     (folder / "results.json").write_text(json.dumps(results), encoding="utf-8")
-    return SavedRun.load(folder)
+    return load_case(folder)
 
 
 @pytest.mark.parametrize(
@@ -66,10 +67,10 @@ def test_no_checks_leave_the_verdict_alone(tmp_path: Path) -> None:
     assert apply_checks(run, verdict, DEFAULT_CHECKS).fix is UNKNOWN
 
 
-def run_with_errors(tmp_path: Path, errors: list[str]) -> SavedRun:
+def run_with_errors(tmp_path: Path, errors: list[str]) -> Case:
     """Return a failed run whose failing test reports the given instrument errors."""
     test = {**FAILING_TEST, "instrument_errors": errors}
-    return SavedRun.load(write_run(tmp_path / "run", [test]))
+    return load_case(write_run(tmp_path / "run", [test]))
 
 
 @pytest.mark.parametrize(
@@ -103,7 +104,7 @@ def test_an_error_in_a_passing_test_doesnt_count(tmp_path: Path) -> None:
         "message": "",
         "instrument_errors": ["-113,x"],
     }
-    run = SavedRun.load(write_run(tmp_path / "run", [passing, FAILING_TEST]))
+    run = load_case(write_run(tmp_path / "run", [passing, FAILING_TEST]))
     verdict = Verdict(DEFAULT_PACK.action("TIMEOUT"), "session", "slow")
     assert check_named("timeout-with-instrument-error").review(run, verdict) == verdict
 
@@ -169,13 +170,13 @@ def test_the_service_applies_every_check() -> None:
     ]
 
 
-def run_with_no_signal(tmp_path: Path, warnings: int) -> SavedRun:
+def run_with_no_signal(tmp_path: Path, warnings: int) -> Case:
     """Return a failed run whose analyzer logged no signal the given number of times."""
     folder = write_run(tmp_path / "run", [FAILING_TEST])
     (folder / "logs.txt").write_text(
         "\n".join(["generator-1 | {}", *[NO_SIGNAL_LINE] * warnings]) + "\n", encoding="utf-8"
     )
-    return SavedRun.load(folder)
+    return load_case(folder)
 
 
 @pytest.mark.parametrize(
@@ -210,12 +211,12 @@ LEVEL_CASES = {"a level", "a path loss", "a level and a frequency"}
 """The cases with a level or power reading out of limits, which alignment can explain."""
 
 
-def run_with_failed_units(tmp_path: Path, units: tuple[str, ...]) -> SavedRun:
+def run_with_failed_units(tmp_path: Path, units: tuple[str, ...]) -> Case:
     """Return a failed run whose one failed test has out-of-limit readings in these units."""
     measurement = FAILING_TEST["measurements"][0]  # type: ignore[index]
     measurements = [{**measurement, "name": f"reading_{unit}", "unit": unit} for unit in units]
     test = {**FAILING_TEST, "measurements": measurements}
-    return SavedRun.load(write_run(tmp_path / "run", [test]))
+    return load_case(write_run(tmp_path / "run", [test]))
 
 
 @pytest.mark.parametrize(
@@ -235,19 +236,11 @@ def test_only_alignment_without_a_failed_level_reading_is_overruled(
         assert reviewed == verdict
 
 
-def payments_run(tmp_path: Path, logs: str) -> SavedRun:
-    """Return a failed payments run whose test reported a feed error, with the given logs."""
-    test = {**FAILING_TEST, "feed_errors": ["E17 file truncated"]}
-    folder = write_run(tmp_path / "run", [test])
-    (folder / "logs.txt").write_text(logs, encoding="utf-8")
-    return SavedRun.load(folder)
-
-
 @pytest.mark.parametrize(
     ("logs", "reason"),
     [
-        ("batch 7 rejected\n", "no mapping change was deployed"),
-        ("mapping v2 deployed\n", "the feed reported E17 file truncated"),
+        ("batch 7 rejected", "no mapping change was deployed"),
+        ("mapping v2 deployed", "the feed reported E17 file truncated"),
     ],
 )
 def test_another_domains_rules_refuse_its_own_actions(
@@ -255,7 +248,7 @@ def test_another_domains_rules_refuse_its_own_actions(
 ) -> None:
     """A payments pack's checks apply in order, and quote its own facts; nothing RF is used."""
     pack = load_pack(write_pack(tmp_path, WITH_CHECKS))
-    run = payments_run(tmp_path, logs)
+    run = payments_case(tmp_path, (logs,))
     mapping = Verdict(pack.action("FIX_MAPPING"), "the mapping", "fields moved", [])
     feed = Verdict(pack.action("REQUEST_FEED"), "the feed", "file short", [])
     assert apply_checks(run, mapping, checks_for(pack)).overruled == reason

@@ -15,8 +15,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from triage.answer import VERDICT_SCHEMA, MalformedAnswerError, past_fix_lines
+from triage.bench_run import load_case
+from triage.case import Case
 from triage.evaluate import expected_fix
-from triage.evidence import FULL, SavedRun, error_only_evidence
+from triage.evidence import FULL, error_only_evidence
 from triage.label import load_label
 from triage.llm import DEFAULT_MODEL, LLMProvider, ModelUnavailableError, OllamaProvider
 from triage.pack import Action
@@ -78,7 +80,7 @@ class DemoResult:
 
 
 def _answer(
-    run: SavedRun, provider: LLMProvider, expected: Action, sources: Sequence[Source]
+    run: Case, provider: LLMProvider, expected: Action, sources: Sequence[Source]
 ) -> Answer:
     """Triage one run once, turning an unusable reply into a result instead of an error.
 
@@ -107,7 +109,7 @@ def _answer(
 
 
 def run_demo(
-    run: SavedRun, provider: LLMProvider, retriever: Retriever, top_k: int = DEFAULT_TOP_K
+    run: Case, provider: LLMProvider, retriever: Retriever, top_k: int = DEFAULT_TOP_K
 ) -> DemoResult:
     """Triage one run with and without retrieval, so the difference is attributable to it.
 
@@ -214,7 +216,7 @@ def main(
     parsed = parser.parse_args(arguments)
     provider = provider or OllamaProvider(model=parsed.model, response_format=VERDICT_SCHEMA)
     try:
-        run = SavedRun.load(parsed.run)
+        run = load_case(parsed.run)
         result = run_demo(run, provider, retriever or history_index(parsed.history))
     except (ModelUnavailableError, FileNotFoundError, KeyError) as error:
         sys.stdout.write(f"{error}\n")

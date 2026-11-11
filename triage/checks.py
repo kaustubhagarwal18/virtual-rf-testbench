@@ -16,7 +16,7 @@ from dataclasses import dataclass, replace
 from typing import Protocol
 
 from triage.answer import Verdict
-from triage.evidence import SavedRun
+from triage.case import Case
 from triage.facts import Fact
 from triage.pack import DEFAULT_PACK, UNKNOWN, CheckRule, Pack
 
@@ -24,7 +24,7 @@ from triage.pack import DEFAULT_PACK, UNKNOWN, CheckRule, Pack
 class VerdictCheck(Protocol):
     """Anything that can review a verdict against the run it is about."""
 
-    def review(self, run: SavedRun, verdict: Verdict) -> Verdict:
+    def review(self, run: Case, verdict: Verdict) -> Verdict:
         """Return the verdict, or UNKNOWN in its place if it contradicts the evidence.
 
         Args:
@@ -48,7 +48,7 @@ class RuleCheck:
     rule: CheckRule
     fact: Fact
 
-    def review(self, run: SavedRun, verdict: Verdict) -> Verdict:
+    def review(self, run: Case, verdict: Verdict) -> Verdict:
         """Overrule the rule's action when its fact holds, or unless it does.
 
         Args:
@@ -82,7 +82,7 @@ DEFAULT_CHECKS: tuple[VerdictCheck, ...] = checks_for(DEFAULT_PACK)
 """The default pack's checks, which the service applies to every verdict."""
 
 
-def apply_checks(run: SavedRun, verdict: Verdict, checks: tuple[VerdictCheck, ...]) -> Verdict:
+def apply_checks(run: Case, verdict: Verdict, checks: tuple[VerdictCheck, ...]) -> Verdict:
     """Pass a verdict through each check in turn.
 
     Args:

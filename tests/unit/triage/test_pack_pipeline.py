@@ -6,10 +6,9 @@ from pathlib import Path
 import pytest
 
 from tests.unit.tools.test_triage_demo import StubRetriever
-from tests.unit.triage.test_evidence import FAILING_TEST, write_run
-from tests.unit.triage.test_pack import WITH_CHECKS, write_pack
+from tests.unit.triage.test_pack import WITH_CHECKS, payments_case, write_pack
 from triage.answer import MalformedAnswerError, verdict_schema
-from triage.evidence import SavedRun
+from triage.case import Case
 from triage.failures import triage_like_the_api
 from triage.llm import FakeProvider
 from triage.pack import Pack, load_pack
@@ -23,11 +22,9 @@ def payments(tmp_path: Path) -> Pack:
     return load_pack(write_pack(tmp_path, WITH_CHECKS))
 
 
-def failed_batch(tmp_path: Path, logs: str = "batch 7 rejected\n") -> SavedRun:
-    """Return a failed payments run with the given logs."""
-    folder = write_run(tmp_path / "run", [FAILING_TEST])
-    (folder / "logs.txt").write_text(logs, encoding="utf-8")
-    return SavedRun.load(folder)
+def failed_batch(tmp_path: Path) -> Case:
+    """Return a failed payments batch, saved and loaded as a generic case.json."""
+    return payments_case(tmp_path)
 
 
 def reply(key: str, cited: list[str] | None = None) -> str:

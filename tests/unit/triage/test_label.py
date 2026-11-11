@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from tests.unit.triage.test_evidence import FAILING_TEST, write_run
-from triage.evidence import SavedRun
+from triage.bench_run import load_case
 from triage.label import load_label
 
 
@@ -15,7 +15,7 @@ def test_the_label_is_read_from_beside_the_evidence(tmp_path: Path) -> None:
     folder = write_run(tmp_path / "cable_loss-1", [FAILING_TEST])
     written = {"fault": "cable_loss", "cause": "worn cable", "fix": "replaced it"}
     (folder / "label.json").write_text(json.dumps(written), encoding="utf-8")
-    assert load_label(SavedRun.load(folder)) == written
+    assert load_label(load_case(folder)) == written
 
 
 def test_a_missing_label_is_reported(tmp_path: Path) -> None:
@@ -23,4 +23,4 @@ def test_a_missing_label_is_reported(tmp_path: Path) -> None:
     folder = write_run(tmp_path / "run", [FAILING_TEST])
     (folder / "label.json").unlink()
     with pytest.raises(FileNotFoundError):
-        load_label(SavedRun.load(folder))
+        load_label(load_case(folder))

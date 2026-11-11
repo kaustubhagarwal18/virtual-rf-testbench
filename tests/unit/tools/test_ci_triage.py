@@ -23,7 +23,7 @@ from tools.ci_triage import (
     render_triage,
 )
 from triage.answer import PastFix, Verdict
-from triage.evidence import SavedRun
+from triage.bench_run import load_case
 from triage.failures import FailureAnswer, FailureGroup, RunTriage, triage_like_the_api
 from triage.llm import FakeProvider
 from triage.pack import DEFAULT_PACK, UNKNOWN
@@ -179,7 +179,7 @@ def test_a_problem_is_one_line_under_the_heading() -> None:
 
 def test_the_failed_run_is_triaged_as_the_api_triages_it(tmp_path: Path) -> None:
     """Agreeing past runs reach the model; both share its action, so both are quoted."""
-    run = SavedRun.load(write_run(tmp_path / "run", [FAILING_TEST]))
+    run = load_case(write_run(tmp_path / "run", [FAILING_TEST]))
     provider = FakeProvider([CABLE_REPLY])
     verdict = triage_like_the_api(run, provider, StubRetriever(*AGREEING))
     assert verdict.fix is DEFAULT_PACK.action("CABLE")
@@ -192,7 +192,7 @@ def test_the_failed_run_is_triaged_as_the_api_triages_it(tmp_path: Path) -> None
 
 def test_disagreeing_past_runs_answer_unknown_without_asking_the_model(tmp_path: Path) -> None:
     """The API's disagreement gate applies in CI too: no model call, an UNKNOWN with a reason."""
-    run = SavedRun.load(write_run(tmp_path / "run", [FAILING_TEST]))
+    run = load_case(write_run(tmp_path / "run", [FAILING_TEST]))
     provider = FakeProvider([])
     verdict = triage_like_the_api(run, provider, StubRetriever(*DISAGREEING))
     assert verdict.fix is UNKNOWN

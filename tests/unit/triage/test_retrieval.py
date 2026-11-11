@@ -8,8 +8,8 @@ import numpy as np
 import pytest
 
 from tests.unit.triage.test_evidence import FAILING_TEST, write_run
+from triage.bench_run import load_case
 from triage.embed import FakeEmbedder, OllamaEmbedder
-from triage.evidence import SavedRun
 from triage.label import load_label
 from triage.retrieval import InMemoryRetriever, history_index, history_source, neutral_id
 
@@ -26,7 +26,7 @@ def labelled_run(folder: Path, fault: str, cause: str, fix: str) -> Path:
 def test_a_history_source_carries_its_cause_and_fix() -> None:
     """A past run is only useful if it says how it was resolved, so the source includes both."""
     with tempfile.TemporaryDirectory() as folder:
-        run = SavedRun.load(
+        run = load_case(
             labelled_run(Path(folder) / "cable_loss-1", "cable_loss", "worn cable", "replaced it")
         )
         source = history_source(run, load_label(run))
@@ -40,7 +40,7 @@ def test_a_history_source_carries_its_cause_and_fix() -> None:
 )
 def test_a_source_id_never_names_the_run_or_its_fault(tmp_path: Path, folder_name: str) -> None:
     """The id the model cites is a hash, so it can't read the cause off a folder name."""
-    run = SavedRun.load(labelled_run(tmp_path / folder_name, "cable_loss", "worn", "replaced"))
+    run = load_case(labelled_run(tmp_path / folder_name, "cable_loss", "worn", "replaced"))
     source = history_source(run, load_label(run))
     assert source.source_id == neutral_id(source.text)
     assert source.source_id.startswith("past-")
@@ -74,7 +74,7 @@ def test_the_nearest_run_shares_the_most_words(tmp_path: Path) -> None:
     run_with_error(history / "cable_loss-1", "cable_loss", "path loss cable datasheet exceeded")
     run_with_error(history / "slow_responses-1", "slow_responses", "timeout no reply from port")
     retriever = InMemoryRetriever.from_history(history, FakeEmbedder())
-    question = SavedRun.load(
+    question = load_case(
         run_with_error(tmp_path / "q" / "cable_loss", "cable_loss", "path loss cable datasheet off")
     )
     top = retriever.similar_to(question, count=1)
@@ -87,7 +87,7 @@ def test_count_limits_how_many_are_returned(tmp_path: Path) -> None:
     for index in range(4):
         labelled_run(history / f"cable_loss-{index}", "cable_loss", f"cable {index}", "new cable")
     retriever = InMemoryRetriever.from_history(history, FakeEmbedder())
-    question = SavedRun.load(labelled_run(tmp_path / "q" / "cable_loss", "cable_loss", "c", "f"))
+    question = load_case(labelled_run(tmp_path / "q" / "cable_loss", "cable_loss", "c", "f"))
     wanted = 2
     assert len(retriever.similar_to(question, count=wanted)) == wanted
 
@@ -99,7 +99,7 @@ def test_a_held_out_fault_is_never_returned(tmp_path: Path) -> None:
     run_with_error(history / "cable_loss-2", "cable_loss", "path loss cable datasheet high")
     run_with_error(history / "slow_responses-1", "slow_responses", "timeout no reply from port")
     retriever = InMemoryRetriever.from_history(history, FakeEmbedder())
-    question = SavedRun.load(
+    question = load_case(
         run_with_error(tmp_path / "q" / "cable_loss", "cable_loss", "path loss cable datasheet")
     )
     kept = retriever.similar_to(question, count=3, exclude_fault="cable_loss")
@@ -109,9 +109,9 @@ def test_a_held_out_fault_is_never_returned(tmp_path: Path) -> None:
 def test_an_added_run_can_be_retrieved_and_is_kept_once(tmp_path: Path) -> None:
     """A resolved run added later is searched like the rest; adding it again changes nothing."""
     retriever = InMemoryRetriever([], np.zeros((0, 0)), FakeEmbedder())
-    question = SavedRun.load(run_with_error(tmp_path / "q", "cable_loss", "path loss cable"))
+    question = load_case(run_with_error(tmp_path / "q", "cable_loss", "path loss cable"))
     assert not retriever.similar_to(question, count=3)
-    resolved = SavedRun.load(run_with_error(tmp_path / "new", "cable_loss", "path loss cable"))
+    resolved = load_case(run_with_error(tmp_path / "new", "cable_loss", "path loss cable"))
     label = {"fault": "cable_loss", "cause": "worn cable", "fix": "replaced it"}
     first = retriever.add(resolved, label)
     second = retriever.add(resolved, label)
@@ -127,7 +127,7 @@ def test_a_source_states_the_action_taken_when_the_label_records_one(
     tmp_path: Path, action: str | None, shown: bool
 ) -> None:
     """A precedent hands the model the action key itself, when the ticket recorded it."""
-    run = SavedRun.load(labelled_run(tmp_path / "run", "link_down", "unplugged", "reconnected"))
+    run = load_case(labelled_run(tmp_path / "run", "link_down", "unplugged", "reconnected"))
     label = {"fault": "link_down", "cause": "unplugged", "fix": "reconnected"}
     if action is not None:
         label["action"] = action
@@ -147,7 +147,7 @@ def test_retrieved_sources_carry_their_action_and_similarity(tmp_path: Path) -> 
         label = json.loads((run / "label.json").read_text(encoding="utf-8"))
         (run / "label.json").write_text(json.dumps({**label, "action": action}), "utf-8")
     retriever = InMemoryRetriever.from_history(history, FakeEmbedder())
-    question = SavedRun.load(run_with_error(tmp_path / "q", "a", "path loss cable datasheet"))
+    question = load_case(run_with_error(tmp_path / "q", "a", "path loss cable datasheet"))
     found = retriever.similar_to(question, count=2)
     assert [source.action for source in found] == ["CABLE", "TIMEOUT"]
     similarities = [source.similarity for source in found if source.similarity is not None]
@@ -166,14 +166,14 @@ def test_identical_history_runs_are_indexed_once(tmp_path: Path, copies: int) ->
     retriever = InMemoryRetriever.from_history(history, FakeEmbedder())
     distinct = 2
     assert len(retriever) == distinct
-    question = SavedRun.load(labelled_run(tmp_path / "q" / "q", "cable_loss", "c", "f"))
+    question = load_case(labelled_run(tmp_path / "q" / "q", "cable_loss", "c", "f"))
     found = retriever.similar_to(question, count=distinct)
     assert len({source.source_id for source in found}) == distinct
 
 
 def test_a_history_source_keeps_the_fix_applied_apart(tmp_path: Path) -> None:
     """The fix a ticket records is kept on its own, so an answer can quote it word for word."""
-    run = SavedRun.load(labelled_run(tmp_path / "run", "cable_loss", "worn cable", "replaced it"))
+    run = load_case(labelled_run(tmp_path / "run", "cable_loss", "worn cable", "replaced it"))
     source = history_source(run, load_label(run))
     assert source.fix_applied == "replaced it"
 

@@ -19,8 +19,10 @@ from pathlib import Path
 
 from triage.abstain import DEFAULT_GATES
 from triage.answer import VERDICT_SCHEMA, Verdict, parse_verdict, verdict_schema
+from triage.bench_run import load_case
+from triage.case import Case
 from triage.checks import DEFAULT_CHECKS, apply_checks
-from triage.evidence import EVALUATED_LEVELS, SavedRun, build_evidence
+from triage.evidence import EVALUATED_LEVELS, build_evidence
 from triage.label import load_label
 from triage.pack import DEFAULT_PACK, Action
 from triage.prompt import SYSTEM_PROMPT, build_prompt
@@ -61,9 +63,9 @@ def digest(value: object) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
 
-def runs(kind: str) -> list[SavedRun]:
+def runs(kind: str) -> list[Case]:
     """Load every recorded run of one kind, history or questions, in name order."""
-    return [SavedRun.load(folder) for folder in sorted((RUNS / kind).iterdir()) if folder.is_dir()]
+    return [load_case(folder) for folder in sorted((RUNS / kind).iterdir()) if folder.is_dir()]
 
 
 def reviewed(verdict: Verdict) -> dict[str, object]:

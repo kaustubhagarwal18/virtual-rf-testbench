@@ -14,8 +14,8 @@ from collections.abc import Sequence
 
 from triage.abstain import SourceGate, reason_to_abstain
 from triage.answer import Verdict, with_past_fixes
+from triage.case import Case
 from triage.checks import VerdictCheck, apply_checks
-from triage.evidence import SavedRun
 from triage.pack import DEFAULT_PACK, UNKNOWN, Action, Pack
 from triage.prompt import Source
 
@@ -84,7 +84,7 @@ def majority_vote(sources: Sequence[Source], pack: Pack = DEFAULT_PACK) -> Verdi
 
 
 def vote_run(
-    run: SavedRun,
+    run: Case,
     sources: Sequence[Source],
     *,
     checks: tuple[VerdictCheck, ...] = (),

@@ -10,7 +10,8 @@ import pytest
 
 from tests.unit.triage.test_evidence import FAILING_TEST, write_run
 from tools.triage_demo import UNUSABLE, main, render, run_demo
-from triage.evidence import SavedRun
+from triage.bench_run import load_case
+from triage.case import Case
 from triage.llm import FakeProvider, LLMProvider, ModelUnavailableError
 from triage.pack import DEFAULT_PACK
 from triage.prompt import Source
@@ -43,9 +44,7 @@ class StubRetriever:
         """
         self.sources = sources
 
-    def similar_to(
-        self, run: SavedRun, count: int, exclude_fault: str | None = None
-    ) -> list[Source]:
+    def similar_to(self, run: Case, count: int, exclude_fault: str | None = None) -> list[Source]:
         """Return the fixed sources, up to the count asked for.
 
         Args:
@@ -82,7 +81,7 @@ class UnreachableProvider:
         raise ModelUnavailableError("start it with 'ollama serve'")
 
 
-def cable_run(tmp_path: Path) -> SavedRun:
+def cable_run(tmp_path: Path) -> Case:
     """Return a saved cable_loss question run, so its resolving fix is CABLE."""
     folder = write_run(tmp_path / "cable_loss", [FAILING_TEST])
     (folder / "label.json").write_text(
@@ -97,7 +96,7 @@ def cable_run(tmp_path: Path) -> SavedRun:
         ),
         encoding="utf-8",
     )
-    return SavedRun.load(folder)
+    return load_case(folder)
 
 
 def demo_retriever() -> Retriever:

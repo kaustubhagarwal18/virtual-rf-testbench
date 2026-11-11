@@ -9,8 +9,9 @@ import pytest
 
 from tests.unit.triage.test_evidence import FAILING_TEST, write_run
 from triage.abstain import PrecedentsDisagree
+from triage.bench_run import load_case
+from triage.case import Case
 from triage.checks import DEFAULT_CHECKS
-from triage.evidence import SavedRun
 from triage.pack import DEFAULT_PACK, UNKNOWN
 from triage.prompt import Source
 from triage.vote import majority_vote, vote_run
@@ -80,13 +81,13 @@ def test_an_action_that_is_not_on_the_list_is_an_error() -> None:
         majority_vote(precedents(("REPLACE_EVERYTHING",)))
 
 
-def unchanged_firmware_run(folder: Path) -> SavedRun:
+def unchanged_firmware_run(folder: Path) -> Case:
     """Write a failed run whose firmware is the same as the last passing run's."""
     run = write_run(folder, [FAILING_TEST])
     results = json.loads((run / "results.json").read_text(encoding="utf-8"))
     results["firmware_versions"] = {"analyzer": "0.1.0", "generator": "0.1.0"}
     (run / "results.json").write_text(json.dumps(results), encoding="utf-8")
-    return SavedRun.load(run)
+    return load_case(run)
 
 
 def test_the_checks_overrule_a_vote_as_they_would_the_model(tmp_path: Path) -> None:

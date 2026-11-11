@@ -16,8 +16,10 @@ from typing import Any, Protocol
 
 import numpy as np
 
+from triage.bench_run import load_case
+from triage.case import Case
 from triage.embed import Embedder, OllamaEmbedder
-from triage.evidence import FULL, SavedRun, build_evidence
+from triage.evidence import FULL, build_evidence
 from triage.label import load_label
 from triage.prompt import Source
 
@@ -33,9 +35,7 @@ SOURCE_ID_HEX_DIGITS = 8
 class Retriever(Protocol):
     """Anything that can return the past runs most like a new one."""
 
-    def similar_to(
-        self, run: SavedRun, count: int, exclude_fault: str | None = None
-    ) -> list[Source]:
+    def similar_to(self, run: Case, count: int, exclude_fault: str | None = None) -> list[Source]:
         """Return the runs most like this one, most similar first.
 
         Args:
@@ -52,7 +52,7 @@ class Retriever(Protocol):
 class HistoryStore(Protocol):
     """Anything that can take a resolved run into the history retrieval searches."""
 
-    def add(self, run: SavedRun, label: dict[str, Any]) -> Source:
+    def add(self, run: Case, label: dict[str, Any]) -> Source:
         """Add a resolved run.
 
         Args:
@@ -77,7 +77,7 @@ def neutral_id(text: str) -> str:
     return f"{SOURCE_ID_PREFIX}{digest[:SOURCE_ID_HEX_DIGITS]}"
 
 
-def history_source(run: SavedRun, label: dict[str, Any]) -> Source:
+def history_source(run: Case, label: dict[str, Any]) -> Source:
     """Turn a resolved run into a source the model can cite.
 
     The label is part of a history source on purpose: a past run is only useful if it says
@@ -129,7 +129,7 @@ class InMemoryRetriever:
             The retriever, ready to search. Runs whose sources are identical are indexed
             once, as add() does, so one copy can't fill several of the top places.
         """
-        runs = [SavedRun.load(folder) for folder in sorted(history.iterdir()) if folder.is_dir()]
+        runs = [load_case(folder) for folder in sorted(history.iterdir()) if folder.is_dir()]
         unique: dict[str, Source] = {}
         for run in runs:
             source = history_source(run, load_label(run))
@@ -146,7 +146,7 @@ class InMemoryRetriever:
         """
         return len(self.sources)
 
-    def add(self, run: SavedRun, label: dict[str, Any]) -> Source:
+    def add(self, run: Case, label: dict[str, Any]) -> Source:
         """Add a resolved run to the index; adding the same run twice keeps one copy.
 
         Args:
@@ -165,7 +165,7 @@ class InMemoryRetriever:
         return source
 
     def similar_to(
-        self, run: SavedRun, count: int = DEFAULT_TOP_K, exclude_fault: str | None = None
+        self, run: Case, count: int = DEFAULT_TOP_K, exclude_fault: str | None = None
     ) -> list[Source]:
         """Return the history runs most like this one.
 

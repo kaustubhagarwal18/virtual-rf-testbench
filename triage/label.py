@@ -8,12 +8,12 @@ run into a source the model may cite (how that past failure was resolved).
 import json
 from typing import Any
 
-from triage.evidence import SavedRun
+from triage.case import Case
 
 LABEL_FILE = "label.json"
 
 
-def load_label(run: SavedRun) -> dict[str, Any]:
+def load_label(run: Case) -> dict[str, Any]:
     """Read a saved run's label.
 
     Args:

@@ -48,21 +48,18 @@ category = "firmware"
 says = "report a firmware regression and pin the previous release"
 
 # Facts: statements about a run that the checks read. Each is a kind the core provides
-# (triage/facts.py), given this domain's field names, phrases and units.
+# (triage/facts.py), given this domain's baselines, phrases and units.
 
 [facts.names_other_release]
 kind = "names_other_version"
-field = "firmware_versions"
 pattern = '\b\d+\.\d+\.\d+(?:-[0-9A-Za-z]+(?:\.[0-9A-Za-z]+)*)?\b'
 
 [facts.firmware_unchanged]
 kind = "versions_unchanged"
-field = "firmware_versions"
 baseline = "0.1.0"
 
 [facts.instrument_error]
 kind = "errors_reported"
-field = "instrument_errors"
 
 [facts.no_signal]
 kind = "log_contains"

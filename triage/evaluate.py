@@ -25,13 +25,14 @@ from pathlib import Path
 
 from triage.abstain import DEFAULT_GATES
 from triage.answer import VERDICT_SCHEMA, MalformedAnswerError, Verdict
+from triage.bench_run import load_case
+from triage.case import Case
 from triage.checks import DEFAULT_CHECKS
 from triage.evidence import (
     ERROR_ONLY,
     FULL,
     FULL_WITHOUT_FIRMWARE,
     FULL_WITHOUT_SIGNAL,
-    SavedRun,
     error_only_evidence,
 )
 from triage.label import load_label
@@ -141,7 +142,7 @@ SCENARIOS = (
 names its model twin: the one thing it changes is the vote answering in the model's place."""
 
 
-def expected_fix(run: SavedRun) -> Action:
+def expected_fix(run: Case) -> Action:
     """Return the fix that resolves a question run, from the action its label records.
 
     The label is read here, and only here: it is the answer key, used to score the model's
@@ -168,7 +169,7 @@ def expected_fix(run: SavedRun) -> Action:
 
 
 def _sources_for(
-    run: SavedRun, fault: str, scenario: Scenario, retriever: Retriever | None
+    run: Case, fault: str, scenario: Scenario, retriever: Retriever | None
 ) -> tuple[Source, ...]:
     """Find the past runs a scenario offers for one question.
 
@@ -193,7 +194,7 @@ def _sources_for(
 
 
 def _decide(
-    run: SavedRun, provider: LLMProvider, scenario: Scenario, sources: Sequence[Source]
+    run: Case, provider: LLMProvider, scenario: Scenario, sources: Sequence[Source]
 ) -> Verdict:
     """Answer one question the scenario's way: by the model, or by the precedents' vote.
 
@@ -214,7 +215,7 @@ def _decide(
 
 
 def evaluate_question(
-    run: SavedRun, provider: LLMProvider, scenario: Scenario, retriever: Retriever | None
+    run: Case, provider: LLMProvider, scenario: Scenario, retriever: Retriever | None
 ) -> Outcome:
     """Ask about one run in one scenario, and score the answer.
 
@@ -288,7 +289,7 @@ def evaluate(
     Returns:
         One result per scenario, in the order given.
     """
-    runs = [SavedRun.load(folder) for folder in sorted(questions.iterdir()) if folder.is_dir()]
+    runs = [load_case(folder) for folder in sorted(questions.iterdir()) if folder.is_dir()]
     results = []
     for scenario in scenarios:
         result = ScenarioResult(scenario)
@@ -313,9 +314,7 @@ def repeated_faults(questions: Path) -> list[str]:
         The faults whose labels record no unit, in name order.
     """
     labels = [
-        load_label(SavedRun.load(folder))
-        for folder in sorted(questions.iterdir())
-        if folder.is_dir()
+        load_label(load_case(folder)) for folder in sorted(questions.iterdir()) if folder.is_dir()
     ]
     return sorted({str(label["fault"]) for label in labels if not label.get("unit")})
 

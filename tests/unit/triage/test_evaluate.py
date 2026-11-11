@@ -11,9 +11,10 @@ import pytest
 
 from tests.unit.triage.test_evidence import FAILING_TEST, write_run
 from tools.faults import CATALOGUE
+from triage.bench_run import load_case
 from triage.embed import FakeEmbedder
 from triage.evaluate import SCENARIOS, evaluate, expected_fix, main, repeated_faults
-from triage.evidence import ERROR_ONLY, FULL, SavedRun
+from triage.evidence import ERROR_ONLY, FULL
 from triage.llm import CachingProvider, FakeProvider, ModelUnavailableError
 from triage.pack import DEFAULT_PACK, UNKNOWN, Action
 from triage.report import _report_rows, findings, render, render_report, score_line
@@ -73,7 +74,7 @@ def test_the_data_set_has_a_label_for_every_run() -> None:
 
 def test_the_expected_fix_comes_from_the_label(tmp_path: Path) -> None:
     """The label is the answer key; the fix it maps to is what the verdict is scored against."""
-    run = SavedRun.load(question(tmp_path / "cable_loss", "cable_loss"))
+    run = load_case(question(tmp_path / "cable_loss", "cable_loss"))
     assert expected_fix(run) is DEFAULT_PACK.action("CABLE")
 
 
@@ -168,7 +169,7 @@ def test_a_label_without_a_known_action_has_no_expected_fix(tmp_path: Path, acti
     label = {"fault": "brand_new_fault"} if action is None else {"fault": "x", "action": action}
     (run / "label.json").write_text(json.dumps(label), encoding="utf-8")
     with pytest.raises(KeyError, match="make fault-dataset"):
-        expected_fix(SavedRun.load(run))
+        expected_fix(load_case(run))
 
 
 def test_evaluate_runs_as_a_module() -> None:
