@@ -9,6 +9,9 @@ it, so the package version moves only with a release.
 
 ### Added
 
+- **A "No signal" ablation** in `make eval` (`full evidence, no signal line`): 5 of 9
+  faults, 11 wrong, against full evidence's 7 and 6, so the README's first finding is
+  reproducible rather than quoted from ADR 0017. It needed no new prompts.
 - **Guides for other people:** `docs/ADAPTING.md` (triaging your own failures, adding a
   fault, driving real instruments), `CONTRIBUTING.md` (setup, workflow, the checks and the
   project's rules) and GitHub issue forms for bug reports and feature requests.
@@ -65,9 +68,14 @@ it, so the package version moves only with a release.
 
 ### Changed
 
-- The README reads like a short paper: an abstract, four figures (two new: a system overview
-  and the fault catalogue, both with dark-mode styles), one results table, findings,
-  limitations and the commands to reproduce. The hands-on guide moved to `docs/USAGE.md`,
+- The README's results are one figure, Table 1 drawn as rows of solved-fault dots and
+  wrong-answer bars; the fuller chart stays in `docs/EVALUATION.md`. The example answer is
+  now one the API gives (`cable_loss-1`): the old one, on `config_decimal_error`, is refused
+  by the disagreement gate. `make triage-demo` with no run now shows
+  `config_parameter_out_of_range-1`, where retrieval does change the verdict.
+- The README reads like a short paper: an abstract, five figures (four new: a system overview,
+  the fault catalogue, the findings and the limitations, all with dark-mode styles), one
+  results table and the commands to reproduce. The hands-on guide moved to `docs/USAGE.md`,
   and the full command and CI tables to `docs/DEVELOPMENT.md`.
 - The README's triage section is shorter: what the assistant answers, one real example, and
   how well it works in three sentences. The guardrails, results chart, findings and ADR
@@ -92,6 +100,8 @@ it, so the package version moves only with a release.
 
 ### Fixed
 
+- The demo said "changed the verdict from FIRMWARE to CONFIGURATION to the resolving
+  fix"; it now says "…to CONFIGURATION, the resolving fix".
 - The stalled-log-stream test failed about 2 runs in 500: a writer thread that started late
   freed a queue slot mid-stall, so two drop warnings went out where the test expected one.
   The test now waits until the writer is stuck on its first record before logging the rest,

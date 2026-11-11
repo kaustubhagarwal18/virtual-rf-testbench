@@ -70,40 +70,26 @@ solves **5 with no wrong answers**. A majority vote over the retrieved past runs
 ## 3 · Results
 
 <p align="center">
-  <img src="docs/images/triage-results.svg" width="760" alt="Faults solved out of 9: error only 3, full evidence 7, without the version line 6; with retrieval 6, with checks 6, with the disagreement gate 5 and no wrong answers; a majority vote over the same past runs, with no model, 9 with no wrong answers, and 6 with the gate; with the question's own fault held out, 4 with checks (the vote 4) and 1 with both gates (the vote 2).">
+  <img src="docs/images/results-table.svg" width="860" alt="Faults solved of 9 and wrong answers of 27. Error message only: 3 (95% interval 1 to 6), 18 wrong. Full evidence: 7 (4 to 8), 6 wrong. Plus the 3 closest past runs and checks: 6 (3 to 8), 3 wrong. Plus the disagreement gate, which the API runs: 5 (2 to 7), 0 wrong. Majority vote of the 3 past runs, no model: 9 (6 to 9), 0 wrong.">
 </p>
-<p align="center"><sub><b>Figure 4.</b> Faults solved, with 95% intervals, and confident wrong answers, for each configuration.</sub></p>
+<p align="center"><sub><b>Table 1.</b> A fault is solved when all three of its questions are right; the small numbers are 95% intervals.</sub></p>
 
-<div align="center">
-
-| Configuration | Faults solved (of 9) | Wrong answers (of 27) |
-|:---|:---:|:---:|
-| Error message only | 3 (1–6) | 18 |
-| Full evidence | **7** (4–8) | 6 |
-| + 3 closest past runs + checks | 6 (3–8) | 3 |
-| + disagreement gate (the API) | 5 (2–7) | **0** |
-| Majority vote of the 3 past runs, no model | 9 (6–9) | 0 |
-
-<sub><b>Table 1.</b> A fault is solved when all three of its questions are right; 95% intervals in brackets.</sub>
-
-</div>
-
-A real answer, on a run whose configuration asked for a 15 dB level offset instead of 1.5 dB:
+A real answer from the API, on a run whose path loss at 100 MHz is 1.89 dB against a limit of
+0.97 dB:
 
 ```
-fix:   CONFIGURATION
-where: bench configuration
-why:   The bench configuration asks for a 15 dB level offset where 1.5 dB was meant:
-       a misplaced decimal point, and far more than the cable's loss.
-cause: test
-cited: past-9e31db17, past-4b20146a
-last time: Corrected level_offset_db to 1.5 (past-9e31db17, past-4b20146a)
+fix:   CABLE
+where: cable
+why:   Extra loss in the cable between generator and analyzer, from a damaged cable
+cause: bench
+cited: past-72b3edd9, past-22406f9c, past-7858bf7e
+last time: Replaced the cable and recalibrated the path loss (past-72b3edd9, past-22406f9c, past-7858bf7e)
 ```
 
 <p align="center">
   <img src="docs/images/findings.svg" width="860" alt="Finding 1, stating a fact helps: a line saying the analyzer logged no signal took full evidence from 5 to 7 of 9 faults, fixing link_down and link_flaky. Finding 2, past runs can mislead: with the three closest past runs, 7 becomes 6; they fix config_parameter_out_of_range, but link_down becomes ALIGNMENT and reset_leaks_offset becomes CONFIGURATION. Finding 3, safety costs answers: the disagreement gate prevents 3 wrong answers and gives up 3 right ones.">
 </p>
-<p align="center"><sub><b>Figure 5.</b> Three findings from the experiments.</sub></p>
+<p align="center"><sub><b>Figure 4.</b> Three findings from the experiments.</sub></p>
 
 [docs/EVALUATION.md](docs/EVALUATION.md) has every scenario and what each experiment taught.
 
@@ -112,7 +98,7 @@ last time: Corrected level_offset_db to 1.5 (past-9e31db17, past-4b20146a)
 <p align="center">
   <img src="docs/images/limitations.svg" width="860" alt="Four limitations. Small, easy data: 6 of 9 faults repeat a past run, so the vote's 9 of 9 is recall, not reasoning. One small model: qwen2.5:3b at temperature 0, one seed, on an 8 GB laptop; a one-fault difference may be noise. One fault unanswered: with past runs the model wants ALIGNMENT on link_down and a check refuses it, where the vote would say LINK. Simulated bench: no real instruments; noise and errors are modelled, not measured.">
 </p>
-<p align="center"><sub><b>Figure 6.</b> What these results do not show.</sub></p>
+<p align="center"><sub><b>Figure 5.</b> What these results do not show.</sub></p>
 
 ## 5 · Reproduce
 
@@ -140,7 +126,7 @@ Score the triage assistant and triage one run, with [Ollama](https://ollama.com)
 ollama pull qwen2.5:3b
 ollama pull nomic-embed-text
 make eval
-make triage-demo RUN=triage/data/runs/questions/config_decimal_error-1
+make triage-demo RUN=triage/data/runs/questions/cable_loss-1
 ```
 
 On Linux, install uv from its [guide](https://docs.astral.sh/uv/getting-started/installation/)
@@ -154,9 +140,9 @@ make lint
 make test
 ```
 
-`make lint` runs ruff, mypy (strict), pylint, pydoclint, bandit and codespell; `make test`
-enforces 80% coverage. [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) lists every command and CI
-job.
+`make lint` runs ruff, mypy (strict), pylint, pydoclint, bandit, codespell, hadolint on the
+Dockerfile and mbake on the Makefile; `make test` enforces 80% coverage.
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) lists every command and CI job.
 
 ## Known issues
 
