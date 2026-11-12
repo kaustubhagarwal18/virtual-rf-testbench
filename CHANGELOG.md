@@ -9,6 +9,17 @@ it, so the package version moves only with a release.
 
 ### Added
 
+- **A domain-free case** (ADR 0023): the pipeline reads cases (`triage/case.py`) with a
+  `case.json` format any system can write; bench runs are one adapter
+  (`triage/bench_run.py`). The evidence's RF wording and notes move into the pack's
+  `[evidence]`. The behaviour lock passes unchanged.
+- **Checks as pack rules** (ADR 0022): the five checks are `[[checks]]` in the pack over
+  named facts of five domain-free kinds (`triage/facts.py`); the pipeline, the vote and CI
+  take a pack, and `python -m triage.service` and `tools.ci_triage` take `--pack`. The
+  behaviour lock, widened so every check fires, passes unchanged.
+- **Domain packs** (ADR 0021): the actions, their causes and the domain's description move
+  from code to `triage/packs/rf-bench.toml`, checked on load. A behaviour lock hashes 231
+  parts of triage's behaviour and proves the move changed no prompt, evidence, check or vote.
 - **An answer for each distinct failure in CI** (ADR 0020): the failed tests are grouped by
   setup step, or by test function and kind of failure, and each of the first five groups is
   triaged on its own; the comment has one numbered block per failure, naming it, listing its

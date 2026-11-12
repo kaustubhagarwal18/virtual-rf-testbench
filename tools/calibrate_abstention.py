@@ -20,8 +20,9 @@ from pathlib import Path
 
 import numpy as np
 
+from triage.bench_run import load_case
 from triage.embed import Embedder, OllamaEmbedder
-from triage.evidence import FULL, SavedRun, build_evidence
+from triage.evidence import FULL, build_evidence
 from triage.label import load_label
 from triage.llm import ModelUnavailableError
 from triage.retrieval import DEFAULT_HISTORY, history_source, normalise
@@ -58,7 +59,7 @@ def neighbours(history: Path, embedder: Embedder) -> list[Neighbours]:
     Returns:
         One entry per history run, in folder order.
     """
-    runs = [SavedRun.load(folder) for folder in sorted(history.iterdir()) if folder.is_dir()]
+    runs = [load_case(folder) for folder in sorted(history.iterdir()) if folder.is_dir()]
     sources = [history_source(run, load_label(run)) for run in runs]
     stored = normalise(np.array(embedder.embed([source.text for source in sources])))
     asked = normalise(np.array(embedder.embed([build_evidence(run, FULL) for run in runs])))
@@ -147,7 +148,7 @@ def main(arguments: Sequence[str] | None = None, embedder: Embedder | None = Non
     parser.add_argument("--history", type=Path, default=DEFAULT_HISTORY, help="history runs")
     parsed = parser.parse_args(arguments)
     try:
-        found = neighbours(parsed.history, embedder or OllamaEmbedder())
+        found = neighbours(parsed.history, embedder if embedder is not None else OllamaEmbedder())
         chosen = threshold(found)
     except (ModelUnavailableError, ValueError) as error:
         sys.stdout.write(f"{error}\n")

@@ -10,9 +10,11 @@ import pytest
 
 from tests.unit.triage.test_evidence import FAILING_TEST, write_run
 from tools.triage_demo import UNUSABLE, main, render, run_demo
-from triage.evidence import SavedRun
+from triage.bench_run import load_case
+from triage.case import Case
 from triage.llm import FakeProvider, LLMProvider, ModelUnavailableError
-from triage.prompt import Fix, Source
+from triage.pack import DEFAULT_PACK
+from triage.prompt import Source
 from triage.retrieval import Retriever
 
 FIRMWARE_REPLY = json.dumps(
@@ -42,9 +44,7 @@ class StubRetriever:
         """
         self.sources = sources
 
-    def similar_to(
-        self, run: SavedRun, count: int, exclude_fault: str | None = None
-    ) -> list[Source]:
+    def similar_to(self, run: Case, count: int, exclude_fault: str | None = None) -> list[Source]:
         """Return the fixed sources, up to the count asked for.
 
         Args:
@@ -81,7 +81,7 @@ class UnreachableProvider:
         raise ModelUnavailableError("start it with 'ollama serve'")
 
 
-def cable_run(tmp_path: Path) -> SavedRun:
+def cable_run(tmp_path: Path) -> Case:
     """Return a saved cable_loss question run, so its resolving fix is CABLE."""
     folder = write_run(tmp_path / "cable_loss", [FAILING_TEST])
     (folder / "label.json").write_text(
@@ -96,7 +96,7 @@ def cable_run(tmp_path: Path) -> SavedRun:
         ),
         encoding="utf-8",
     )
-    return SavedRun.load(folder)
+    return load_case(folder)
 
 
 def demo_retriever() -> Retriever:
@@ -108,7 +108,7 @@ def test_retrieval_flips_a_wrong_baseline_to_the_resolving_fix(tmp_path: Path) -
     """Without past runs the model blames firmware; with them it chooses the cable, and cites it."""
     provider = FakeProvider([FIRMWARE_REPLY, CABLE_REPLY])
     result = run_demo(cable_run(tmp_path), provider, demo_retriever())
-    assert result.expected is Fix.CABLE
+    assert result.expected is DEFAULT_PACK.action("CABLE")
     assert result.baseline.chosen == "FIRMWARE"
     assert not result.baseline.right
     assert result.retrieval.chosen == "CABLE"
@@ -266,3 +266,14 @@ def test_the_report_says_which_cited_run_each_fix_came_from(tmp_path: Path) -> N
     report = render(run_demo(cable_run(tmp_path), provider, StubRetriever(*sources)))
     assert "last time: Replaced the cable (past-a)" in report
     assert "last time: Reseated the connector (past-b)" in report
+
+
+def test_main_reports_a_malformed_case_in_one_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A case.json that isn't JSON is one line naming the file and exit 1, not a traceback."""
+    (tmp_path / "case.json").write_text("{", encoding="utf-8")
+    assert main([str(tmp_path)], FakeProvider([]), demo_retriever()) == 1
+    output = capsys.readouterr().out
+    assert "case.json" in output
+    assert len(output.strip().splitlines()) == 1

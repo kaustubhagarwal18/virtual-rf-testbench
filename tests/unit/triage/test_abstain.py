@@ -11,7 +11,8 @@ from triage.abstain import (
     WeakPrecedent,
     reason_to_abstain,
 )
-from triage.prompt import Fix, Source
+from triage.pack import DEFAULT_PACK
+from triage.prompt import Source
 
 
 def precedent(action: str = "", similarity: float | None = None) -> Source:
@@ -81,7 +82,7 @@ def test_the_first_gate_that_objects_gives_the_reason() -> None:
 
 def test_agreeing_close_precedents_pass_every_gate() -> None:
     """Three close precedents resolved the same way leave the answer to the model."""
-    sources = [precedent(Fix.LINK.name, 0.99) for _ in range(3)]
+    sources = [precedent(DEFAULT_PACK.action("LINK").key, 0.99) for _ in range(3)]
     assert reason_to_abstain(sources, DEFAULT_GATES) == ""
 
 

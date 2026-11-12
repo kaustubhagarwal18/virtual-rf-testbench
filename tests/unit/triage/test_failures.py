@@ -7,11 +7,9 @@ import pytest
 
 from tests.unit.triage.test_evidence import PASSING_TEST, write_run
 from triage.answer import MalformedAnswerError, Verdict
+from triage.bench_run import SEQUENCE_FILE, load_case
+from triage.case import Case, Item, save_case
 from triage.evidence import (
-    NO_LEVEL_READING,
-    SEQUENCE_FILE,
-    SavedRun,
-    failed_tests,
     first_failure,
     full_evidence,
 )
@@ -21,7 +19,7 @@ from triage.failures import (
     focus,
     triage_failures,
 )
-from triage.prompt import Fix
+from triage.pack import DEFAULT_PACK, Action
 
 STEP_LOG = (
     "06:55:12.000 INFO  step=1 action=verify level offset instrument=generator result=ok\n"
@@ -64,9 +62,9 @@ TIMEOUT = failing("test_level_accuracy[10.0]", "drivers.session.InstrumentTimeou
 HARMONIC = failing("test_second_harmonic", "Failed: second_harmonic: -1.6 dBc, FAIL")
 
 
-def load(tmp_path: Path, tests: list[dict[str, object]], sequence: str = "") -> SavedRun:
+def load(tmp_path: Path, tests: list[dict[str, object]], sequence: str = "") -> Case:
     """Write a run with these tests and load it."""
-    return SavedRun.load(write_run(tmp_path / "run", tests, sequence))
+    return load_case(write_run(tmp_path / "run", tests, sequence))
 
 
 def test_a_passing_run_has_no_failures(tmp_path: Path) -> None:
@@ -106,9 +104,9 @@ def test_a_focused_run_holds_only_its_own_failed_tests(tmp_path: Path) -> None:
     run = load(tmp_path, [*LEVEL_CASES, HARMONIC, PASSING_TEST])
     harmonic = failure_groups(run)[1]
     focused = focus(run, harmonic, failure_groups(run))
-    assert [test["id"] for test in failed_tests(focused)] == [HARMONIC["id"]]
+    assert [item.id for item in focused.failed_items] == [HARMONIC["id"]]
     assert focused.logs == run.logs
-    assert focused.results["tests"][-1] == PASSING_TEST
+    assert focused.items[-1].id == PASSING_TEST["id"]
 
 
 def test_a_focused_test_failure_is_not_led_by_another_failures_setup_step(
@@ -146,14 +144,14 @@ def test_an_unfocused_run_keeps_its_evidence_unchanged(tmp_path: Path) -> None:
 
 
 def answer_by_test(
-    answers: dict[str, Fix],
-) -> tuple[list[str], Callable[[SavedRun], Verdict]]:
+    answers: dict[str, Action],
+) -> tuple[list[str], Callable[[Case], Verdict]]:
     """Return a record of the failed tests asked about and an answerer keyed by test name."""
     asked: list[str] = []
 
-    def answer(run: SavedRun) -> Verdict:
+    def answer(run: Case) -> Verdict:
         """Answer with the fix registered for the focused run's first failed test."""
-        name = str(failed_tests(run)[0]["id"]).rsplit("::", maxsplit=1)[-1]
+        name = run.failed_items[0].id.rsplit("::", maxsplit=1)[-1]
         asked.append(name)
         return Verdict(answers[name], "here", f"because of {name}", [])
 
@@ -165,7 +163,9 @@ def test_each_failure_is_asked_once_and_the_rest_are_listed_past_the_cap(
 ) -> None:
     """Only the first few failures are triaged; the others are named, not dropped."""
     tests = [failing(f"test_{number}", "Failed: x") for number in range(4)]
-    asked, answer = answer_by_test({f"test_{number}": Fix.CABLE for number in range(4)})
+    asked, answer = answer_by_test(
+        {f"test_{number}": DEFAULT_PACK.action("CABLE") for number in range(4)}
+    )
     result = triage_failures(load(tmp_path, tests), answer, limit=3)
     assert asked == ["test_0", "test_1", "test_2"]
     assert [group.test_ids for group in result.untriaged] == [("test_3",)]
@@ -176,12 +176,18 @@ def test_each_failure_is_asked_once_and_the_rest_are_listed_past_the_cap(
 def test_every_failure_keeps_its_own_answer_even_when_two_agree(tmp_path: Path) -> None:
     """Three failures, two of them CABLE: three answers, each naming its own failure."""
     tests = [failing(name, "Failed: x") for name in ("test_a", "test_b", "test_c")]
-    _, answer = answer_by_test({"test_a": Fix.CABLE, "test_b": Fix.ALIGNMENT, "test_c": Fix.CABLE})
+    _, answer = answer_by_test(
+        {
+            "test_a": DEFAULT_PACK.action("CABLE"),
+            "test_b": DEFAULT_PACK.action("ALIGNMENT"),
+            "test_c": DEFAULT_PACK.action("CABLE"),
+        }
+    )
     result = triage_failures(load(tmp_path, tests), answer)
     assert [answered.verdict.fix for answered in result.answers if answered.verdict] == [
-        Fix.CABLE,
-        Fix.ALIGNMENT,
-        Fix.CABLE,
+        DEFAULT_PACK.action("CABLE"),
+        DEFAULT_PACK.action("ALIGNMENT"),
+        DEFAULT_PACK.action("CABLE"),
     ]
     assert [answered.group.test_ids for answered in result.answers] == [
         ("test_a",),
@@ -194,11 +200,11 @@ def test_an_unusable_answer_for_one_failure_keeps_the_others(tmp_path: Path) -> 
     """One malformed reply becomes that failure's problem, not the whole run's."""
     tests = [failing(name, "Failed: x") for name in ("test_a", "test_b")]
 
-    def answer(run: SavedRun) -> Verdict:
+    def answer(run: Case) -> Verdict:
         """Fail on test_a and answer CABLE for anything else."""
-        if str(failed_tests(run)[0]["id"]).endswith("test_a"):
+        if run.failed_items[0].id.endswith("test_a"):
             raise MalformedAnswerError("not JSON")
-        return Verdict(Fix.CABLE, "here", "why", [])
+        return Verdict(DEFAULT_PACK.action("CABLE"), "here", "why", [])
 
     result = triage_failures(load(tmp_path, tests), answer)
     assert result.answers[0].verdict is None
@@ -217,11 +223,11 @@ def test_the_default_cap_is_five() -> None:
 )
 def test_every_question_run_splits_into_failures_covering_every_failed_test(name: str) -> None:
     """On the recorded runs, each failed test lands in exactly one failure."""
-    run = SavedRun.load(Path("triage/data/runs/questions") / name)
+    run = load_case(Path("triage/data/runs/questions") / name)
     groups = failure_groups(run)
     covered = [test_id for group in groups for test_id in group.test_ids]
     assert sorted(covered) == sorted(
-        str(test["id"]).rsplit("::", maxsplit=1)[-1] for test in failed_tests(run)
+        item.id.rsplit("::", maxsplit=1)[-1] for item in run.failed_items
     )
     assert groups, f"{name} failed but split into no failures"
 
@@ -230,6 +236,12 @@ def test_a_message_naming_no_exception_is_grouped_by_its_outcome(tmp_path: Path)
     """A message without an exception class falls back to the outcome as its kind."""
     plain = failing("test_plain", "the reading never settled", outcome="error")
     assert failure_groups(load(tmp_path, [plain]))[0].description == "test_plain: error"
+
+
+NO_LEVEL_READING = next(
+    note.say for note in DEFAULT_PACK.evidence.notes if note.name == "no_level_reading"
+)
+"""The RF pack's sentence for a focused failure with no level reading out of limits."""
 
 
 def with_reading(test_id: str, unit: str) -> dict[str, object]:
@@ -258,3 +270,22 @@ def test_a_whole_run_never_gets_the_reading_line(tmp_path: Path) -> None:
     """The line is for focused runs only, so history and the evaluation keep their evidence."""
     run = load(tmp_path, [with_reading("test_frequency", "Hz")])
     assert NO_LEVEL_READING not in full_evidence(run)
+
+
+def test_generic_items_with_brackets_stay_apart(tmp_path: Path) -> None:
+    """payment[1] and payment[2] are two payments, not cases of one parametrized test."""
+    case = Case(
+        tmp_path,
+        items=(
+            Item("payment[1]", "failed", "Failed: rejected"),
+            Item("payment[2]", "failed", "Failed: rejected"),
+        ),
+    )
+    assert [group.test_ids for group in failure_groups(case)] == [("payment[1]",), ("payment[2]",)]
+
+
+def test_pytest_cases_of_one_test_still_group_from_case_json(tmp_path: Path) -> None:
+    """A bench run saved as case.json keeps its pytest ids, and their cases still group."""
+    run = load(tmp_path, LEVEL_CASES)
+    reloaded = load_case(save_case(run, tmp_path / "saved").parent)
+    assert len(failure_groups(reloaded)) == 1

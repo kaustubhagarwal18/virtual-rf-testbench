@@ -7,25 +7,31 @@ import subprocess
 import sys
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from tests.unit.tools.test_triage_demo import StubRetriever, UnreachableProvider
 from tests.unit.triage.test_evidence import FAILING_TEST, write_run
+from tests.unit.triage.test_pack import VALID, payments_case, write_pack
 from tools.ci_triage import (
     HEADING,
     NO_SAFE_ANSWER,
     SHOWN_TESTS,
     TEXT_LIMIT,
+    history_for,
     main,
     positive_count,
     render_problem,
     render_triage,
 )
 from triage.answer import PastFix, Verdict
-from triage.evidence import SavedRun
+from triage.bench_run import load_case
+from triage.embed import FakeEmbedder
 from triage.failures import FailureAnswer, FailureGroup, RunTriage, triage_like_the_api
 from triage.llm import FakeProvider
-from triage.prompt import Fix, Source
+from triage.pack import DEFAULT_PACK, UNKNOWN, load_pack
+from triage.prompt import Source
+from triage.retrieval import DEFAULT_HISTORY, InMemoryRetriever
 
 CABLE_REPLY = json.dumps(
     {
@@ -85,7 +91,7 @@ def outside_code_spans(markdown: str) -> str:
 def answered(because: str = "the loss is high", where: str = "the cable") -> Verdict:
     """Return a CABLE verdict citing one past run, with its recorded fix."""
     return Verdict(
-        Fix.CABLE,
+        DEFAULT_PACK.action("CABLE"),
         where,
         because,
         ["past-1"],
@@ -114,7 +120,7 @@ def test_a_gated_unknown_says_why_the_model_was_not_asked() -> None:
 def test_an_overruled_answer_gives_the_check_instead_of_the_model_words() -> None:
     """A verdict a check replaced says why, and hides the refused answer and its past fix."""
     verdict = Verdict(
-        Fix.UNKNOWN,
+        UNKNOWN,
         "LINK",
         "the model's refused reasoning",
         ["past-1"],
@@ -130,7 +136,7 @@ def test_an_overruled_answer_gives_the_check_instead_of_the_model_words() -> Non
 
 def test_a_model_unknown_keeps_its_own_reason() -> None:
     """When the model itself answers UNKNOWN, its reason is the answer and is shown."""
-    section = render_verdict(Verdict(Fix.UNKNOWN, "", "nothing in the run points anywhere"))
+    section = render_verdict(Verdict(UNKNOWN, "", "nothing in the run points anywhere"))
     assert "`nothing in the run points anywhere`" in section
     assert "- **Where:** (none)" in section
 
@@ -138,7 +144,9 @@ def test_a_model_unknown_keeps_its_own_reason() -> None:
 def test_past_runs_with_the_same_fix_share_one_line() -> None:
     """Three cited runs fixed the same way are listed once, with all three ids."""
     fixes = tuple(PastFix(f"past-{number}", "Replaced the cable") for number in (1, 2, 3))
-    section = render_verdict(Verdict(Fix.CABLE, "x", "y", ["past-1"], past_fixes=fixes))
+    section = render_verdict(
+        Verdict(DEFAULT_PACK.action("CABLE"), "x", "y", ["past-1"], past_fixes=fixes)
+    )
     last_time = [line for line in section.splitlines() if line.startswith("- **Last time:**")]
     assert last_time == ["- **Last time:** `Replaced the cable` (`past-1`, `past-2`, `past-3`)"]
 
@@ -148,7 +156,9 @@ def verdict_with(field: str, text: str) -> Verdict:
     if field == "gate_reason":
         return Verdict.gated(text)
     if field == "past_fix":
-        return Verdict(Fix.CABLE, "x", "y", ["p"], past_fixes=(PastFix("p", text),))
+        return Verdict(
+            DEFAULT_PACK.action("CABLE"), "x", "y", ["p"], past_fixes=(PastFix("p", text),)
+        )
     return answered(**{field: text})
 
 
@@ -173,10 +183,10 @@ def test_a_problem_is_one_line_under_the_heading() -> None:
 
 def test_the_failed_run_is_triaged_as_the_api_triages_it(tmp_path: Path) -> None:
     """Agreeing past runs reach the model; both share its action, so both are quoted."""
-    run = SavedRun.load(write_run(tmp_path / "run", [FAILING_TEST]))
+    run = load_case(write_run(tmp_path / "run", [FAILING_TEST]))
     provider = FakeProvider([CABLE_REPLY])
     verdict = triage_like_the_api(run, provider, StubRetriever(*AGREEING))
-    assert verdict.fix is Fix.CABLE
+    assert verdict.fix is DEFAULT_PACK.action("CABLE")
     assert verdict.past_fixes == (
         PastFix("past-1", "Replaced the cable"),
         PastFix("past-2", "Replaced it again"),
@@ -186,10 +196,10 @@ def test_the_failed_run_is_triaged_as_the_api_triages_it(tmp_path: Path) -> None
 
 def test_disagreeing_past_runs_answer_unknown_without_asking_the_model(tmp_path: Path) -> None:
     """The API's disagreement gate applies in CI too: no model call, an UNKNOWN with a reason."""
-    run = SavedRun.load(write_run(tmp_path / "run", [FAILING_TEST]))
+    run = load_case(write_run(tmp_path / "run", [FAILING_TEST]))
     provider = FakeProvider([])
     verdict = triage_like_the_api(run, provider, StubRetriever(*DISAGREEING))
-    assert verdict.fix is Fix.UNKNOWN
+    assert verdict.fix is UNKNOWN
     assert verdict.gate_reason
     assert not provider.prompts
 
@@ -239,12 +249,12 @@ def test_runs_as_a_module(tmp_path: Path) -> None:
 
 def test_an_answer_says_what_to_do_in_the_action_list_words() -> None:
     """The action's own description, fixed text from the action list, says what to do."""
-    assert f"- **What to do:** {Fix.CABLE.value}" in render_verdict(answered())
+    assert f"- **What to do:** {DEFAULT_PACK.action('CABLE').says}" in render_verdict(answered())
 
 
 @pytest.mark.parametrize(
     "verdict",
-    [Verdict.gated("disagree"), Verdict(Fix.UNKNOWN, "", "nothing points anywhere")],
+    [Verdict.gated("disagree"), Verdict(UNKNOWN, "", "nothing points anywhere")],
 )
 def test_an_unknown_says_to_look_by_hand(verdict: Verdict) -> None:
     """UNKNOWN has no action, so what to do is to look at the failure by hand."""
@@ -274,7 +284,9 @@ def test_every_failure_gets_a_numbered_block_saying_what_to_do() -> None:
     result = RunTriage(
         [
             FailureAnswer(LEVEL_GROUP, answered()),
-            FailureAnswer(other, Verdict(Fix.ALIGNMENT, "analyzer", "reads high", [])),
+            FailureAnswer(
+                other, Verdict(DEFAULT_PACK.action("ALIGNMENT"), "analyzer", "reads high", [])
+            ),
             FailureAnswer(third, answered()),
         ],
         failed_tests=4,
@@ -287,7 +299,9 @@ def test_every_failure_gets_a_numbered_block_saying_what_to_do() -> None:
     assert "#### Failure 2 of 3: `test_other: Failed`" in section
     assert "#### Failure 3 of 3: `test_third: Failed`" in section
     cable = [
-        answer for answer in result.answers if answer.verdict and answer.verdict.fix is Fix.CABLE
+        answer
+        for answer in result.answers
+        if answer.verdict and answer.verdict.fix is DEFAULT_PACK.action("CABLE")
     ]
     assert section.count("`CABLE`") == len(cable)
 
@@ -373,3 +387,86 @@ def test_the_cap_must_be_a_whole_number_of_at_least_one(text: str) -> None:
     """A cap of nothing, or not a number, is refused with a message."""
     with pytest.raises(argparse.ArgumentTypeError, match="at least 1"):
         positive_count(text)
+
+
+def test_main_triages_with_another_domains_pack(tmp_path: Path) -> None:
+    """--pack swaps the RF actions for the pack's: the answer names a payments action."""
+    folder = write_run(tmp_path / "run", [FAILING_TEST])
+    pack = write_pack(tmp_path, VALID)
+    out = tmp_path / "triage.md"
+    payment_reply = json.dumps(
+        {"fix": "REQUEST_FEED", "where": "the feed", "because": "short", "cited": []}
+    )
+    arguments = [str(folder), "--out", str(out), "--pack", str(pack)]
+    assert main(arguments, FakeProvider([payment_reply]), StubRetriever()) == 0
+    section = out.read_text(encoding="utf-8")
+    assert "`REQUEST_FEED`" in section
+    assert "ask the provider to resend the file" in section
+
+
+def test_main_writes_a_problem_when_the_pack_is_broken(tmp_path: Path) -> None:
+    """A pack that can't be used leaves a one-line problem in the comment, not a traceback."""
+    folder = write_run(tmp_path / "run", [FAILING_TEST])
+    out = tmp_path / "triage.md"
+    arguments = [str(folder), "--out", str(out), "--pack", str(tmp_path / "absent.toml")]
+    assert main(arguments, FakeProvider([]), StubRetriever()) == 1
+    assert "no pack file" in out.read_text(encoding="utf-8")
+
+
+def test_another_pack_needs_its_own_history(tmp_path: Path) -> None:
+    """Without --history, a non-RF pack would be offered the RF past runs; it is refused."""
+    folder = write_run(tmp_path / "run", [FAILING_TEST])
+    out = tmp_path / "triage.md"
+    arguments = [str(folder), "--out", str(out), "--pack", str(write_pack(tmp_path, VALID))]
+    assert main(arguments, FakeProvider([])) == 1
+    assert "--history" in out.read_text(encoding="utf-8")
+
+
+def test_a_generic_case_is_triaged_and_grouped_by_its_own_ids(tmp_path: Path) -> None:
+    """A payments batch saved as case.json goes through the CI tool with the payments pack."""
+    folder = payments_case(tmp_path).folder
+    out = tmp_path / "triage.md"
+    payment_reply = json.dumps(
+        {"fix": "REQUEST_FEED", "where": "the feed", "because": "short", "cited": []}
+    )
+    arguments = [str(folder), "--out", str(out), "--pack", str(write_pack(tmp_path, VALID))]
+    assert main(arguments, FakeProvider([payment_reply]), StubRetriever()) == 0
+    section = out.read_text(encoding="utf-8")
+    assert "`batch-7/settlement: failed`" in section
+    assert "`REQUEST_FEED`" in section
+
+
+def test_a_broken_case_json_is_a_problem_line(tmp_path: Path) -> None:
+    """A case.json that can't be read leaves a one-line problem, not a traceback."""
+    (tmp_path / "case.json").write_text('{"format": "triage-case/9"}', encoding="utf-8")
+    out = tmp_path / "triage.md"
+    assert main([str(tmp_path), "--out", str(out)], FakeProvider([]), StubRetriever()) == 1
+    assert "triage-case/9" in out.read_text(encoding="utf-8")
+
+
+def test_the_history_is_the_one_given_or_the_rf_benchs_for_the_rf_pack(tmp_path: Path) -> None:
+    """--history wins; without it only the RF pack falls back to the RF history."""
+    assert history_for(tmp_path, load_pack(write_pack(tmp_path, VALID))) == tmp_path
+    assert history_for(None, DEFAULT_PACK) == DEFAULT_HISTORY
+
+
+def test_an_empty_retriever_given_is_used_not_replaced(tmp_path: Path) -> None:
+    """An empty index is still the one asked for: no history is loaded, nothing is embedded."""
+    folder = payments_case(tmp_path).folder
+    out = tmp_path / "triage.md"
+    embedder = FakeEmbedder()
+    empty = InMemoryRetriever([], np.zeros((0, 0)), embedder)
+    payment_reply = json.dumps(
+        {"fix": "REQUEST_FEED", "where": "the feed", "because": "short", "cited": []}
+    )
+    arguments = [str(folder), "--out", str(out), "--pack", str(write_pack(tmp_path, VALID))]
+    assert main(arguments, FakeProvider([payment_reply]), empty) == 0
+    assert not embedder.calls
+
+
+def test_invalid_json_in_the_case_is_a_problem_line(tmp_path: Path) -> None:
+    """A case.json that isn't JSON leaves a problem section naming it, not a traceback."""
+    (tmp_path / "case.json").write_text("{", encoding="utf-8")
+    out = tmp_path / "triage.md"
+    assert main([str(tmp_path), "--out", str(out)], FakeProvider([]), StubRetriever()) == 1
+    assert "case.json" in out.read_text(encoding="utf-8")

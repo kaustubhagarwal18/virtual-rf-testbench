@@ -16,9 +16,12 @@ from typing import Any, Protocol
 
 import numpy as np
 
+from triage.bench_run import load_case
+from triage.case import Case
 from triage.embed import Embedder, OllamaEmbedder
-from triage.evidence import FULL, SavedRun, build_evidence
+from triage.evidence import FULL, build_evidence
 from triage.label import load_label
+from triage.pack import DEFAULT_PACK, Pack
 from triage.prompt import Source
 
 DEFAULT_HISTORY = Path("triage/data/runs/history")
@@ -33,9 +36,7 @@ SOURCE_ID_HEX_DIGITS = 8
 class Retriever(Protocol):
     """Anything that can return the past runs most like a new one."""
 
-    def similar_to(
-        self, run: SavedRun, count: int, exclude_fault: str | None = None
-    ) -> list[Source]:
+    def similar_to(self, run: Case, count: int, exclude_fault: str | None = None) -> list[Source]:
         """Return the runs most like this one, most similar first.
 
         Args:
@@ -52,7 +53,7 @@ class Retriever(Protocol):
 class HistoryStore(Protocol):
     """Anything that can take a resolved run into the history retrieval searches."""
 
-    def add(self, run: SavedRun, label: dict[str, Any]) -> Source:
+    def add(self, run: Case, label: dict[str, Any]) -> Source:
         """Add a resolved run.
 
         Args:
@@ -77,7 +78,7 @@ def neutral_id(text: str) -> str:
     return f"{SOURCE_ID_PREFIX}{digest[:SOURCE_ID_HEX_DIGITS]}"
 
 
-def history_source(run: SavedRun, label: dict[str, Any]) -> Source:
+def history_source(run: Case, label: dict[str, Any], pack: Pack = DEFAULT_PACK) -> Source:
     """Turn a resolved run into a source the model can cite.
 
     The label is part of a history source on purpose: a past run is only useful if it says
@@ -86,12 +87,14 @@ def history_source(run: SavedRun, label: dict[str, Any]) -> Source:
     Args:
         run: A history run.
         label: Its label: the fault, the cause, the fix applied and, if recorded, the action.
+        pack: The domain pack that words its evidence, the same as the questions'.
 
     Returns:
         The source: the run's evidence plus its recorded cause and fix, and the key of the
         action taken when the label records one, under a neutral id.
     """
-    text = f"{build_evidence(run, FULL)}\nCause: {label['cause']}\nFix applied: {label['fix']}"
+    evidence = build_evidence(run, FULL, pack)
+    text = f"{evidence}\nCause: {label['cause']}\nFix applied: {label['fix']}"
     if label.get("action"):
         text += f"\nAction: {label['action']}"
     return Source(
@@ -111,32 +114,38 @@ class InMemoryRetriever:
         sources: The history runs, as citable sources.
         vectors: Their unit-normalised embeddings, one row each.
         embedder: How a new run is embedded for the search.
+        pack: The domain pack that words both the history and the query, so they compare
+            like with like.
     """
 
     sources: list[Source]
     vectors: np.ndarray
     embedder: Embedder
+    pack: Pack = DEFAULT_PACK
 
     @classmethod
-    def from_history(cls, history: Path, embedder: Embedder) -> "InMemoryRetriever":
+    def from_history(
+        cls, history: Path, embedder: Embedder, pack: Pack = DEFAULT_PACK
+    ) -> "InMemoryRetriever":
         """Build the index from a folder of labelled history runs.
 
         Args:
             history: The folder of history runs.
             embedder: How to embed them.
+            pack: The domain pack that words their evidence and the queries'.
 
         Returns:
             The retriever, ready to search. Runs whose sources are identical are indexed
             once, as add() does, so one copy can't fill several of the top places.
         """
-        runs = [SavedRun.load(folder) for folder in sorted(history.iterdir()) if folder.is_dir()]
+        runs = [load_case(folder) for folder in sorted(history.iterdir()) if folder.is_dir()]
         unique: dict[str, Source] = {}
         for run in runs:
-            source = history_source(run, load_label(run))
+            source = history_source(run, load_label(run), pack)
             unique.setdefault(source.source_id, source)
         sources = list(unique.values())
         vectors = normalise(np.array(embedder.embed([source.text for source in sources])))
-        return cls(sources, vectors, embedder)
+        return cls(sources, vectors, embedder, pack)
 
     def __len__(self) -> int:
         """Count the past runs in the index.
@@ -146,7 +155,7 @@ class InMemoryRetriever:
         """
         return len(self.sources)
 
-    def add(self, run: SavedRun, label: dict[str, Any]) -> Source:
+    def add(self, run: Case, label: dict[str, Any]) -> Source:
         """Add a resolved run to the index; adding the same run twice keeps one copy.
 
         Args:
@@ -156,7 +165,7 @@ class InMemoryRetriever:
         Returns:
             The source it became.
         """
-        source = history_source(run, label)
+        source = history_source(run, label, self.pack)
         if any(known.source_id == source.source_id for known in self.sources):
             return source
         vector = normalise(np.array(self.embedder.embed([source.text])))
@@ -165,7 +174,7 @@ class InMemoryRetriever:
         return source
 
     def similar_to(
-        self, run: SavedRun, count: int = DEFAULT_TOP_K, exclude_fault: str | None = None
+        self, run: Case, count: int = DEFAULT_TOP_K, exclude_fault: str | None = None
     ) -> list[Source]:
         """Return the history runs most like this one.
 
@@ -179,7 +188,7 @@ class InMemoryRetriever:
         """
         if not self.sources:
             return []
-        query = normalise(np.array(self.embedder.embed([build_evidence(run, FULL)])))
+        query = normalise(np.array(self.embedder.embed([build_evidence(run, FULL, self.pack)])))
         scores = self.vectors @ query[0]
         order = np.argsort(scores)[::-1]
         kept = [
@@ -203,14 +212,19 @@ def normalise(vectors: np.ndarray) -> np.ndarray:
     return vectors / np.where(lengths == 0, 1.0, lengths)
 
 
-def history_index(history: Path, embedder: Embedder | None = None) -> InMemoryRetriever:
+def history_index(
+    history: Path, embedder: Embedder | None = None, pack: Pack = DEFAULT_PACK
+) -> InMemoryRetriever:
     """Index a folder of history runs, with the local Ollama embedder unless one is given.
 
     Args:
         history: The folder of labelled history runs.
         embedder: How to embed them; None uses Ollama's embedding model.
+        pack: The domain pack that words their evidence and the queries'.
 
     Returns:
         The retriever, ready to search.
     """
-    return InMemoryRetriever.from_history(history, embedder or OllamaEmbedder())
+    return InMemoryRetriever.from_history(
+        history, embedder if embedder is not None else OllamaEmbedder(), pack
+    )

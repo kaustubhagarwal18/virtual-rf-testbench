@@ -15,11 +15,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from triage.answer import VERDICT_SCHEMA, MalformedAnswerError, past_fix_lines
+from triage.bench_run import load_case
+from triage.case import Case, CaseError
 from triage.evaluate import expected_fix
-from triage.evidence import FULL, SavedRun, error_only_evidence
+from triage.evidence import FULL, error_only_evidence
 from triage.label import load_label
 from triage.llm import DEFAULT_MODEL, LLMProvider, ModelUnavailableError, OllamaProvider
-from triage.prompt import Fix, Source
+from triage.pack import Action
+from triage.prompt import Source
 from triage.retrieval import DEFAULT_HISTORY, DEFAULT_TOP_K, Retriever, history_index
 from triage.service import triage_run
 from triage.textfmt import clip
@@ -70,14 +73,14 @@ class DemoResult:
     """
 
     fault: str
-    expected: Fix
+    expected: Action
     error: str
     baseline: Answer
     retrieval: Answer
 
 
 def _answer(
-    run: SavedRun, provider: LLMProvider, expected: Fix, sources: Sequence[Source]
+    run: Case, provider: LLMProvider, expected: Action, sources: Sequence[Source]
 ) -> Answer:
     """Triage one run once, turning an unusable reply into a result instead of an error.
 
@@ -95,7 +98,7 @@ def _answer(
     except MalformedAnswerError as unusable:
         return Answer(UNUSABLE, "", str(unusable), (), right=False)
     return Answer(
-        chosen=verdict.fix.name,
+        chosen=verdict.fix.key,
         where=verdict.where,
         because=verdict.because,
         cited=tuple(verdict.cited),
@@ -106,7 +109,7 @@ def _answer(
 
 
 def run_demo(
-    run: SavedRun, provider: LLMProvider, retriever: Retriever, top_k: int = DEFAULT_TOP_K
+    run: Case, provider: LLMProvider, retriever: Retriever, top_k: int = DEFAULT_TOP_K
 ) -> DemoResult:
     """Triage one run with and without retrieval, so the difference is attributable to it.
 
@@ -128,7 +131,7 @@ def run_demo(
     return DemoResult(str(load_label(run)["fault"]), expected, error, baseline, retrieval)
 
 
-def _answer_lines(title: str, answer: Answer, expected: Fix) -> list[str]:
+def _answer_lines(title: str, answer: Answer, expected: Action) -> list[str]:
     """Format one answer as a titled block.
 
     Args:
@@ -141,7 +144,7 @@ def _answer_lines(title: str, answer: Answer, expected: Fix) -> list[str]:
     """
     mark = "RIGHT" if answer.right else "wrong"
     cited = ", ".join(answer.cited) if answer.cited else "nothing"
-    expected_note = "" if answer.right else f" (resolving fix: {expected.name})"
+    expected_note = "" if answer.right else f" (resolving fix: {expected.key})"
     return [
         f"{title}:",
         f"  fix:   {answer.chosen}  [{mark}]{expected_note}",
@@ -163,7 +166,7 @@ def render(result: DemoResult) -> str:
         The report.
     """
     lines = [
-        f"Run: {result.fault}  (resolving fix: {result.expected.name} — {result.expected.value})",
+        f"Run: {result.fault}  (resolving fix: {result.expected.key} — {result.expected.says})",
         f"Error shown to the model: {clip(result.error, 120)}",
         "",
         *_answer_lines("Without retrieval (evidence alone)", result.baseline, result.expected),
@@ -199,7 +202,8 @@ def main(
 
     Returns:
         0 when the demo ran; 1 when the model or embedder could not be reached, or the run,
-        its label, or the history folder is missing or names a fault with no known fix.
+        its label, or the history folder is missing, malformed or names a fault with no
+        known fix.
     """
     parser = argparse.ArgumentParser(
         prog="python -m tools.triage_demo",
@@ -211,11 +215,17 @@ def main(
         "--model", default=DEFAULT_MODEL, help=f"Ollama model to ask (default: {DEFAULT_MODEL})"
     )
     parsed = parser.parse_args(arguments)
-    provider = provider or OllamaProvider(model=parsed.model, response_format=VERDICT_SCHEMA)
+    provider = (
+        provider
+        if provider is not None
+        else OllamaProvider(model=parsed.model, response_format=VERDICT_SCHEMA)
+    )
     try:
-        run = SavedRun.load(parsed.run)
-        result = run_demo(run, provider, retriever or history_index(parsed.history))
-    except (ModelUnavailableError, FileNotFoundError, KeyError) as error:
+        run = load_case(parsed.run)
+        result = run_demo(
+            run, provider, retriever if retriever is not None else history_index(parsed.history)
+        )
+    except (ModelUnavailableError, FileNotFoundError, KeyError, CaseError) as error:
         sys.stdout.write(f"{error}\n")
         return 1
     sys.stdout.write(render(result))

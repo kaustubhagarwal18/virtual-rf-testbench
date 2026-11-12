@@ -25,13 +25,14 @@ from pathlib import Path
 
 from triage.abstain import DEFAULT_GATES
 from triage.answer import VERDICT_SCHEMA, MalformedAnswerError, Verdict
+from triage.bench_run import load_case
+from triage.case import Case, CaseError
 from triage.checks import DEFAULT_CHECKS
 from triage.evidence import (
     ERROR_ONLY,
     FULL,
     FULL_WITHOUT_FIRMWARE,
     FULL_WITHOUT_SIGNAL,
-    SavedRun,
     error_only_evidence,
 )
 from triage.label import load_label
@@ -42,7 +43,8 @@ from triage.llm import (
     ModelUnavailableError,
     OllamaProvider,
 )
-from triage.prompt import Fix, Source
+from triage.pack import DEFAULT_PACK, Action
+from triage.prompt import Source
 from triage.report import BASELINE_TITLE, RETRIEVAL_TITLE, render, render_report
 from triage.retrieval import (
     DEFAULT_HISTORY,
@@ -140,7 +142,7 @@ SCENARIOS = (
 names its model twin: the one thing it changes is the vote answering in the model's place."""
 
 
-def expected_fix(run: SavedRun) -> Fix:
+def expected_fix(run: Case) -> Action:
     """Return the fix that resolves a question run, from the action its label records.
 
     The label is read here, and only here: it is the answer key, used to score the model's
@@ -158,16 +160,16 @@ def expected_fix(run: SavedRun) -> Fix:
             message says to rebuild the data set.
     """
     action = load_label(run).get("action")
-    if not isinstance(action, str) or action not in Fix.__members__:
+    if not isinstance(action, str) or action not in DEFAULT_PACK.keys:
         raise KeyError(
             f"{run.folder.name}: the label records no known action ({action!r}); rebuild "
             "the data set with 'make fault-dataset'"
         )
-    return Fix[action]
+    return DEFAULT_PACK.action(action)
 
 
 def _sources_for(
-    run: SavedRun, fault: str, scenario: Scenario, retriever: Retriever | None
+    run: Case, fault: str, scenario: Scenario, retriever: Retriever | None
 ) -> tuple[Source, ...]:
     """Find the past runs a scenario offers for one question.
 
@@ -192,7 +194,7 @@ def _sources_for(
 
 
 def _decide(
-    run: SavedRun, provider: LLMProvider, scenario: Scenario, sources: Sequence[Source]
+    run: Case, provider: LLMProvider, scenario: Scenario, sources: Sequence[Source]
 ) -> Verdict:
     """Answer one question the scenario's way: by the model, or by the precedents' vote.
 
@@ -213,7 +215,7 @@ def _decide(
 
 
 def evaluate_question(
-    run: SavedRun, provider: LLMProvider, scenario: Scenario, retriever: Retriever | None
+    run: Case, provider: LLMProvider, scenario: Scenario, retriever: Retriever | None
 ) -> Outcome:
     """Ask about one run in one scenario, and score the answer.
 
@@ -245,7 +247,7 @@ def evaluate_question(
     if verdict.gate_reason:
         return replace(
             base,
-            chosen=verdict.fix.name,
+            chosen=verdict.fix.key,
             answer=f"UNKNOWN, model not asked: {verdict.gate_reason}",
             sources=replace(base.sources, gated=True),
         )
@@ -253,13 +255,13 @@ def evaluate_question(
     cited = f" citing {', '.join(verdict.cited)}" if verdict.cited else ""
     overruled = f" [overruled: {verdict.overruled}]" if verdict.overruled else ""
     answer = (
-        f"{verdict.fix.name} by majority vote, model not asked: {verdict.because}{overruled}"
+        f"{verdict.fix.key} by majority vote, model not asked: {verdict.because}{overruled}"
         if scenario.vote
-        else f"{verdict.fix.name} ({verdict.where}){cited} because {verdict.because}{overruled}"
+        else f"{verdict.fix.key} ({verdict.where}){cited} because {verdict.because}{overruled}"
     )
     return replace(
         base,
-        chosen=verdict.fix.name,
+        chosen=verdict.fix.key,
         answer=answer,
         sources=replace(
             base.sources,
@@ -287,7 +289,7 @@ def evaluate(
     Returns:
         One result per scenario, in the order given.
     """
-    runs = [SavedRun.load(folder) for folder in sorted(questions.iterdir()) if folder.is_dir()]
+    runs = [load_case(folder) for folder in sorted(questions.iterdir()) if folder.is_dir()]
     results = []
     for scenario in scenarios:
         result = ScenarioResult(scenario)
@@ -312,9 +314,7 @@ def repeated_faults(questions: Path) -> list[str]:
         The faults whose labels record no unit, in name order.
     """
     labels = [
-        load_label(SavedRun.load(folder))
-        for folder in sorted(questions.iterdir())
-        if folder.is_dir()
+        load_label(load_case(folder)) for folder in sorted(questions.iterdir()) if folder.is_dir()
     ]
     return sorted({str(label["fault"]) for label in labels if not label.get("unit")})
 
@@ -334,7 +334,7 @@ def main(
             history runs with the Ollama embedder when a retrieval scenario is selected.
 
     Returns:
-        0 when it ran, 1 if a model wasn't reachable.
+        0 when it ran, 1 if a model wasn't reachable or a run couldn't be read.
     """
     parser = argparse.ArgumentParser(
         prog="python -m triage.evaluate", description="Score triage against the question runs."
@@ -359,9 +359,13 @@ def main(
     )
     parser.add_argument("--no-cache", action="store_true", help="ask the model every prompt again")
     parsed = parser.parse_args(arguments)
-    provider = provider or CachingProvider(
-        OllamaProvider(model=parsed.model, response_format=VERDICT_SCHEMA),
-        None if parsed.no_cache else parsed.cache_dir,
+    provider = (
+        provider
+        if provider is not None
+        else CachingProvider(
+            OllamaProvider(model=parsed.model, response_format=VERDICT_SCHEMA),
+            None if parsed.no_cache else parsed.cache_dir,
+        )
     )
     chosen = parsed.scenario or names
     scenarios = [scenario for scenario in SCENARIOS if scenario.name in chosen]
@@ -370,7 +374,7 @@ def main(
         if retriever is None and any(scenario.retrieve for scenario in scenarios):
             retriever = history_index(parsed.history)  # pragma: no cover - needs Ollama
         results = evaluate(parsed.questions, provider, scenarios, retriever)
-    except ModelUnavailableError as error:
+    except (ModelUnavailableError, CaseError, FileNotFoundError) as error:
         sys.stdout.write(f"{error}\n")
         return 1
     model = str(getattr(provider, "model", DEFAULT_MODEL))

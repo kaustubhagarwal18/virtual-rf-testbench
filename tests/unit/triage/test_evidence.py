@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from triage.bench_run import load_case, sequence_fields
 from triage.evidence import (
     ERROR_ONLY,
     EVALUATED_LEVELS,
@@ -12,14 +13,12 @@ from triage.evidence import (
     FULL_WITHOUT_FIRMWARE,
     FULL_WITHOUT_SIGNAL,
     LEVELS,
-    NO_SIGNAL_LOG,
-    SavedRun,
     build_evidence,
-    firmware_changed,
-    firmware_note,
     first_failure,
-    sequence_fields,
+    versions_note,
 )
+from triage.facts import LogContains
+from triage.pack import DEFAULT_PACK
 
 PASSING_TEST: dict[str, object] = {
     "id": "tests/bench/test_bench.py::test_passes",
@@ -45,6 +44,11 @@ FAILING_TEST: dict[str, object] = {
         }
     ],
 }
+
+
+def failing_tests(count: int) -> list[dict[str, object]]:
+    """Return FAILING_TEST as several cases with their own ids, as pytest would name them."""
+    return [{**FAILING_TEST, "id": f"{FAILING_TEST['id']}[{number}]"} for number in range(count)]
 
 
 def write_run(folder: Path, tests: list[dict[str, object]], sequence: str = "") -> Path:
@@ -79,27 +83,27 @@ def test_a_line_that_isnt_a_step_has_no_fields() -> None:
 
 def test_the_label_is_never_read(tmp_path: Path) -> None:
     """The run carries its evidence only: the answer beside it is not loaded."""
-    run = SavedRun.load(write_run(tmp_path / "run", [PASSING_TEST]))
-    assert "category" not in json.dumps(run.results)
+    run = load_case(write_run(tmp_path / "run", [PASSING_TEST]))
+    assert "category" not in repr(run)
     assert not hasattr(run, "label")
 
 
 def test_a_folder_without_results_is_refused(tmp_path: Path) -> None:
-    """A folder that isn't a saved run says so, rather than looking like an empty one."""
+    """A folder with neither a case.json nor a results file says so, naming both."""
     (tmp_path / "empty").mkdir()
-    with pytest.raises(FileNotFoundError, match="isn't a saved run"):
-        SavedRun.load(tmp_path / "empty")
+    with pytest.raises(FileNotFoundError, match=r"no case\.json or results\.json"):
+        load_case(tmp_path / "empty")
 
 
 def test_a_run_where_everything_passed_has_no_first_failure(tmp_path: Path) -> None:
     """Nothing to triage means nothing is invented."""
-    run = SavedRun.load(write_run(tmp_path / "clean", [PASSING_TEST]))
+    run = load_case(write_run(tmp_path / "clean", [PASSING_TEST]))
     assert first_failure(run) is None
 
 
 def test_a_failed_measurement_is_the_first_failure_with_its_numbers(tmp_path: Path) -> None:
     """Without a failed step, the first failing test is the anchor, with its margins."""
-    run = SavedRun.load(write_run(tmp_path / "level", [PASSING_TEST, FAILING_TEST]))
+    run = load_case(write_run(tmp_path / "level", [PASSING_TEST, FAILING_TEST]))
     failure = first_failure(run)
     assert failure is not None
     assert failure.source == "results.json"
@@ -119,7 +123,7 @@ def test_a_failed_setup_step_comes_before_any_test(tmp_path: Path) -> None:
         "17:00:00.002 ERROR step=2 action=verify level offset instrument=generator "
         "parameter=level_offset_db expected=0.0 reason=AssertionError: it carries -2 dB\n"
     )
-    run = SavedRun.load(write_run(tmp_path / "leak", [FAILING_TEST, FAILING_TEST], sequence))
+    run = load_case(write_run(tmp_path / "leak", failing_tests(2), sequence))
     failure = first_failure(run)
     assert failure is not None
     assert failure.source == "sequence.log"
@@ -135,7 +139,7 @@ def test_the_evidence_doesnt_repeat_the_same_numbers_twice(tmp_path: Path) -> No
         **FAILING_TEST,
         "message": "Failed: a: 1 dB, limit 0 to 0 dB, margin -1 dB, FAIL\nb: 2 dB, FAIL",
     }
-    run = SavedRun.load(write_run(tmp_path / "many", [failing]))
+    run = load_case(write_run(tmp_path / "many", [failing]))
     evidence = build_evidence(run, FULL)
     assert evidence.count("level_1000mhz") == 1
     assert "b: 2 dB, FAIL" not in evidence
@@ -147,12 +151,12 @@ def test_the_evidence_says_whether_the_firmware_moved(tmp_path: Path) -> None:
     results = json.loads((folder / "results.json").read_text())
     results["firmware_versions"] = {"generator": "0.2.0-rc2", "analyzer": "0.2.0-rc2"}
     (folder / "results.json").write_text(json.dumps(results), encoding="utf-8")
-    assert "changed since the last passing run" in build_evidence(SavedRun.load(folder), FULL)
+    assert "changed since the last passing run" in build_evidence(load_case(folder), FULL)
 
 
 def test_error_only_evidence_is_just_the_message(tmp_path: Path) -> None:
     """The smallest scenario gets what a person would paste, and nothing more."""
-    run = SavedRun.load(write_run(tmp_path / "bare", [FAILING_TEST]))
+    run = load_case(write_run(tmp_path / "bare", [FAILING_TEST]))
     evidence = build_evidence(run, ERROR_ONLY)
     assert evidence.startswith("Failed: level_1000mhz: -13.0 dBm")
     assert "Firmware" not in evidence
@@ -160,21 +164,21 @@ def test_error_only_evidence_is_just_the_message(tmp_path: Path) -> None:
 
 def test_an_unknown_evidence_level_is_refused(tmp_path: Path) -> None:
     """A typo in the mode name fails loudly rather than quietly measuring something else."""
-    run = SavedRun.load(write_run(tmp_path / "x", [FAILING_TEST]))
+    run = load_case(write_run(tmp_path / "x", [FAILING_TEST]))
     with pytest.raises(ValueError, match="unknown evidence level"):
         build_evidence(run, "everything")
 
 
 def test_evidence_for_a_clean_run_says_so(tmp_path: Path) -> None:
     """A run where everything passed has no failure to describe, at either level."""
-    run = SavedRun.load(write_run(tmp_path / "clean", [PASSING_TEST]))
+    run = load_case(write_run(tmp_path / "clean", [PASSING_TEST]))
     assert build_evidence(run, ERROR_ONLY) == "Every test passed."
     assert build_evidence(run, FULL) == "Every test passed."
 
 
 def test_consequences_are_counted_in_the_evidence(tmp_path: Path) -> None:
     """When failures follow the first, the evidence says how many may be consequences."""
-    run = SavedRun.load(write_run(tmp_path / "many", [FAILING_TEST, FAILING_TEST, FAILING_TEST]))
+    run = load_case(write_run(tmp_path / "many", failing_tests(3)))
     assert "2 further tests failed after it" in build_evidence(run, FULL)
 
 
@@ -187,7 +191,7 @@ def test_consequences_are_counted_in_the_evidence(tmp_path: Path) -> None:
         ({}, None),
     ],
 )
-def test_firmware_changed_is_unknown_when_no_version_was_recorded(
+def test_the_versions_line_is_unknown_when_no_version_was_recorded(
     tmp_path: Path, versions: dict[str, str], changed: bool | None
 ) -> None:
     """A run with no recorded versions is unknown, never reported as unchanged."""
@@ -196,9 +200,8 @@ def test_firmware_changed_is_unknown_when_no_version_was_recorded(
     (folder / "results.json").write_text(
         json.dumps({**results, "firmware_versions": versions}), encoding="utf-8"
     )
-    run = SavedRun.load(folder)
-    assert firmware_changed(run) is changed
-    note = firmware_note(run)
+    run = load_case(folder)
+    note = versions_note(run)
     assert ("unknown" in note) is (changed is None)
     assert ("the same as the last passing run" in note) is (changed is False)
     assert ("firmware" in note.casefold()) is (changed is not False)
@@ -233,7 +236,7 @@ def test_an_instrument_error_leads_the_full_evidence(
         {**TIMED_OUT_TEST, "id": f"t::{index}", "instrument_errors": errors}
         for index, errors in enumerate(errors_per_test)
     ]
-    run = SavedRun.load(write_run(tmp_path / "run", tests))
+    run = load_case(write_run(tmp_path / "run", tests))
     lines = build_evidence(run, FULL).splitlines()
     if expected is None:
         assert lines[0].startswith("First failure:")
@@ -245,7 +248,7 @@ def test_an_instrument_error_leads_the_full_evidence(
 
 def test_the_error_only_evidence_stays_the_pasted_message(tmp_path: Path) -> None:
     """Error-only is what a person pastes, so it gains no instrument-error line."""
-    run = SavedRun.load(write_run(tmp_path / "run", [TIMED_OUT_TEST]))
+    run = load_case(write_run(tmp_path / "run", [TIMED_OUT_TEST]))
     assert build_evidence(run, ERROR_ONLY) == TIMED_OUT_TEST["message"]
 
 
@@ -262,7 +265,7 @@ def test_an_ablation_drops_only_its_own_line(
     results["firmware_versions"] = {"analyzer": "0.1.0", "generator": "0.1.0"}
     (folder / "results.json").write_text(json.dumps(results), encoding="utf-8")
     (folder / "logs.txt").write_text(NO_SIGNAL_LINE + "\n", encoding="utf-8")
-    run = SavedRun.load(folder)
+    run = load_case(folder)
     full = build_evidence(run, FULL).splitlines()
     ablated = build_evidence(run, level).splitlines()
     assert [line for line in full if not line.startswith(dropped_prefix)] == ablated
@@ -290,7 +293,7 @@ def test_a_missing_signal_leads_the_full_evidence(tmp_path: Path, count: int) ->
     (folder / "logs.txt").write_text(
         "\n".join(["generator-1 | {}", *[NO_SIGNAL_LINE] * count]) + "\n", encoding="utf-8"
     )
-    lines = build_evidence(SavedRun.load(folder), FULL).splitlines()
+    lines = build_evidence(load_case(folder), FULL).splitlines()
     if count == 0:
         assert lines[0].startswith("First failure:")
         assert not any(line.startswith("No signal:") for line in lines)
@@ -305,4 +308,6 @@ def test_a_missing_signal_leads_the_full_evidence(tmp_path: Path, count: int) ->
 def test_the_no_signal_note_matches_what_the_analyzer_logs() -> None:
     """The phrase the evidence looks for is the one the analyzer writes, so they can't drift."""
     source = Path("simulators/spectrum_analyzer/link.py").read_text(encoding="utf-8")
-    assert NO_SIGNAL_LOG in source
+    fact = DEFAULT_PACK.facts["no_signal"]
+    assert isinstance(fact, LogContains)
+    assert fact.text in source

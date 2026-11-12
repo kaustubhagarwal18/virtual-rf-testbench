@@ -8,7 +8,7 @@ import math
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from triage.prompt import Fix
+from triage.pack import UNKNOWN, Action
 
 MALFORMED = "malformed"
 """What a reply that couldn't be parsed counts as: neither right nor a real wrong answer."""
@@ -112,7 +112,7 @@ class Outcome:
 
     question: str
     fault: str
-    expected: Fix
+    expected: Action
     chosen: str
     error: str = ""
     answer: str = ""
@@ -125,7 +125,7 @@ class Outcome:
         Returns:
             True for the resolving fix.
         """
-        return self.chosen == self.expected.name
+        return self.chosen == self.expected.key
 
     @property
     def abstained(self) -> bool:
@@ -134,7 +134,7 @@ class Outcome:
         Returns:
             True for UNKNOWN, unless UNKNOWN were itself the expected fix.
         """
-        return not self.right and self.chosen == Fix.UNKNOWN.name
+        return not self.right and self.chosen == UNKNOWN.key
 
     @property
     def confidently_wrong(self) -> bool:

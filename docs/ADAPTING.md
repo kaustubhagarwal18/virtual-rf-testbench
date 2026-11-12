@@ -7,7 +7,7 @@ it yours, from least to most work. Setup is in the [README](../README.md).
 | You want to | Change | Code changes |
 |---|---|---|
 | Triage your own failures | Feed in your resolved runs as history | None |
-| Teach it a new kind of fault | The fault catalogue and the action list | A few lines, plus a re-run of `make eval` |
+| Teach it a new kind of fault | The fault catalogue and the domain pack's actions | A few lines, plus a re-run of `make eval` |
 | Drive real instruments | The drivers' identity filter and command set | Yes, and testing on the hardware |
 
 ## 1 · Triage your own failures
@@ -37,9 +37,9 @@ instruments' log lines and the setup sequence's log lines. `make bench-test` wri
 ```
 
 **What a resolved run adds.** A label saying how it was fixed: `fault` (a short name),
-`cause`, `fix`, and optionally `action`, the key from the fixed action list (`CABLE`, `LINK`,
-`ALIGNMENT`, `CONFIGURATION`, `TIMEOUT`, `TEST_CLEANUP`, `FIRMWARE`). A run that records its
-action gives the model the action itself, not only a description.
+`cause`, `fix`, and optionally `action`, a key from the domain pack's action list
+(`CABLE`, `LINK`, `ALIGNMENT`, `CONFIGURATION`, `TIMEOUT`, `TEST_CLEANUP`, `FIRMWARE`). A run
+that records its action gives the model the action itself, not only a description.
 
 **Two ways to load them:**
 
@@ -72,15 +72,79 @@ action on the fixed list.
   (switched on an instrument's admin port), a `ConfigFault` (a bench configuration value)
   or a `ReleaseFault` (a simulated firmware release). Its `Label` records the cause, the fix
   and the action.
-- **The action, if none fits:** add it to `Fix` in `triage/prompt.py` and give it a cause in
-  `_CATEGORY_BY_FIX`. A test checks every fault's category against its action's, so the two
-  can't drift apart.
+- **The action, if none fits:** add an `[[actions]]` entry to the domain pack,
+  `triage/packs/rf-bench.toml`: a key, the cause it answers (one of the pack's
+  `categories`) and what it says to do. No code changes; the pack is checked when it loads,
+  and a test checks every fault's category against its action's, so the two can't drift
+  apart.
 - **The data:** `make fault-dataset` rebuilds the history and question runs for every fault,
   then `make eval` scores the assistant on them.
 
-Adding an action changes the instructions every question is asked with, so `make eval`
-re-asks the model every question rather than reading its cache. Expect that to take a while
+Adding an action, or changing what one says, changes the instructions every question is
+asked with, so `make eval` re-asks the model every question rather than reading its cache,
+and `tests/unit/triage/test_behaviour_lock.py` fails until its hashes are recorded again with
+`UPDATE_BEHAVIOUR_LOCK=1`. Expect that to take a while
 on a laptop.
+
+## Write a pack for another domain
+
+The pipeline knows no domain; a pack file tells it one. `triage/packs/rf-bench.toml` is the
+RF bench's, and a pack for payments, wafer test or a device fleet has the same parts:
+
+- **`name`:** a short name for the pack, such as `payments`.
+- **`description`:** two or three sentences for the model: what the system is, and what its
+  failures are caused by.
+- **`categories`:** the causes, such as `["feed", "mapping", "counterparty"]`.
+- **`[[actions]]`:** what an engineer would do, each with an upper-case `key`, the
+  `category` it answers and what it `says` to do. `UNKNOWN` is added for you.
+- **`[facts.<name>]`** (optional): statements about a run, each of a kind the core provides:
+  `versions_unchanged` (a version field equals a baseline), `names_other_version` (the answer
+  names a version the run didn't record), `errors_reported` (a failed test lists errors),
+  `log_contains` (a log line has a phrase) and `reading_failed_in` (a reading in some units
+  is out of limits).
+- **`[[checks]]`** (optional): `refuse` an action `when` a fact holds, or `unless` it does,
+  with a `reason`, which may quote the fact's values such as `{error}`. A refused answer
+  becomes `UNKNOWN`; a check never picks another action.
+
+- **`[evidence]`** (optional): how the evidence words your things. `versions_fact` names a
+  `versions_unchanged` fact to compare versions with; `versions_unrecorded`,
+  `versions_unchanged` and `versions_changed` word the versions line (`{versions}`);
+  `errors` words the errors line (`{errors}`, `{reporting}`, `{failed}`); `logs` names
+  the logs. Each `[[evidence.notes]]` states a sentence (`say`) when a `fact` holds, either
+  before the first failure (`place = "lead"`) or among a focused failure's lines
+  (`place = "focus"`). Left out, the wording is neutral: "Versions: …", "Errors reported:
+  …", "Logs".
+
+A mistake is refused when the pack loads, with one line naming the file. Then pass it:
+
+```
+uv run python -m triage.service path/to/run --pack path/to/your-pack.toml
+```
+
+`python -m tools.ci_triage` takes `--pack` too, and with any pack but the RF bench's it
+needs `--history`, a folder of that domain's resolved runs: the RF bench's past runs would
+otherwise be offered as precedents.
+
+**Your data, as a case.** A run folder can hold `case.json` in place of a bench results
+file; `triage/case.py` defines it. Only `format` and `items` are required:
+
+```json
+{
+  "format": "triage-case/1",
+  "items": [
+    {"id": "batch-7/settlement", "outcome": "failed", "message": "3 of 120 payments rejected",
+     "errors": ["E17 file truncated"],
+     "readings": [{"name": "rejected", "value": 3, "unit": "payments", "low": 0, "high": 0,
+                   "margin": -3, "passed": false}]}
+  ],
+  "steps": [{"number": "1", "action": "load the rules", "target": "", "failed": false}],
+  "logs": [{"text": "mapping v2 deployed", "level": "INFO"}],
+  "versions": {"mapping": "v2"}
+}
+```
+
+Write one per failure from whatever your system records, put a `label.json` beside the
+resolved ones, and the pipeline reads them as it reads the bench's runs.
 
 ## 3 · Drive real instruments
 

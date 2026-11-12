@@ -9,21 +9,44 @@ import json
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 
-from triage.prompt import Fix, Source, fix_category
+from triage.pack import DEFAULT_PACK, UNKNOWN, Action, Pack
+from triage.prompt import Source
 
-_VERDICT_PROPERTIES: dict[str, object] = {
-    "fix": {"type": "string", "enum": [fix.name for fix in Fix]},
-    "where": {"type": "string"},
-    "because": {"type": "string"},
-    "cited": {"type": "array", "items": {"type": "string"}},
-}
-"""The answer's fields, apart so a schema for one question can narrow one of them."""
 
-VERDICT_SCHEMA: dict[str, object] = {
-    "type": "object",
-    "properties": _VERDICT_PROPERTIES,
-    "required": ["fix", "where", "because", "cited"],
-}
+def _verdict_properties(pack: Pack) -> dict[str, object]:
+    """Return the answer's fields, apart so a schema for one question can narrow one of them.
+
+    Args:
+        pack: The domain pack whose action keys the answer may name.
+
+    Returns:
+        Each field's schema.
+    """
+    return {
+        "fix": {"type": "string", "enum": list(pack.keys)},
+        "where": {"type": "string"},
+        "because": {"type": "string"},
+        "cited": {"type": "array", "items": {"type": "string"}},
+    }
+
+
+def pack_schema(pack: Pack) -> dict[str, object]:
+    """Return the answer's shape for a pack, before any question narrows it.
+
+    Args:
+        pack: The domain pack.
+
+    Returns:
+        The JSON schema; the action is an enum of the pack's keys.
+    """
+    return {
+        "type": "object",
+        "properties": _verdict_properties(pack),
+        "required": ["fix", "where", "because", "cited"],
+    }
+
+
+VERDICT_SCHEMA: dict[str, object] = pack_schema(DEFAULT_PACK)
 """The answer's shape as a JSON schema, for a model that can be constrained to it.
 
 The action is an enum of the keys offered, so a constrained reply can't name an action off
@@ -32,7 +55,7 @@ the model can say, it doesn't replace reading it strictly.
 """
 
 
-def verdict_schema(source_ids: Sequence[str] = ()) -> dict[str, object]:
+def verdict_schema(source_ids: Sequence[str] = (), pack: Pack = DEFAULT_PACK) -> dict[str, object]:
     """Return the answer's schema, with 'cited' narrowed to the sources this question has.
 
     A model that is constrained to the offered ids can't paste a source's text where its id
@@ -42,14 +65,17 @@ def verdict_schema(source_ids: Sequence[str] = ()) -> dict[str, object]:
 
     Args:
         source_ids: The ids of the sources offered with this question.
+        pack: The domain pack whose action keys the answer may name.
 
     Returns:
-        A schema whose 'cited' items must each be one of the ids, or VERDICT_SCHEMA itself.
+        A schema whose 'cited' items must each be one of the ids, or the pack's general
+        schema (VERDICT_SCHEMA for the default pack) when there are none.
     """
+    general = VERDICT_SCHEMA if pack == DEFAULT_PACK else pack_schema(pack)
     if not source_ids:
-        return VERDICT_SCHEMA
+        return general
     cited = {"type": "array", "items": {"type": "string", "enum": list(source_ids)}}
-    return {**VERDICT_SCHEMA, "properties": {**_VERDICT_PROPERTIES, "cited": cited}}
+    return {**general, "properties": {**_verdict_properties(pack), "cited": cited}}
 
 
 class MalformedAnswerError(Exception):
@@ -86,7 +112,7 @@ class Verdict:
             until with_past_fixes fills it in.
     """
 
-    fix: Fix
+    fix: Action
     where: str
     because: str
     cited: list[str] = field(default_factory=list)
@@ -101,7 +127,7 @@ class Verdict:
         Returns:
             'firmware', 'bench', 'test', or 'unknown' for UNKNOWN.
         """
-        return fix_category(self.fix)
+        return self.fix.category
 
     @classmethod
     def gated(cls, reason: str) -> "Verdict":
@@ -113,9 +139,7 @@ class Verdict:
         Returns:
             UNKNOWN, with the reason as both the explanation and the gate's reason.
         """
-        return cls(
-            fix=Fix.UNKNOWN, where="no precedent to follow", because=reason, gate_reason=reason
-        )
+        return cls(fix=UNKNOWN, where="no precedent to follow", because=reason, gate_reason=reason)
 
 
 def _json_object(reply: str) -> dict[str, object]:
@@ -142,11 +166,12 @@ def _json_object(reply: str) -> dict[str, object]:
     return parsed
 
 
-def _chosen_fix(value: object) -> Fix:
+def _chosen_fix(value: object, pack: Pack) -> Action:
     """Read the action the model chose, by key or by its text.
 
     Args:
         value: Whatever the reply held under 'fix'.
+        pack: The domain pack whose actions were offered.
 
     Returns:
         The action.
@@ -155,22 +180,23 @@ def _chosen_fix(value: object) -> Fix:
         MalformedAnswerError: If it isn't one of the actions offered.
     """
     text = str(value).strip()
-    by_name = {fix.name.casefold(): fix for fix in Fix}
-    by_value = {fix.value.casefold(): fix for fix in Fix}
-    chosen = by_name.get(text.casefold()) or by_value.get(text.casefold())
+    by_key = {action.key.casefold(): action for action in pack.actions}
+    by_says = {action.says.casefold(): action for action in pack.actions}
+    chosen = by_key.get(text.casefold()) or by_says.get(text.casefold())
     if chosen is None:
         raise MalformedAnswerError(
-            f"{text!r} isn't one of the actions offered: {', '.join(fix.name for fix in Fix)}"
+            f"{text!r} isn't one of the actions offered: {', '.join(pack.keys)}"
         )
     return chosen
 
 
-def parse_verdict(reply: str, source_ids: Sequence[str] = ()) -> Verdict:
+def parse_verdict(reply: str, source_ids: Sequence[str] = (), pack: Pack = DEFAULT_PACK) -> Verdict:
     """Read a reply into a verdict, refusing anything unusable.
 
     Args:
         reply: What the model returned.
         source_ids: The sources it was given; citing anything else is an invention.
+        pack: The domain pack whose actions were offered.
 
     Returns:
         The verdict.
@@ -188,7 +214,7 @@ def parse_verdict(reply: str, source_ids: Sequence[str] = ()) -> Verdict:
     if invented:
         raise MalformedAnswerError(f"cites sources it wasn't given: {invented}")
     return Verdict(
-        fix=_chosen_fix(parsed.get("fix", "")),
+        fix=_chosen_fix(parsed.get("fix", ""), pack),
         where=str(parsed.get("where", "")).strip(),
         because=str(parsed.get("because", "")).strip(),
         cited=citations,
@@ -216,7 +242,7 @@ def with_past_fixes(verdict: Verdict, sources: Sequence[Source]) -> Verdict:
     same_action = [
         source.source_id
         for source in sources
-        if source.action == verdict.fix.name and source.source_id not in verdict.cited
+        if source.action == verdict.fix.key and source.source_id not in verdict.cited
     ]
     past_fixes = tuple(
         PastFix(source_id, fix_by_id[source_id])

@@ -1,111 +1,16 @@
-"""Reading a saved bench run, and finding the one thing that went wrong first.
+"""Building the evidence for a case, led by the one thing that went wrong first.
 
 A run with nineteen errors has one cause and eighteen consequences. Triage starts where a
 person starts: the first step that failed. Everything else is context for it.
 
-The evidence a run carries is its results file, the instruments' logs and the setup
-sequence's log. The label beside them is never read here: it is the answer, and this module
-is the question.
+The evidence is built from a case (triage.case), whatever system it came from. The label
+beside it is never read here: it is the answer, and this module is the question.
 """
 
-import json
-import re
-from collections.abc import Callable
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Self
 
-RESULTS_FILE = "results.json"
-LOGS_FILE = "logs.txt"
-SEQUENCE_FILE = "sequence.log"
-
-_SEQUENCE_FIELDS = re.compile(r"(\w+)=(.*?)(?=\s+\w+=|$)")
-"""One key=value field of a sequence-log line; values may contain spaces."""
-
-_SEQUENCE_LINE = re.compile(r"^(?P<time>\S+)\s+(?P<level>\w+)\s+(?P<fields>.*)$")
-"""A sequence-log line: a timestamp, a level, then its fields."""
-
-REASON_FIELD = " reason="
-"""Where a step's reason begins. The sequencer writes it last, and everything after it is
-free text that may itself contain '=', so it is read whole rather than as fields."""
-
-_DESCRIBED_FIELDS = frozenset({"step", "action", "instrument", "reason", "result"})
-"""Fields named in a step's description, so the rest are its parameters."""
-
-
-@dataclass(frozen=True)
-class SavedRun:
-    """A run's evidence, as saved by `make fault`.
-
-    Attributes:
-        folder: Where the run is saved.
-        results: The bench suite's results file.
-        logs: The instruments' log lines.
-        sequence: The setup sequence's log lines; empty when no step ever ran.
-    """
-
-    folder: Path
-    results: dict[str, Any]
-    logs: list[str] = field(default_factory=list)
-    sequence: list[str] = field(default_factory=list)
-
-    @classmethod
-    def load(cls, folder: Path) -> Self:
-        """Read a saved run's evidence, and nothing else.
-
-        Args:
-            folder: The run's folder.
-
-        Returns:
-            The run, with whichever artefacts it has; `label.json` is deliberately not read.
-
-        Raises:
-            FileNotFoundError: If the run has no results file, which every run must have.
-        """
-        results_path = folder / RESULTS_FILE
-        if not results_path.exists():
-            raise FileNotFoundError(f"{folder} has no {RESULTS_FILE}: it isn't a saved run")
-        return cls(
-            folder=folder,
-            results=json.loads(results_path.read_text(encoding="utf-8")),
-            logs=_lines(folder / LOGS_FILE),
-            sequence=_lines(folder / SEQUENCE_FILE),
-        )
-
-
-def _lines(path: Path) -> list[str]:
-    """Read a text artefact's lines, treating an absent file as no lines.
-
-    Args:
-        path: The file.
-
-    Returns:
-        Its lines without endings, or nothing when the run doesn't have it.
-    """
-    if not path.exists():
-        return []
-    return path.read_text(encoding="utf-8").splitlines()
-
-
-def sequence_fields(line: str) -> dict[str, str]:
-    """Read one sequence-log line into its fields.
-
-    Args:
-        line: The line, for example '17:03 ERROR step=11 action=verify level offset ...'.
-
-    Returns:
-        The fields, with 'time' and 'level' included; empty if the line has no fields. The
-        reason keeps any '=' it contains, so an error message isn't read as further fields.
-    """
-    match = _SEQUENCE_LINE.match(line)
-    if match is None:
-        return {}
-    fields = {"time": match["time"], "level": match["level"]}
-    described, separator, reason = match["fields"].partition(REASON_FIELD)
-    fields.update(dict(_SEQUENCE_FIELDS.findall(described)))
-    if separator:
-        fields["reason"] = reason
-    return fields
+from triage.case import Case
+from triage.pack import DEFAULT_PACK, VERSIONS_LINE, Pack
 
 
 @dataclass(frozen=True)
@@ -127,69 +32,7 @@ class FirstFailure:
     consequences: int = 0
 
 
-def failed_steps(run: SavedRun) -> list[dict[str, str]]:
-    """List the setup-sequence steps that failed.
-
-    Args:
-        run: The run.
-
-    Returns:
-        The fields of each ERROR line, in the order logged.
-    """
-    return [
-        fields
-        for fields in (sequence_fields(line) for line in run.sequence)
-        if fields.get("level") == "ERROR"
-    ]
-
-
-def failed_tests(run: SavedRun) -> list[dict[str, Any]]:
-    """List the tests that didn't pass, in the order they ran.
-
-    Args:
-        run: The run.
-
-    Returns:
-        Each failed or errored test's record.
-    """
-    return [test for test in run.results.get("tests", []) if test["outcome"] != "passed"]
-
-
-LEVEL_UNITS = frozenset({"dB", "dBm"})
-"""Units of absolute level and power readings, which an analyzer's alignment error shifts.
-A relative level (dBc) and a frequency (Hz) are left as they were."""
-
-
-def failed_readings(run: SavedRun) -> list[dict[str, Any]]:
-    """List the out-of-limit readings in the tests that didn't pass.
-
-    Args:
-        run: The run.
-
-    Returns:
-        Each failed measurement's record, in the order the tests ran.
-    """
-    return [
-        measurement
-        for test in failed_tests(run)
-        for measurement in test.get("measurements", [])
-        if not measurement["passed"]
-    ]
-
-
-def failed_level_reading(run: SavedRun) -> bool:
-    """Say whether any level or power reading is out of limits in the failed tests.
-
-    Args:
-        run: The run.
-
-    Returns:
-        True when a failed reading is in dB or dBm.
-    """
-    return any(str(reading["unit"]) in LEVEL_UNITS for reading in failed_readings(run))
-
-
-def instrument_errors(run: SavedRun) -> list[str]:
+def instrument_errors(run: Case) -> list[str]:
     """List the SCPI errors the instruments reported in the tests that didn't pass.
 
     Args:
@@ -198,35 +41,35 @@ def instrument_errors(run: SavedRun) -> list[str]:
     Returns:
         Each error, such as '-113,"Undefined header"', in the order the tests ran.
     """
-    return [str(error) for test in failed_tests(run) for error in test.get("instrument_errors", [])]
+    return [error for item in run.failed_items for error in item.errors]
 
 
-def instrument_error_note(run: SavedRun) -> str:
-    """Say which SCPI errors the instruments reported in the failed tests, if any.
+def errors_note(run: Case, pack: Pack = DEFAULT_PACK) -> str:
+    """Say which errors the failed items reported, if any.
 
     A rejected command can surface in the test as a timeout on the query after it, so the
     first failure reads as a timeout while the instrument's error says what happened. This
     line states the error on its own, and full_evidence puts it first.
 
     Args:
-        run: The run.
+        run: The case.
+        pack: The domain pack, which words the line.
 
     Returns:
-        One line naming each distinct error and how many failed tests reported one, or an
+        One line naming each distinct error and how many failed items reported one, or an
         empty string when none did.
     """
     errors = list(dict.fromkeys(instrument_errors(run)))
     if not errors:
         return ""
-    tests = failed_tests(run)
-    reporting = sum(1 for test in tests if test.get("instrument_errors"))
-    return (
-        f"Instrument error: {'; '.join(errors)}, reported by {reporting} of {len(tests)} "
-        "failed tests."
+    tests = run.failed_items
+    reporting = sum(1 for item in tests if item.errors)
+    return pack.evidence.errors.format(
+        errors="; ".join(errors), reporting=reporting, failed=len(tests)
     )
 
 
-def first_failure(run: SavedRun) -> FirstFailure | None:
+def first_failure(run: Case) -> FirstFailure | None:
     """Find the one thing that went wrong first, which the rest of the run follows from.
 
     A failed setup step comes first: when the sequence that prepares the instruments stops,
@@ -238,39 +81,32 @@ def first_failure(run: SavedRun) -> FirstFailure | None:
     Returns:
         The first failure, or None when every test passed.
     """
-    tests = failed_tests(run)
-    steps = failed_steps(run)
+    tests = run.failed_items
+    steps = run.failed_steps
     if steps:
         step = steps[0]
         return FirstFailure(
-            source=SEQUENCE_FILE,
-            where=(
-                f"step {step.get('step', '?')} ({step.get('action', 'unknown')}) "
-                f"on the {step.get('instrument', 'bench')}"
-            ),
-            detail=step.get("reason", ""),
-            parameters={
-                name: value
-                for name, value in step.items()
-                if name not in _DESCRIBED_FIELDS and name not in {"time", "level"}
-            },
+            source=run.context.step_source,
+            where=f"step {step.number} ({step.action})"
+            + (f" on the {step.target}" if step.target else ""),
+            detail=step.reason,
+            parameters=dict(step.params),
             consequences=max(len(tests) - 1, 0),
         )
     if not tests:
         return None
     test = tests[0]
     return FirstFailure(
-        source=RESULTS_FILE,
-        where=test["id"].split("::")[-1],
-        detail=test["message"],
+        source=run.context.item_source,
+        where=test.id.split("::")[-1],
+        detail=test.message,
         parameters={
-            measurement["name"]: (
-                f"{measurement['value']} {measurement['unit']}, limit "
-                f"{measurement['limit_low']} to {measurement['limit_high']}, "
-                f"margin {measurement['margin']}"
+            reading.name: (
+                f"{reading.value} {reading.unit}, limit {reading.low} to {reading.high}, "
+                f"margin {reading.margin}"
             )
-            for measurement in test.get("measurements", [])
-            if not measurement["passed"]
+            for reading in test.readings
+            if not reading.passed
         },
         consequences=len(tests) - 1,
     )
@@ -294,85 +130,60 @@ LEVELS = (ERROR_ONLY, FULL)
 EVALUATED_LEVELS = (*LEVELS, FULL_WITHOUT_FIRMWARE, FULL_WITHOUT_SIGNAL)
 """Every level the evaluation can score, the ablations included."""
 
-NOTABLE_LOG_LEVELS = ("WARNING", "ERROR")
-"""Instrument log lines worth showing: a healthy run's INFO lines are noise."""
-
 MAX_NOTABLE_LOGS = 6
 """How many notable log lines to show, newest last."""
 
-BASELINE_VERSION = "0.1.0"
-"""The release the bench normally runs, and the one the last passing run used."""
 
+def versions_note(run: Case, pack: Pack = DEFAULT_PACK) -> str:
+    """Say what versions the case ran, and whether that changed since the last passing run.
 
-def firmware_changed(run: SavedRun) -> bool | None:
-    """Say whether the run's firmware differs from the last passing run's.
+    A regression and a fault elsewhere can look identical in the readings; whether a version
+    moved is what separates them, so it is stated rather than left to be noticed. The
+    comparison uses the pack's versions fact; without one, the versions are only listed.
 
     Args:
-        run: The run.
+        run: The case.
+        pack: The domain pack, which words the line and names the baseline.
 
     Returns:
-        True if any instrument runs another release, False if none does, and None when the
-        run recorded no versions: unknown is not the same as unchanged.
+        One line naming the versions and whether they differ from the baseline.
     """
-    versions = run.results.get("firmware_versions", {})
+    wording = pack.evidence
+    versions = run.context.versions
     if not versions:
-        return None
-    return any(version != BASELINE_VERSION for version in versions.values())
-
-
-def firmware_note(run: SavedRun) -> str:
-    """Say what firmware the run used, and whether that changed.
-
-    A firmware regression and a bench fault can look identical in the measurements; whether
-    the version moved is what separates them, so it is stated rather than left to be noticed.
-
-    When nothing changed, the line doesn't use the word firmware: ADR 0013's ablation found
-    that "Firmware: … (unchanged …)" pulled the model to FIRMWARE on a run that ruled it out.
-    It states the versions and that they match, which is all the evidence there is.
-
-    Args:
-        run: The run.
-
-    Returns:
-        One line naming the versions and whether they differ from the last passing run.
-    """
-    changed = firmware_changed(run)
-    if changed is None:
-        return (
-            "Firmware: not recorded, so whether it changed since the last passing run is unknown."
-        )
-    versions = run.results["firmware_versions"]
+        return wording.versions_unrecorded
     text = ", ".join(f"{role} {version}" for role, version in sorted(versions.items()))
-    if not changed:
-        return f"Instruments: {text}, the same as the last passing run."
-    return f"Firmware: {text} (changed since the last passing run)."
+    fact = pack.facts.get(wording.versions_fact or "")
+    if fact is not None and fact(run, "") is not None:
+        return wording.versions_unchanged.format(versions=text)
+    return wording.versions_changed.format(versions=text)
 
 
-NO_SIGNAL_LOG = "No signal reaching the analyzer"
-"""What the analyzer logs for a reading that saw no signal; a test checks it still does."""
-
-
-def no_signal_note(run: SavedRun) -> str:
-    """Say how often the analyzer logged that no signal reached it, if it did.
-
-    The log lines are in the evidence already, but as the last few of many. A small model
-    read a disconnected cable's 110 dB path loss as a calibration problem; this line states
-    the fact the logs record, the way instrument_error_note states an SCPI error.
+def notes(
+    run: Case, place: str, pack: Pack = DEFAULT_PACK, leave_out: frozenset[str] = frozenset()
+) -> list[str]:
+    """State the pack's notes for one place whose facts hold.
 
     Args:
-        run: The run.
+        run: The case.
+        place: 'lead' or 'focus'.
+        pack: The domain pack, which lists the notes.
+        leave_out: Names of notes to leave out, for an ablation.
 
     Returns:
-        One line with the count, or an empty string when the analyzer never logged it.
+        Each note's sentence, in the pack's order.
     """
-    count = sum(1 for line in run.logs if NO_SIGNAL_LOG in line)
-    if not count:
-        return ""
-    times = "once" if count == 1 else f"{count} times"
-    return f'No signal: the analyzer logged "{NO_SIGNAL_LOG}" {times}.'
+    lines = []
+    for note in pack.evidence.notes:
+        if note.place != place or note.name in leave_out:
+            continue
+        values = pack.facts[note.fact](run, "")
+        if values is not None:
+            lines.append(note.say.format(**values))
+    return lines
 
 
-def notable_logs(run: SavedRun) -> list[str]:
+def notable_logs(run: Case) -> list[str]:
     """Pick the instrument log lines a person would actually read.
 
     Args:
@@ -381,13 +192,11 @@ def notable_logs(run: SavedRun) -> list[str]:
     Returns:
         The last few warnings and errors, or nothing when the instruments logged none.
     """
-    notable = [
-        line for line in run.logs if any(f'"{level}"' in line for level in NOTABLE_LOG_LEVELS)
-    ]
+    notable = [line.text for line in run.logs if line.notable]
     return notable[-MAX_NOTABLE_LOGS:]
 
 
-def selection_note(run: SavedRun) -> str:
+def selection_note(run: Case) -> str:
     """Say which tests ran, so a subset run can't read like a complete one.
 
     Args:
@@ -396,10 +205,10 @@ def selection_note(run: SavedRun) -> str:
     Returns:
         One line with the counts, or an empty string when the run didn't record them.
     """
-    selection = run.results.get("selection")
+    selection = run.context.selection
     if not selection:
         return ""
-    totals = run.results.get("totals", {})
+    totals = run.context.totals
     return (
         f"Tests: {selection['selected']} of {selection['collected']} selected"
         f" ({selection['deselected']} deselected); {totals.get('passed', 0)} passed,"
@@ -407,7 +216,7 @@ def selection_note(run: SavedRun) -> str:
     )
 
 
-def error_only_evidence(run: SavedRun) -> str:
+def error_only_evidence(run: Case) -> str:
     """Build the smallest evidence there is: the first failure's message.
 
     Args:
@@ -422,43 +231,37 @@ def error_only_evidence(run: SavedRun) -> str:
     return failure.detail or failure.where
 
 
-FOCUS_KEY = "focus"
-"""The results entry a focused run carries (triage.failures.focus): how many tests failed its
-way, and the descriptions of the run's other failures."""
-
-NO_LEVEL_READING = "No level or power reading is out of limits in this failure."
-"""Said of a focused failure whose out-of-limit readings are all frequencies or relative
-levels: the run's logs may warn about another failure's levels, such as an analyzer's
-alignment, and that warning is not this failure's cause."""
-
 MAX_OTHER_FAILURES = 5
 """How many of a run's other failures a focused run's evidence names."""
 
 
-def _consequence_lines(run: SavedRun, failure: FirstFailure) -> list[str]:
+def _consequence_lines(
+    run: Case, failure: FirstFailure, pack: Pack, leave_out: frozenset[str]
+) -> list[str]:
     """Say what else failed besides the first failure.
 
-    A whole run says how many tests failed after it. A run focused on one failure
-    (triage.failures.focus) says how many tests failed its way, that no level reading is
-    out of limits when only frequencies are, and names the other failures.
+    A whole case says how many items failed after it. A case focused on one failure
+    (triage.failures.focus) says how many items failed its way, states the pack's focus
+    notes, and names the other failures.
 
     Args:
-        run: The run, whole or focused.
+        run: The case, whole or focused.
         failure: Its first failure.
+        pack: The domain pack, which lists the focus notes.
+        leave_out: Names of notes to leave out, for an ablation.
 
     Returns:
         The lines; none when nothing else failed.
     """
-    focused = run.results.get(FOCUS_KEY)
-    if not focused:
+    focused = run.focus
+    if focused is None:
         if not failure.consequences:
             return []
         return [f"{failure.consequences} further tests failed after it, which may be consequences."]
-    count = int(focused["tests"])
+    count = focused.items
     lines = [f"{count} {'test' if count == 1 else 'tests'} failed this way."]
-    if failed_readings(run) and not failed_level_reading(run):
-        lines.append(NO_LEVEL_READING)
-    others = [str(other) for other in focused.get("others", [])]
+    lines += notes(run, "focus", pack, leave_out)
+    others = list(focused.others)
     if others:
         named = "; ".join(others[:MAX_OTHER_FAILURES])
         more = len(others) - MAX_OTHER_FAILURES
@@ -467,17 +270,19 @@ def _consequence_lines(run: SavedRun, failure: FirstFailure) -> list[str]:
     return lines
 
 
-def full_evidence(run: SavedRun, firmware_line: bool = True, signal_line: bool = True) -> str:
-    """Build everything the run recorded, led by the failure the rest follows from.
+def full_evidence(
+    run: Case, pack: Pack = DEFAULT_PACK, leave_out: frozenset[str] = frozenset()
+) -> str:
+    """Build everything the case recorded, led by the failure the rest follows from.
 
-    A missing signal and an SCPI error the instruments reported come before the first
-    failure, because the first failure is often what they caused: a path loss of 110 dB,
-    or a timeout.
+    The pack's lead notes and any errors the failed items reported come before the first
+    failure, because the first failure is often what they caused: a path loss of 110 dB
+    with no signal, or a timeout after a rejected command.
 
     Args:
-        run: The run.
-        firmware_line: Whether to state the instruments' versions; False only for the ablation.
-        signal_line: Whether to state a missing signal; False only for the ablation.
+        run: The case.
+        pack: The domain pack, which words the lines that name its things.
+        leave_out: Lines to leave out, for an ablation: a note's name, or VERSIONS_LINE.
 
     Returns:
         The evidence as text, ready to put in a prompt.
@@ -488,65 +293,46 @@ def full_evidence(run: SavedRun, firmware_line: bool = True, signal_line: bool =
     # Only the reason's first line: where there are parameters they carry the same numbers
     # more precisely, and a prompt shouldn't say everything twice.
     reason = failure.detail.splitlines()[0] if failure.detail else ""
-    signal = no_signal_note(run) if signal_line else ""
-    lines = [note for note in (signal, instrument_error_note(run)) if note]
+    lines = notes(run, "lead", pack, leave_out)
+    errors = errors_note(run, pack)
+    if errors:
+        lines.append(errors)
     lines += [
         f"First failure: {failure.where} (found in {failure.source}).",
         f"Reason: {reason}",
     ]
     for name, value in failure.parameters.items():
         lines.append(f"  {name}: {value}")
-    lines += _consequence_lines(run, failure)
-    if firmware_line:
-        lines.append(firmware_note(run))
+    lines += _consequence_lines(run, failure, pack, leave_out)
+    if VERSIONS_LINE not in leave_out:
+        lines.append(versions_note(run, pack))
     selection = selection_note(run)
     if selection:
         lines.append(selection)
     logs = notable_logs(run)
-    lines.append(f"Instrument logs: {len(run.logs)} lines, {len(logs)} warnings or errors.")
+    lines.append(f"{pack.evidence.logs}: {len(run.logs)} lines, {len(logs)} warnings or errors.")
     lines.extend(f"  {line}" for line in logs)
     return "\n".join(lines)
 
 
-def _full_without_firmware(run: SavedRun) -> str:
-    """Build the full evidence without its firmware line, for the ablation.
+SIGNAL_NOTE = "no_signal"
+"""The RF pack's note the "no signal line" ablation leaves out."""
 
-    Args:
-        run: The run.
-
-    Returns:
-        The evidence as text.
-    """
-    return full_evidence(run, firmware_line=False)
-
-
-def _full_without_signal(run: SavedRun) -> str:
-    """Build the full evidence without its "No signal" line, for the ablation.
-
-    Args:
-        run: The run.
-
-    Returns:
-        The evidence as text.
-    """
-    return full_evidence(run, signal_line=False)
-
-
-_BUILDERS: dict[str, Callable[[SavedRun], str]] = {
-    ERROR_ONLY: error_only_evidence,
-    FULL: full_evidence,
-    FULL_WITHOUT_FIRMWARE: _full_without_firmware,
-    FULL_WITHOUT_SIGNAL: _full_without_signal,
+_LEFT_OUT: dict[str, frozenset[str]] = {
+    FULL: frozenset(),
+    FULL_WITHOUT_FIRMWARE: frozenset({VERSIONS_LINE}),
+    FULL_WITHOUT_SIGNAL: frozenset({SIGNAL_NOTE}),
 }
-"""How each evidence level is built; a new level is a new entry, not a new branch."""
+"""What each full level leaves out: nothing, or one line for an ablation."""
 
 
-def build_evidence(run: SavedRun, level: str = FULL) -> str:
-    """Build a run's evidence at the level asked for.
+def build_evidence(run: Case, level: str = FULL, pack: Pack = DEFAULT_PACK) -> str:
+    """Build a case's evidence at the level asked for.
 
     Args:
-        run: The run.
+        run: The case.
         level: One of EVALUATED_LEVELS.
+        pack: The domain pack, which words the lines that name its things.
 
     Returns:
         The evidence as text.
@@ -554,7 +340,9 @@ def build_evidence(run: SavedRun, level: str = FULL) -> str:
     Raises:
         ValueError: If the level isn't one this module builds.
     """
-    builder = _BUILDERS.get(level)
-    if builder is None:
+    if level == ERROR_ONLY:
+        return error_only_evidence(run)
+    left_out = _LEFT_OUT.get(level)
+    if left_out is None:
         raise ValueError(f"unknown evidence level {level!r}; expected one of {EVALUATED_LEVELS}")
-    return builder(run)
+    return full_evidence(run, pack, left_out)

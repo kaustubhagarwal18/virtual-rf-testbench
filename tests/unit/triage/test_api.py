@@ -22,10 +22,12 @@ from triage.api import (
     create_app,
     main,
 )
+from triage.bench_run import load_case
 from triage.embed import FakeEmbedder
-from triage.evidence import LEVELS, SavedRun, build_evidence
+from triage.evidence import LEVELS, build_evidence
 from triage.llm import FakeProvider, ModelUnavailableError
-from triage.prompt import Fix, build_prompt
+from triage.pack import DEFAULT_PACK
+from triage.prompt import build_prompt
 from triage.retrieval import InMemoryRetriever
 
 CABLE_REPLY = json.dumps({"fix": "CABLE", "where": "the cable", "because": "loss", "cited": []})
@@ -268,14 +270,24 @@ SAVED_RUNS = sorted(path for path in Path("triage/data/runs").glob("*/*") if pat
 """Every saved run in the data set: real results files, logs and sequence logs."""
 
 
+def read_lines(path: Path) -> list[str]:
+    """Return a saved run file's lines, or none when the run doesn't have it."""
+    return path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+
+
 @pytest.mark.parametrize(
     "folder", SAVED_RUNS, ids=lambda folder: f"{folder.parent.name}/{folder.name}"
 )
 def test_a_real_run_posted_gives_the_model_what_the_saved_run_does(folder: Path) -> None:
     """Posting a saved run's files builds exactly the prompt reading them from disk builds."""
-    run = SavedRun.load(folder)
+    run = load_case(folder)
     provider = FakeProvider([CABLE_REPLY])
-    body = {"results": run.results, "logs": run.logs, "sequence": run.sequence, "retrieve": False}
+    body = {
+        "results": json.loads((folder / "results.json").read_text(encoding="utf-8")),
+        "logs": read_lines(folder / "logs.txt"),
+        "sequence": read_lines(folder / "sequence.log"),
+        "retrieve": False,
+    }
     response = TestClient(create_app(provider)).post("/triage", json=body)
     assert response.status_code == status.HTTP_200_OK
     assert provider.prompts == [build_prompt(build_evidence(run))]
@@ -289,7 +301,7 @@ def test_the_data_set_has_every_saved_run() -> None:
 
 def test_the_api_accepts_exactly_the_action_keys_on_the_list() -> None:
     """A label's action type and the list of actions can't drift apart."""
-    assert set(get_args(ActionKey)) == set(Fix.__members__)
+    assert set(get_args(ActionKey)) == set(DEFAULT_PACK.keys)
 
 
 def test_an_added_runs_action_reaches_a_later_prompt() -> None:
@@ -359,3 +371,14 @@ def test_the_verdict_states_its_category_and_what_fixed_a_cited_run() -> None:
     body = client.post("/triage", json={"results": RESULTS}).json()
     assert body["category"] == "bench"
     assert body["past_fixes"] == [{"source_id": source_id, "fix_applied": "replaced it"}]
+
+
+def test_main_reports_a_malformed_history_case_in_one_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A broken case.json in the history stops start-up with one line naming it."""
+    broken = tmp_path / "history" / "batch-1"
+    broken.mkdir(parents=True)
+    (broken / "case.json").write_text("{", encoding="utf-8")
+    assert main(["--history", str(tmp_path / "history")], lambda *_, **__: None) == 1
+    assert "case.json" in capsys.readouterr().out

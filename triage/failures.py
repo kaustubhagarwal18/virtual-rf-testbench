@@ -15,13 +15,14 @@ groups past the cap are listed, not dropped.
 import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
-from typing import Any
 
 from triage.abstain import SERVICE_GATES
 from triage.answer import MalformedAnswerError, Verdict
-from triage.checks import DEFAULT_CHECKS
-from triage.evidence import FOCUS_KEY, FULL, SavedRun, failed_steps, failed_tests, sequence_fields
+from triage.case import Case, Focus, Item
+from triage.checks import DEFAULT_CHECKS, checks_for
+from triage.evidence import FULL
 from triage.llm import LLMProvider
+from triage.pack import DEFAULT_PACK, Pack
 from triage.retrieval import DEFAULT_TOP_K, Retriever
 from triage.service import triage_run
 
@@ -59,28 +60,46 @@ class FailureGroup:
         return tuple(test_id.split("::")[-1] for test_id in self.tests)
 
 
-def _failure_kind(test: dict[str, Any]) -> str:
-    """Name the kind of failure a test reported: its exception's class, or 'Failed'.
+def _failure_kind(test: Item) -> str:
+    """Name the kind of failure an item reported: its exception's class, or 'Failed'.
 
     Args:
-        test: The test's record.
+        test: The failed item.
 
     Returns:
         The class name before the message's first colon, without its module, or the
         test's outcome when the message names none.
     """
-    head, separator, _ = str(test.get("message", "")).partition(":")
+    head, separator, _ = test.message.partition(":")
     if not separator or " " in head.strip():
-        return str(test["outcome"])
+        return test.outcome
     return head.strip().rsplit(".", 1)[-1]
 
 
-def failure_groups(run: SavedRun) -> list[FailureGroup]:
+def _function(item_id: str) -> str:
+    """Name what an item is a case of, so a test's parametrized cases group together.
+
+    A pytest id ('file.py::test_level[-30.0]') names a test function and, in brackets, one
+    case of it. Any other id is its own thing: 'payment[1]' and 'payment[2]' are two
+    payments, not two cases of one test.
+
+    Args:
+        item_id: The item's id.
+
+    Returns:
+        The test function for a pytest id, or the whole id otherwise.
+    """
+    if "::" not in item_id:
+        return item_id
+    return item_id.rsplit("::", maxsplit=1)[-1].split("[", maxsplit=1)[0]
+
+
+def failure_groups(run: Case) -> list[FailureGroup]:
     """Group a run's failed tests by how they failed.
 
     Failed setup steps come first, as first_failure puts them first: every test such a step
-    stopped joins its group. Each remaining test joins the group of its test function and
-    kind of failure, in the order the tests ran.
+    stopped joins its group. Each remaining item joins the group of its test function (for a
+    pytest id; any other item is its own) and kind of failure, in the order they ran.
 
     Args:
         run: The run.
@@ -89,16 +108,16 @@ def failure_groups(run: SavedRun) -> list[FailureGroup]:
         The distinct failures, empty when every test passed.
     """
     steps: dict[tuple[str, str], list[str]] = {}
-    for fields in failed_steps(run):
-        steps.setdefault((fields.get("action", "unknown"), fields.get("instrument", "bench")), [])
+    for step in run.failed_steps:
+        steps.setdefault((step.action, step.target), [])
     tests: dict[tuple[str, str], list[str]] = {}
-    for test in failed_tests(run):
-        test_id = str(test["id"])
-        stopped = _STOPPED_BY_STEP.search(str(test.get("message", "")))
+    for test in run.failed_items:
+        test_id = test.id
+        stopped = _STOPPED_BY_STEP.search(test.message)
         if stopped:
             steps.setdefault((stopped["action"], stopped["instrument"]), []).append(test_id)
             continue
-        function = test_id.rsplit("::", maxsplit=1)[-1].split("[", maxsplit=1)[0]
+        function = _function(test_id)
         tests.setdefault((function, _failure_kind(test)), []).append(test_id)
     return [
         FailureGroup(f"setup step '{action}' on the {instrument}", tuple(ids), (action, instrument))
@@ -106,23 +125,7 @@ def failure_groups(run: SavedRun) -> list[FailureGroup]:
     ] + [FailureGroup(f"{function}: {kind}", tuple(ids)) for (function, kind), ids in tests.items()]
 
 
-def _keeps_sequence_line(line: str, group: FailureGroup) -> bool:
-    """Say whether a sequence-log line belongs in a group's focused run.
-
-    Args:
-        line: The line.
-        group: The group.
-
-    Returns:
-        True for every line that isn't a failed step, and for the group's own failed step.
-    """
-    fields = sequence_fields(line)
-    if fields.get("level") != "ERROR":
-        return True
-    return group.step == (fields.get("action", "unknown"), fields.get("instrument", "bench"))
-
-
-def focus(run: SavedRun, group: FailureGroup, groups: Sequence[FailureGroup]) -> SavedRun:
+def focus(run: Case, group: FailureGroup, groups: Sequence[FailureGroup]) -> Case:
     """Make a copy of the run in which only this group's tests failed.
 
     The passed tests, the logs, the versions and the run's totals stay, since they describe
@@ -138,18 +141,16 @@ def focus(run: SavedRun, group: FailureGroup, groups: Sequence[FailureGroup]) ->
         The focused run, which the usual pipeline triages like any other.
     """
     kept = set(group.tests)
-    results = dict(run.results)
-    results["tests"] = [
-        test
-        for test in run.results.get("tests", [])
-        if test["outcome"] == "passed" or test["id"] in kept
-    ]
-    results[FOCUS_KEY] = {
-        "tests": len(group.tests),
-        "others": [other.description for other in groups if other != group],
-    }
-    sequence = [line for line in run.sequence if _keeps_sequence_line(line, group)]
-    return replace(run, results=results, sequence=sequence)
+    return replace(
+        run,
+        items=tuple(item for item in run.items if not item.failed or item.id in kept),
+        steps=tuple(
+            step
+            for step in run.steps
+            if not step.failed or group.step == (step.action, step.target)
+        ),
+        focus=Focus(len(group.tests), tuple(o.description for o in groups if o != group)),
+    )
 
 
 @dataclass(frozen=True)
@@ -187,8 +188,8 @@ class RunTriage:
 
 
 def triage_failures(
-    run: SavedRun,
-    answer: Callable[[SavedRun], Verdict],
+    run: Case,
+    answer: Callable[[Case], Verdict],
     limit: int = DEFAULT_MAX_FAILURES,
 ) -> RunTriage:
     """Triage each distinct failure in a run, up to the cap.
@@ -213,22 +214,26 @@ def triage_failures(
     return RunTriage(
         answers=answers,
         untriaged=groups[limit:],
-        failed_tests=len(failed_tests(run)),
+        failed_tests=len(run.failed_items),
         distinct_failures=len(groups),
         limit=limit,
     )
 
 
-def triage_like_the_api(run: SavedRun, provider: LLMProvider, retriever: Retriever) -> Verdict:
+def triage_like_the_api(
+    run: Case, provider: LLMProvider, retriever: Retriever, pack: Pack = DEFAULT_PACK
+) -> Verdict:
     """Triage a run as the API does: past runs, the disagreement gate, the model, the checks.
 
     Args:
         run: The run, whole or focused on one failure.
         provider: The answering model.
         retriever: The source of past runs.
+        pack: The domain pack, which supplies the actions and the checks.
 
     Returns:
         The verdict, UNKNOWN when the gate or a check found no safe answer.
     """
     sources = retriever.similar_to(run, DEFAULT_TOP_K)
-    return triage_run(run, provider, FULL, sources, checks=DEFAULT_CHECKS, gates=SERVICE_GATES)
+    checks = DEFAULT_CHECKS if pack == DEFAULT_PACK else checks_for(pack)
+    return triage_run(run, provider, FULL, sources, checks=checks, gates=SERVICE_GATES, pack=pack)

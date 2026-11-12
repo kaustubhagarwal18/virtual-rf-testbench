@@ -1,0 +1,139 @@
+# The RF bench domain: what its failed runs can be caused by, and what an engineer does about
+# each. triage/pack.py reads it; docs/ADAPTING.md explains how to write one for your domain.
+#
+# Each action is chosen by its key. Where two act on the same hardware (CABLE and LINK), each
+# says first which symptom it answers, so the choice turns on what the evidence shows rather
+# than on which words a fix shares. UNKNOWN is added by the core, not listed here.
+
+name = "rf-bench"
+description = """You triage failed runs of an automated RF test bench: a signal generator
+and a spectrum analyzer joined by a cable, driven over SCPI by a pytest suite. A run fails
+because of the instrument firmware under test, the bench itself (cable, connectors,
+calibration, alignment), or the test code and its configuration."""
+categories = ["firmware", "bench", "test"]
+
+[[actions]]
+key = "CABLE"
+category = "bench"
+says = "signal present but attenuated: replace the cable and recalibrate"
+
+[[actions]]
+key = "LINK"
+category = "bench"
+says = "no signal or intermittent signal; the path is open: reconnect or reseat the link between the instruments"
+
+[[actions]]
+key = "ALIGNMENT"
+category = "bench"
+says = "run the instrument's self-alignment"
+
+[[actions]]
+key = "CONFIGURATION"
+category = "test"
+says = "correct the bench configuration"
+
+[[actions]]
+key = "TIMEOUT"
+category = "test"
+says = "raise the session timeout to the instrument's response time"
+
+[[actions]]
+key = "TEST_CLEANUP"
+category = "test"
+says = "fix the test's cleanup so it restores what it changed"
+
+[[actions]]
+key = "FIRMWARE"
+category = "firmware"
+says = "report a firmware regression and pin the previous release"
+
+# Facts: statements about a run that the checks read. Each is a kind the core provides
+# (triage/facts.py), given this domain's baselines, phrases and units.
+
+[facts.names_other_release]
+kind = "names_other_version"
+pattern = '\b\d+\.\d+\.\d+(?:-[0-9A-Za-z]+(?:\.[0-9A-Za-z]+)*)?\b'
+
+[facts.firmware_unchanged]
+kind = "versions_unchanged"
+baseline = "0.1.0"
+
+[facts.instrument_error]
+kind = "errors_reported"
+
+[facts.no_signal]
+kind = "log_contains"
+text = "No signal reaching the analyzer"
+
+[facts.level_reading_failed]
+kind = "reading_failed_in"
+units = ["dB", "dBm"]
+
+# Checks: an answer the evidence contradicts becomes UNKNOWN, in this order. A check never
+# picks another action in the model's place.
+
+[[checks]]
+# With retrieval, the model sometimes copies a past run's diagnosis whole, release included.
+name = "foreign-release"
+refuse = "FIRMWARE"
+when = "names_other_release"
+reason = "the model blamed release {mentioned}, but this run ran {ran}: the diagnosis belongs to another run"
+
+[[checks]]
+# A regression needs a release that changed; unrecorded versions are unknown, not unchanged.
+name = "firmware-unchanged"
+refuse = "FIRMWARE"
+when = "firmware_unchanged"
+reason = "the model chose FIRMWARE, but the firmware is unchanged since the last passing run, so a firmware regression is not what the evidence shows"
+
+[[checks]]
+# A slow instrument accepts the command; an SCPI error means it refused it.
+name = "timeout-with-instrument-error"
+refuse = "TIMEOUT"
+when = "instrument_error"
+reason = "the model chose TIMEOUT, but the instruments reported {error}: a rejected command, not a slow instrument"
+
+[[checks]]
+# Self-alignment can't bring back a signal that never arrives (ADR 0017).
+name = "alignment-without-signal"
+refuse = "ALIGNMENT"
+when = "no_signal"
+reason = "the model chose ALIGNMENT, but the analyzer logged that no signal reached it: self-alignment can't restore a missing signal"
+
+[[checks]]
+# An alignment error shifts levels, not frequencies (ADR 0020).
+name = "alignment-without-level-reading"
+refuse = "ALIGNMENT"
+unless = "level_reading_failed"
+reason = "the model chose ALIGNMENT, but no level or power reading is out of limits in this failure: an alignment error shifts levels, not frequencies"
+
+[facts.only_other_readings_failed]
+kind = "readings_failed_only_outside"
+units = ["dB", "dBm"]
+
+# How the evidence words this domain's things. A versions line that compares with the
+# baseline doesn't say "firmware" when nothing changed: ADR 0013's ablation found that
+# "Firmware: ... (unchanged ...)" pulled the model to FIRMWARE on a run that ruled it out.
+
+[evidence]
+versions_fact = "firmware_unchanged"
+versions_unrecorded = "Firmware: not recorded, so whether it changed since the last passing run is unknown."
+versions_unchanged = "Instruments: {versions}, the same as the last passing run."
+versions_changed = "Firmware: {versions} (changed since the last passing run)."
+errors = "Instrument error: {errors}, reported by {reporting} of {failed} failed tests."
+logs = "Instrument logs"
+
+[[evidence.notes]]
+# Stated before the first failure: a model read a disconnected cable's 110 dB path loss as
+# calibration until the logs' fact was stated outright (ADR 0017).
+name = "no_signal"
+fact = "no_signal"
+place = "lead"
+say = 'No signal: the analyzer logged "No signal reaching the analyzer" {times}.'
+
+[[evidence.notes]]
+# Another failure's level warning in the shared logs is not this failure's cause (ADR 0020).
+name = "no_level_reading"
+fact = "only_other_readings_failed"
+place = "focus"
+say = "No level or power reading is out of limits in this failure."

@@ -91,7 +91,7 @@ def render(results: Sequence[ScenarioResult], model: str) -> str:
         for outcome in result.outcomes:
             mark = "ok  " if outcome.right else "MISS"
             lines.append(
-                f"  {mark} {outcome.question:34} expected {outcome.expected.name:13} "
+                f"  {mark} {outcome.question:34} expected {outcome.expected.key:13} "
                 f"chose {outcome.chosen}"
             )
         if result.wrong_choices:
@@ -136,7 +136,7 @@ def _report_rows(result: ScenarioResult) -> list[str]:
         precedent = f" {'yes' if outcome.precedent_offered else 'no'} |" if retrieves else ""
         detail = f"`{clip(outcome.error, 90)}` -> {clip(outcome.answer, 130)}"
         lines.append(
-            f"| {outcome.question} | {outcome.expected.name} | {outcome.chosen} | "
+            f"| {outcome.question} | {outcome.expected.key} | {outcome.chosen} | "
             f"{_mark(outcome)} |{precedent} {detail} |"
         )
     if result.wrong_choices:
@@ -213,7 +213,7 @@ def _fault_table(results: Sequence[ScenarioResult]) -> list[str]:
     """
     header = " | ".join(result.name for result in results)
     lines = [f"| Fault | Expected | {header} |", "|---|---|" + "---|" * len(results)]
-    expected = {outcome.fault: outcome.expected.name for outcome in results[0].outcomes}
+    expected = {outcome.fault: outcome.expected.key for outcome in results[0].outcomes}
     for fault in results[0].by_fault:
         counts = [result.by_fault.get(fault, (0, 0)) for result in results]
         cells = " | ".join(f"{right}/{asked}" for right, asked in counts)

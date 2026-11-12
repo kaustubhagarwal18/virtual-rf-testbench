@@ -9,7 +9,7 @@ import pytest
 
 from tools.fault_run import LOG_LINES_KEPT
 from tools.save_failed_run import main, save_failed_run
-from triage.evidence import SavedRun
+from triage.bench_run import load_case
 
 RESULTS = {"totals": {"failed": 1, "error": 0}, "tests": [], "exit_status": 1}
 
@@ -36,7 +36,7 @@ def test_the_saved_run_has_results_logs_and_sequence_but_no_label(tmp_path: Path
     assert (out / "sequence.log").read_text(encoding="utf-8") == "*RST\n*OPC?\n"
     assert (out / "logs.txt").read_text(encoding="utf-8").splitlines()[0] == "generator-1 | line 0"
     assert not (out / "label.json").exists()
-    assert SavedRun.load(out).results == RESULTS
+    assert load_case(out).context.totals == RESULTS["totals"]
 
 
 @pytest.mark.parametrize("log_lines", [0, 1, LOG_LINES_KEPT, LOG_LINES_KEPT + 1, 2000])
