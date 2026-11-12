@@ -801,3 +801,15 @@ def test_a_retrieval_outcome_records_whose_fixes_were_quoted(tmp_path: Path) -> 
         retriever,
     )[0]
     assert result.outcomes[0].sources.quoted_faults == ("cable_loss",)
+
+
+def test_main_reports_a_malformed_question_in_one_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A broken case.json among the questions stops the evaluation with one line naming it."""
+    broken = tmp_path / "questions" / "batch-1"
+    broken.mkdir(parents=True)
+    (broken / "case.json").write_text("{", encoding="utf-8")
+    arguments = ["--questions", str(tmp_path / "questions"), "--scenario", "error only"]
+    assert main(arguments, FakeProvider([])) == 1
+    assert "case.json" in capsys.readouterr().out

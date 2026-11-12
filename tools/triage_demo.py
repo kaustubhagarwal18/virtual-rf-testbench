@@ -16,7 +16,7 @@ from pathlib import Path
 
 from triage.answer import VERDICT_SCHEMA, MalformedAnswerError, past_fix_lines
 from triage.bench_run import load_case
-from triage.case import Case
+from triage.case import Case, CaseError
 from triage.evaluate import expected_fix
 from triage.evidence import FULL, error_only_evidence
 from triage.label import load_label
@@ -202,7 +202,8 @@ def main(
 
     Returns:
         0 when the demo ran; 1 when the model or embedder could not be reached, or the run,
-        its label, or the history folder is missing or names a fault with no known fix.
+        its label, or the history folder is missing, malformed or names a fault with no
+        known fix.
     """
     parser = argparse.ArgumentParser(
         prog="python -m tools.triage_demo",
@@ -224,7 +225,7 @@ def main(
         result = run_demo(
             run, provider, retriever if retriever is not None else history_index(parsed.history)
         )
-    except (ModelUnavailableError, FileNotFoundError, KeyError) as error:
+    except (ModelUnavailableError, FileNotFoundError, KeyError, CaseError) as error:
         sys.stdout.write(f"{error}\n")
         return 1
     sys.stdout.write(render(result))

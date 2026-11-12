@@ -266,3 +266,14 @@ def test_the_report_says_which_cited_run_each_fix_came_from(tmp_path: Path) -> N
     report = render(run_demo(cable_run(tmp_path), provider, StubRetriever(*sources)))
     assert "last time: Replaced the cable (past-a)" in report
     assert "last time: Reseated the connector (past-b)" in report
+
+
+def test_main_reports_a_malformed_case_in_one_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A case.json that isn't JSON is one line naming the file and exit 1, not a traceback."""
+    (tmp_path / "case.json").write_text("{", encoding="utf-8")
+    assert main([str(tmp_path)], FakeProvider([]), demo_retriever()) == 1
+    output = capsys.readouterr().out
+    assert "case.json" in output
+    assert len(output.strip().splitlines()) == 1

@@ -29,7 +29,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from triage.abstain import SERVICE_GATES, SourceGate
 from triage.answer import VERDICT_SCHEMA, MalformedAnswerError
 from triage.bench_run import case_from_bench
-from triage.case import Case
+from triage.case import Case, CaseError
 from triage.checks import DEFAULT_CHECKS, VerdictCheck
 from triage.llm import DEFAULT_MODEL, LLMProvider, ModelUnavailableError, OllamaProvider
 from triage.retrieval import (
@@ -460,7 +460,7 @@ def main(arguments: Sequence[str] | None = None, serve: Any = None) -> int:
             return 1
         try:
             history = history_index(parsed.history)
-        except ModelUnavailableError as error:
+        except (ModelUnavailableError, CaseError, FileNotFoundError) as error:
             sys.stdout.write(f"{error}\n")
             return 1
     provider = OllamaProvider(model=parsed.model, response_format=VERDICT_SCHEMA)

@@ -371,3 +371,14 @@ def test_the_verdict_states_its_category_and_what_fixed_a_cited_run() -> None:
     body = client.post("/triage", json={"results": RESULTS}).json()
     assert body["category"] == "bench"
     assert body["past_fixes"] == [{"source_id": source_id, "fix_applied": "replaced it"}]
+
+
+def test_main_reports_a_malformed_history_case_in_one_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A broken case.json in the history stops start-up with one line naming it."""
+    broken = tmp_path / "history" / "batch-1"
+    broken.mkdir(parents=True)
+    (broken / "case.json").write_text("{", encoding="utf-8")
+    assert main(["--history", str(tmp_path / "history")], lambda *_, **__: None) == 1
+    assert "case.json" in capsys.readouterr().out

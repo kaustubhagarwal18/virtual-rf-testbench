@@ -26,7 +26,7 @@ from pathlib import Path
 from triage.abstain import DEFAULT_GATES
 from triage.answer import VERDICT_SCHEMA, MalformedAnswerError, Verdict
 from triage.bench_run import load_case
-from triage.case import Case
+from triage.case import Case, CaseError
 from triage.checks import DEFAULT_CHECKS
 from triage.evidence import (
     ERROR_ONLY,
@@ -334,7 +334,7 @@ def main(
             history runs with the Ollama embedder when a retrieval scenario is selected.
 
     Returns:
-        0 when it ran, 1 if a model wasn't reachable.
+        0 when it ran, 1 if a model wasn't reachable or a run couldn't be read.
     """
     parser = argparse.ArgumentParser(
         prog="python -m triage.evaluate", description="Score triage against the question runs."
@@ -374,7 +374,7 @@ def main(
         if retriever is None and any(scenario.retrieve for scenario in scenarios):
             retriever = history_index(parsed.history)  # pragma: no cover - needs Ollama
         results = evaluate(parsed.questions, provider, scenarios, retriever)
-    except ModelUnavailableError as error:
+    except (ModelUnavailableError, CaseError, FileNotFoundError) as error:
         sys.stdout.write(f"{error}\n")
         return 1
     model = str(getattr(provider, "model", DEFAULT_MODEL))
