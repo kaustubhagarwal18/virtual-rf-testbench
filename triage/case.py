@@ -270,9 +270,11 @@ def case_from_dict(raw: dict[str, Any], folder: Path) -> Case:
         The case.
 
     Raises:
-        CaseError: If the file declares another format, or a field is wrong; the message
-            names the file.
+        CaseError: If the file isn't one object, declares another format, or a field is
+            missing, of the wrong shape or not a JSON boolean; the message names the file.
     """
+    if not isinstance(raw, dict):
+        raise CaseError(f"{folder / CASE_FILE}: must hold one JSON object")
     if raw.get("format") != CASE_FORMAT:
         raise CaseError(
             f"{folder / CASE_FILE} declares format {raw.get('format')!r}, not {CASE_FORMAT!r}"
@@ -281,6 +283,10 @@ def case_from_dict(raw: dict[str, Any], folder: Path) -> Case:
         return _case(raw, folder)
     except CaseError as error:
         raise CaseError(f"{folder / CASE_FILE}: {error}") from error
+    except KeyError as error:
+        raise CaseError(f"{folder / CASE_FILE}: a required field is missing: {error}") from error
+    except (TypeError, AttributeError, ValueError) as error:
+        raise CaseError(f"{folder / CASE_FILE}: a field has the wrong shape: {error}") from error
 
 
 def _case(raw: dict[str, Any], folder: Path) -> Case:

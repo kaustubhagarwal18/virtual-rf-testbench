@@ -247,3 +247,14 @@ def test_main_reports_a_case_it_cant_read_in_one_line(
     assert main([str(tmp_path)], provider) == 1
     assert len(capsys.readouterr().out.strip().splitlines()) == 1
     assert not provider.prompts
+
+
+def test_main_reports_invalid_json_in_one_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A case.json that isn't JSON is one line naming the file, not a traceback."""
+    (tmp_path / "case.json").write_text("{", encoding="utf-8")
+    assert main([str(tmp_path)], FakeProvider([])) == 1
+    output = capsys.readouterr().out
+    assert "case.json" in output
+    assert len(output.strip().splitlines()) == 1

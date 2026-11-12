@@ -125,3 +125,40 @@ def test_a_flag_that_isnt_a_json_boolean_is_refused(tmp_path: Path, raw: dict[st
     """'false' as text is true in Python; a producer's mistake must not flip a result."""
     with pytest.raises(CaseError, match="true or false"):
         case_from_dict({"format": "triage-case/1", **raw}, tmp_path)
+
+
+BROKEN_CASES = {
+    "not JSON": "{",
+    "not an object": "[]",
+    "an item without an id": '{"format": "triage-case/1", "items": [{"outcome": "failed"}]}',
+    "items as an object": '{"format": "triage-case/1", "items": {"id": "a"}}',
+    "a reading as text": (
+        '{"format": "triage-case/1", "items": [{"id": "a", "outcome": "failed", '
+        '"readings": ["3 EUR"]}]}'
+    ),
+    "a step as a number": (
+        '{"format": "triage-case/1", "items": [{"id": "a", "outcome": "failed"}], "steps": [3]}'
+    ),
+}
+"""case.json files with one structural mistake each."""
+
+
+@pytest.mark.parametrize("problem", sorted(BROKEN_CASES))
+def test_a_malformed_case_json_is_a_case_error_naming_the_file(
+    tmp_path: Path, problem: str
+) -> None:
+    """Every structural mistake is one CaseError with the file in it, never a KeyError."""
+    (tmp_path / CASE_FILE).write_text(BROKEN_CASES[problem], encoding="utf-8")
+    with pytest.raises(CaseError, match=CASE_FILE) as refused:
+        load_case(tmp_path)
+    assert "\n" not in str(refused.value)
+
+
+@pytest.mark.parametrize("contents", ["{", '{"tests": [{"outcome": "failed"}]}', '{"tests": 3}'])
+def test_a_malformed_bench_results_file_is_a_case_error_naming_it(
+    tmp_path: Path, contents: str
+) -> None:
+    """A bench run's results file is held to the same rule."""
+    (tmp_path / RESULTS_FILE).write_text(contents, encoding="utf-8")
+    with pytest.raises(CaseError, match=RESULTS_FILE):
+        load_case(tmp_path)

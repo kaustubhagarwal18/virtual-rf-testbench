@@ -148,7 +148,7 @@ def main(arguments: Sequence[str] | None = None, embedder: Embedder | None = Non
     parser.add_argument("--history", type=Path, default=DEFAULT_HISTORY, help="history runs")
     parsed = parser.parse_args(arguments)
     try:
-        found = neighbours(parsed.history, embedder or OllamaEmbedder())
+        found = neighbours(parsed.history, embedder if embedder is not None else OllamaEmbedder())
         chosen = threshold(found)
     except (ModelUnavailableError, ValueError) as error:
         sys.stdout.write(f"{error}\n")

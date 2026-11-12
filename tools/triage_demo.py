@@ -214,10 +214,16 @@ def main(
         "--model", default=DEFAULT_MODEL, help=f"Ollama model to ask (default: {DEFAULT_MODEL})"
     )
     parsed = parser.parse_args(arguments)
-    provider = provider or OllamaProvider(model=parsed.model, response_format=VERDICT_SCHEMA)
+    provider = (
+        provider
+        if provider is not None
+        else OllamaProvider(model=parsed.model, response_format=VERDICT_SCHEMA)
+    )
     try:
         run = load_case(parsed.run)
-        result = run_demo(run, provider, retriever or history_index(parsed.history))
+        result = run_demo(
+            run, provider, retriever if retriever is not None else history_index(parsed.history)
+        )
     except (ModelUnavailableError, FileNotFoundError, KeyError) as error:
         sys.stdout.write(f"{error}\n")
         return 1

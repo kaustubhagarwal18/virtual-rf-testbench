@@ -137,7 +137,11 @@ def main(arguments: Sequence[str] | None = None, provider: LLMProvider | None = 
     except PackError as error:
         sys.stdout.write(f"{error}\n")
         return 1
-    provider = provider or OllamaProvider(response_format=verdict_schema(pack=pack))
+    provider = (
+        provider
+        if provider is not None
+        else OllamaProvider(response_format=verdict_schema(pack=pack))
+    )
     try:
         verdict = triage_run(
             load_case(parsed.run), provider, parsed.level, checks=checks_for(pack), pack=pack

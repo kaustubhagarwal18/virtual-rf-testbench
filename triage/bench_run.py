@@ -15,7 +15,17 @@ import re
 from pathlib import Path
 from typing import Any
 
-from triage.case import CASE_FILE, Case, Context, Item, LogLine, Reading, Step, case_from_dict
+from triage.case import (
+    CASE_FILE,
+    Case,
+    CaseError,
+    Context,
+    Item,
+    LogLine,
+    Reading,
+    Step,
+    case_from_dict,
+)
 
 RESULTS_FILE = "results.json"
 LOGS_FILE = "logs.txt"
@@ -174,6 +184,24 @@ def _lines(path: Path) -> list[str]:
     return path.read_text(encoding="utf-8").splitlines()
 
 
+def _json(path: Path) -> Any:
+    """Read a JSON file, turning a parse failure into a CaseError naming it.
+
+    Args:
+        path: The file.
+
+    Returns:
+        The parsed contents.
+
+    Raises:
+        CaseError: If the file isn't valid JSON.
+    """
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise CaseError(f"{path}: not valid JSON: {error.msg} at line {error.lineno}") from error
+
+
 def load_case(folder: Path) -> Case:
     """Open a saved case: case.json as it is, or a bench run through this adapter.
 
@@ -185,18 +213,24 @@ def load_case(folder: Path) -> Case:
 
     Raises:
         FileNotFoundError: If the folder has neither a case.json nor a results file.
+        CaseError: If the file there isn't valid JSON, or a bench results file is missing
+            a field or has one of the wrong shape; case.json's own mistakes are raised by
+            case_from_dict.
     """
     case_path = folder / CASE_FILE
     if case_path.exists():
-        return case_from_dict(json.loads(case_path.read_text(encoding="utf-8")), folder)
+        return case_from_dict(_json(case_path), folder)
     results_path = folder / RESULTS_FILE
     if not results_path.exists():
         raise FileNotFoundError(
             f"{folder} has no {CASE_FILE} or {RESULTS_FILE}: it isn't a saved case"
         )
-    return case_from_bench(
-        json.loads(results_path.read_text(encoding="utf-8")),
-        _lines(folder / LOGS_FILE),
-        _lines(folder / SEQUENCE_FILE),
-        folder,
-    )
+    results = _json(results_path)
+    try:
+        return case_from_bench(
+            results, _lines(folder / LOGS_FILE), _lines(folder / SEQUENCE_FILE), folder
+        )
+    except KeyError as error:
+        raise CaseError(f"{results_path}: a required field is missing: {error}") from error
+    except (TypeError, AttributeError, ValueError) as error:
+        raise CaseError(f"{results_path}: a field has the wrong shape: {error}") from error

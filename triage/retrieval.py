@@ -225,4 +225,6 @@ def history_index(
     Returns:
         The retriever, ready to search.
     """
-    return InMemoryRetriever.from_history(history, embedder or OllamaEmbedder(), pack)
+    return InMemoryRetriever.from_history(
+        history, embedder if embedder is not None else OllamaEmbedder(), pack
+    )

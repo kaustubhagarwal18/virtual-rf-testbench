@@ -7,6 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from tests.unit.tools.test_triage_demo import StubRetriever, UnreachableProvider
@@ -25,11 +26,12 @@ from tools.ci_triage import (
 )
 from triage.answer import PastFix, Verdict
 from triage.bench_run import load_case
+from triage.embed import FakeEmbedder
 from triage.failures import FailureAnswer, FailureGroup, RunTriage, triage_like_the_api
 from triage.llm import FakeProvider
 from triage.pack import DEFAULT_PACK, UNKNOWN, load_pack
 from triage.prompt import Source
-from triage.retrieval import DEFAULT_HISTORY
+from triage.retrieval import DEFAULT_HISTORY, InMemoryRetriever
 
 CABLE_REPLY = json.dumps(
     {
@@ -446,3 +448,25 @@ def test_the_history_is_the_one_given_or_the_rf_benchs_for_the_rf_pack(tmp_path:
     """--history wins; without it only the RF pack falls back to the RF history."""
     assert history_for(tmp_path, load_pack(write_pack(tmp_path, VALID))) == tmp_path
     assert history_for(None, DEFAULT_PACK) == DEFAULT_HISTORY
+
+
+def test_an_empty_retriever_given_is_used_not_replaced(tmp_path: Path) -> None:
+    """An empty index is still the one asked for: no history is loaded, nothing is embedded."""
+    folder = payments_case(tmp_path).folder
+    out = tmp_path / "triage.md"
+    embedder = FakeEmbedder()
+    empty = InMemoryRetriever([], np.zeros((0, 0)), embedder)
+    payment_reply = json.dumps(
+        {"fix": "REQUEST_FEED", "where": "the feed", "because": "short", "cited": []}
+    )
+    arguments = [str(folder), "--out", str(out), "--pack", str(write_pack(tmp_path, VALID))]
+    assert main(arguments, FakeProvider([payment_reply]), empty) == 0
+    assert not embedder.calls
+
+
+def test_invalid_json_in_the_case_is_a_problem_line(tmp_path: Path) -> None:
+    """A case.json that isn't JSON leaves a problem section naming it, not a traceback."""
+    (tmp_path / "case.json").write_text("{", encoding="utf-8")
+    out = tmp_path / "triage.md"
+    assert main([str(tmp_path), "--out", str(out)], FakeProvider([]), StubRetriever()) == 1
+    assert "case.json" in out.read_text(encoding="utf-8")

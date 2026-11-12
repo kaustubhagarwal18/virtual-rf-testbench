@@ -359,9 +359,13 @@ def main(
     )
     parser.add_argument("--no-cache", action="store_true", help="ask the model every prompt again")
     parsed = parser.parse_args(arguments)
-    provider = provider or CachingProvider(
-        OllamaProvider(model=parsed.model, response_format=VERDICT_SCHEMA),
-        None if parsed.no_cache else parsed.cache_dir,
+    provider = (
+        provider
+        if provider is not None
+        else CachingProvider(
+            OllamaProvider(model=parsed.model, response_format=VERDICT_SCHEMA),
+            None if parsed.no_cache else parsed.cache_dir,
+        )
     )
     chosen = parsed.scenario or names
     scenarios = [scenario for scenario in SCENARIOS if scenario.name in chosen]

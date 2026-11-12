@@ -298,11 +298,17 @@ def main(
     parsed = parser.parse_args(arguments)
     try:
         pack = load_pack(parsed.pack)
-        model = provider or OllamaProvider(
-            model=parsed.model, response_format=verdict_schema(pack=pack)
+        model = (
+            provider
+            if provider is not None
+            else OllamaProvider(model=parsed.model, response_format=verdict_schema(pack=pack))
         )
         run = load_case(parsed.run)
-        index = retriever or history_index(history_for(parsed.history, pack), pack=pack)
+        index = (
+            retriever
+            if retriever is not None
+            else history_index(history_for(parsed.history, pack), pack=pack)
+        )
         answer = partial(triage_like_the_api, provider=model, retriever=index, pack=pack)
         result = triage_failures(run, answer, parsed.max_failures)
         section, exit_code = render_triage(result), 0
