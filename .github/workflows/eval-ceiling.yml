@@ -3,12 +3,7 @@ name: Eval ceiling
 on:
   pull_request:
     types: [labeled]
-  workflow_dispatch:
-    inputs:
-      model:
-        description: "Ollama model tag to evaluate (e.g. qwen2.5:7b, qwen2.5:14b)"
-        required: true
-        default: "qwen2.5:7b"
+  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -20,25 +15,17 @@ env:
   EMBED_MODEL: "nomic-embed-text"
 
 jobs:
-  eval-ceiling:
-    name: "Eval: ${{ inputs.model || 'qwen2.5:7b' }}"
+  eval-3b:
+    name: "Eval: qwen2.5:3b"
     if: >-
       ${{ github.event_name == 'workflow_dispatch'
       || contains(github.event.pull_request.labels.*.name, 'eval-ceiling') }}
-    # Free runner: 7 GB RAM, tight for a 7B q4 model but no desktop competing for memory.
-    # If it times out or OOMs, switch to ubuntu-24.04-4core (16 GB, paid).
     runs-on: ubuntu-24.04
     continue-on-error: true
-    timeout-minutes: 60
+    timeout-minutes: 120
     env:
-      EVAL_MODEL: ${{ inputs.model || 'qwen2.5:7b' }}
+      EVAL_MODEL: "qwen2.5:3b"
     steps:
-      - name: Validate the model tag
-        run: |
-          if ! printf '%s' "$EVAL_MODEL" | grep -qxE '[a-z0-9._-]+([:/][a-z0-9._-]+)*'; then
-            echo "::error::EVAL_MODEL is not a valid Ollama model tag: $EVAL_MODEL"
-            exit 1
-          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -50,7 +37,6 @@ jobs:
           cache-python: true
       - name: Install dependencies from the lockfile
         run: uv sync --locked
-
       - name: Restore Ollama and its models
         id: ollama-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -83,8 +69,7 @@ jobs:
         run: |
           ~/ollama/bin/ollama pull "$EVAL_MODEL"
           ~/ollama/bin/ollama pull "$EMBED_MODEL"
-
-      - name: Run the full evaluation on the stronger model
+      - name: Run the evaluation
         run: >-
           make eval
           MODEL="$EVAL_MODEL"
@@ -98,7 +83,85 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: eval-ceiling-report
+          name: eval-ceiling-report-qwen2.5-3b
+          path: reports/eval-ceiling.md
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Ollama log, if anything failed
+        if: ${{ failure() }}
+        run: cat ollama.log
+
+  eval-7b:
+    name: "Eval: qwen2.5:7b"
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch'
+      || contains(github.event.pull_request.labels.*.name, 'eval-ceiling') }}
+    # 7 GB RAM on the free runner is tight for 7b q4; 2h timeout gives it room.
+    # If it OOMs consistently, switch to ubuntu-24.04-4core (16 GB, paid).
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    timeout-minutes: 120
+    env:
+      EVAL_MODEL: "qwen2.5:7b"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+          cache-python: true
+      - name: Install dependencies from the lockfile
+        run: uv sync --locked
+      - name: Restore Ollama and its models
+        id: ollama-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/ollama
+            ~/.ollama/models
+          key: ollama-${{ env.OLLAMA_VERSION }}-${{ env.EVAL_MODEL }}-${{ env.EMBED_MODEL }}
+      - name: Install Ollama (pinned version, checksum verified, CPU libraries only)
+        if: ${{ steps.ollama-cache.outputs.cache-hit != 'true' }}
+        run: |
+          archive=ollama-linux-amd64.tar.zst
+          curl -sSfL -o "$archive" \
+            "https://github.com/ollama/ollama/releases/download/v${OLLAMA_VERSION}/${archive}"
+          echo "${OLLAMA_SHA256}  ${archive}" | sha256sum --check --strict
+          mkdir -p ~/ollama
+          tar --zstd -xf "$archive" -C ~/ollama \
+            --exclude='lib/ollama/cuda_*' --exclude='lib/ollama/rocm*' --exclude='lib/ollama/vulkan*'
+          rm "$archive"
+      - name: Start Ollama on localhost
+        run: |
+          ~/ollama/bin/ollama serve > ollama.log 2>&1 &
+          for attempt in $(seq 30); do
+            curl -sf http://127.0.0.1:11434/api/version > /dev/null && exit 0
+            sleep 1
+          done
+          echo "Ollama didn't answer on 127.0.0.1:11434 within 30 s"; cat ollama.log; exit 1
+      - name: Pull the models
+        if: ${{ steps.ollama-cache.outputs.cache-hit != 'true' }}
+        run: |
+          ~/ollama/bin/ollama pull "$EVAL_MODEL"
+          ~/ollama/bin/ollama pull "$EMBED_MODEL"
+      - name: Run the evaluation
+        run: >-
+          make eval
+          MODEL="$EVAL_MODEL"
+          EVAL_REPORT="reports/eval-ceiling.md"
+      - name: Evaluation summary on the run page
+        if: ${{ !cancelled() && hashFiles('reports/eval-ceiling.md') != '' }}
+        run: |
+          echo "## Eval ceiling: \`$EVAL_MODEL\`" >> "$GITHUB_STEP_SUMMARY"
+          cat reports/eval-ceiling.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Keep the report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: eval-ceiling-report-qwen2.5-7b
           path: reports/eval-ceiling.md
           if-no-files-found: warn
           retention-days: 30
