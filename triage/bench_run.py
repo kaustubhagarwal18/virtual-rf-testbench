@@ -17,6 +17,7 @@ from typing import Any
 
 from triage.case import (
     CASE_FILE,
+    OUTCOMES,
     Case,
     CaseError,
     Context,
@@ -115,10 +116,18 @@ def _item(test: dict[str, Any]) -> Item:
 
     Returns:
         The item, with its SCPI errors and measurements.
+
+    Raises:
+        CaseError: If the outcome isn't one of the known values.
     """
+    outcome = str(test["outcome"])
+    if outcome not in OUTCOMES:
+        raise CaseError(
+            f"item {test.get('id', '?')!r} has outcome {outcome!r}; expected one of {OUTCOMES}"
+        )
     return Item(
         id=str(test["id"]),
-        outcome=str(test["outcome"]),
+        outcome=outcome,
         message=str(test.get("message", "")),
         errors=tuple(str(error) for error in test.get("instrument_errors", [])),
         readings=tuple(

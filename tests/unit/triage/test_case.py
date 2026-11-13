@@ -174,6 +174,17 @@ def test_a_misspelt_outcome_is_refused(tmp_path: Path, outcome: str) -> None:
         case_from_dict(raw, tmp_path)
 
 
+@pytest.mark.parametrize("outcome", ["pas sed", "PASSED", "fail", "Skipped", ""])
+def test_a_misspelt_outcome_in_a_bench_results_file_is_refused(
+    tmp_path: Path, outcome: str
+) -> None:
+    """The bench-results path validates outcomes the same way as case.json."""
+    results = {"tests": [{"id": "t1", "outcome": outcome}]}
+    (tmp_path / RESULTS_FILE).write_text(json.dumps(results), encoding="utf-8")
+    with pytest.raises(CaseError, match="outcome"):
+        load_case(tmp_path)
+
+
 def test_every_known_outcome_is_accepted(tmp_path: Path) -> None:
     """All four known outcomes load without error."""
     items = [{"id": f"item-{i}", "outcome": outcome} for i, outcome in enumerate(OUTCOMES)]
