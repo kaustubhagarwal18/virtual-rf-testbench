@@ -399,7 +399,11 @@ def _answerer(scenario: Scenario) -> str:
     Returns:
         'the vote' when the precedents' majority vote answered, otherwise 'the model'.
     """
-    return "the vote" if scenario.vote else "the model"
+    if scenario.vote:
+        return "the vote"
+    if scenario.rules:
+        return "the rules"
+    return "the model"
 
 
 def _settings(scenario: Scenario) -> tuple[object, ...]:
@@ -411,7 +415,13 @@ def _settings(scenario: Scenario) -> tuple[object, ...]:
     Returns:
         Its evidence level, precedents, checks, gates and who answers.
     """
-    return (scenario.level, scenario.precedents, scenario.checked, scenario.gated, scenario.vote)
+    return (
+        scenario.level,
+        scenario.precedents,
+        scenario.checked,
+        scenario.gated,
+        scenario.answerer,
+    )
 
 
 def _gate_findings(results: Sequence[ScenarioResult]) -> list[str]:

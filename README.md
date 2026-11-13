@@ -40,10 +40,14 @@ test is wrong, and what fixed a similar failure last time is often in someone's 
 project builds a simulated RF bench, a 20-test regression suite with limits and margins,
 and thirteen faults injected on purpose, so every failure has a known cause. A triage
 assistant, running locally, names the cause and quotes what fixed the most similar past
-failures. From a run's own evidence it names the right fix for **8 of 13 faults**; with past
-runs and behind its safety gate it solves **9 with no wrong answers**. A majority vote over
-the retrieved past runs solves 12 but answers the last one wrong: on this data set,
-retrieval does most of the work, and the gate is what keeps it from being confidently wrong.
+failures. With no evidence at all, a rules-only baseline answers UNKNOWN on every fault:
+the floor is 0 of 13. From a run's own evidence it names the right fix for **8 of 13 faults**;
+applying checks alone to that evidence doesn't solve more faults but converts wrong answers
+to UNKNOWN, so the floor is safer. With past runs and behind its safety gate it solves **9
+with no wrong answers**. A majority vote over the retrieved past runs solves 12 but answers
+the last one wrong: on this data set, retrieval does most of the work, and the gate is what
+keeps it from being confidently wrong. `qwen2.5:7b` matches `qwen2.5:3b`'s ceiling at
+12 of 13: a larger model does not help once retrieval is in place.
 
 ## 1 · Method
 

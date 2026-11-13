@@ -605,7 +605,7 @@ def test_every_vote_scenario_is_the_twin_of_a_model_scenario() -> None:
         twin = by_name[scenario.adds_to]
         assert not twin.vote
         assert scenario.retrieve
-        assert replace(scenario, name=twin.name, vote=False, adds_to=twin.adds_to) == twin
+        assert replace(scenario, name=twin.name, answerer="model", adds_to=twin.adds_to) == twin
 
 
 def test_the_vote_scenario_scores_the_precedents_action_without_the_model(tmp_path: Path) -> None:
@@ -617,7 +617,7 @@ def test_the_vote_scenario_scores_the_precedents_action_without_the_model(tmp_pa
     question(tmp_path / "q" / "cable_loss-1", "cable_loss")
     retriever = InMemoryRetriever.from_history(history, FakeEmbedder())
     provider = FakeProvider([verdict(DEFAULT_PACK.action("LINK"))])
-    vote = Scenario("vote", FULL, precedents=Precedents.ALL, vote=True)
+    vote = Scenario("vote", FULL, precedents=Precedents.ALL, answerer="vote")
     outcome = evaluate(tmp_path / "q", provider, [vote], retriever)[0].outcomes[0]
     assert (outcome.right, outcome.chosen) == (True, "CABLE")
     assert outcome.answer.startswith("CABLE by majority vote, model not asked")
@@ -633,7 +633,7 @@ def test_a_tied_vote_is_unknown_not_malformed(tmp_path: Path) -> None:
     history_resolved_by(history / "slow_responses-1", "slow_responses", "TIMEOUT")
     question(tmp_path / "q" / "cable_loss-1", "cable_loss")
     retriever = InMemoryRetriever.from_history(history, FakeEmbedder())
-    vote = Scenario("vote", FULL, precedents=Precedents.ALL, vote=True)
+    vote = Scenario("vote", FULL, precedents=Precedents.ALL, answerer="vote")
     result = evaluate(tmp_path / "q", FakeProvider(), [vote], retriever)[0]
     assert (result.abstained, result.malformed, result.confidently_wrong) == (1, 0, 0)
 
@@ -675,7 +675,7 @@ def test_the_gate_finding_compares_a_vote_with_its_ungated_vote(tmp_path: Path) 
     question(tmp_path / "q" / "cable_loss-1", "cable_loss")
     retriever = InMemoryRetriever.from_history(history, FakeEmbedder())
     model_gated = Scenario("model gated", FULL, precedents=Precedents.ALL, checked=True, gated=True)
-    vote = Scenario("vote", FULL, precedents=Precedents.ALL, checked=True, vote=True)
+    vote = Scenario("vote", FULL, precedents=Precedents.ALL, checked=True, answerer="vote")
     vote_gated = replace(vote, name="vote gated", gated=True, adds_to="model gated")
     results = evaluate(tmp_path / "q", FakeProvider(), [model_gated, vote, vote_gated], retriever)
     assert results[1].confidently_wrong == 1
@@ -690,7 +690,9 @@ def test_the_held_out_finding_names_the_vote_when_it_answered(tmp_path: Path) ->
     history_resolved_by(history / "slow_responses-1", "slow_responses", "TIMEOUT")
     question(tmp_path / "q" / "cable_loss-1", "cable_loss")
     retriever = InMemoryRetriever.from_history(history, FakeEmbedder())
-    held_out = Scenario("vote held out", FULL, precedents=Precedents.OWN_FAULT_HELD_OUT, vote=True)
+    held_out = Scenario(
+        "vote held out", FULL, precedents=Precedents.OWN_FAULT_HELD_OUT, answerer="vote"
+    )
     result = evaluate(tmp_path / "q", FakeProvider(), [held_out], retriever)[0]
     text = " ".join(findings([result]))
     assert "the vote said UNKNOWN 0 times and named a wrong action 1 times" in text
@@ -813,3 +815,39 @@ def test_main_reports_a_malformed_question_in_one_line(
     arguments = ["--questions", str(tmp_path / "questions"), "--scenario", "error only"]
     assert main(arguments, FakeProvider([])) == 1
     assert "case.json" in capsys.readouterr().out
+
+
+RULES_SCENARIOS = [scenario for scenario in SCENARIOS if scenario.rules]
+"""The scenarios answered by the check rules alone, with no model and no history."""
+
+
+def test_every_rules_scenario_is_the_twin_of_a_checked_model_scenario() -> None:
+    """A rules scenario changes one thing in the one it names: the rules replace the model."""
+    by_name = {scenario.name: scenario for scenario in SCENARIOS}
+    assert RULES_SCENARIOS
+    for scenario in RULES_SCENARIOS:
+        twin = by_name[scenario.adds_to]
+        assert not twin.rules
+        assert twin.checked
+        assert replace(scenario, name=twin.name, answerer="model", adds_to=twin.adds_to) == twin
+
+
+def test_the_rules_scenario_answers_without_the_model(tmp_path: Path) -> None:
+    """The rules-only scenario decides from the checks alone; the model is never asked."""
+    question(tmp_path / "q" / "cable_loss-1", "cable_loss")
+    provider = FakeProvider([verdict(DEFAULT_PACK.action("CABLE"))])
+    rules = Scenario("rules only", FULL, checked=True, answerer="rules")
+    result = evaluate(tmp_path / "q", provider, [rules])[0]
+    assert result.total == 1
+    assert not provider.prompts
+
+
+def test_the_checked_scenario_without_retrieval_exists() -> None:
+    """The 'full + checks' scenario sits between 'full evidence' and 'full + retrieval'."""
+    names = [scenario.name for scenario in SCENARIOS]
+    assert "full + checks" in names
+    by_name = {scenario.name: scenario for scenario in SCENARIOS}
+    checked = by_name["full + checks"]
+    assert checked.checked
+    assert not checked.retrieve
+    assert checked.adds_to == "full evidence"

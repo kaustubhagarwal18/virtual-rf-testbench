@@ -21,6 +21,7 @@ turn an answer into `UNKNOWN` or refuse it, never pick a different action.
 | **Strict parser** | anything unusable is counted as malformed, never read generously | none in the current run; 3 `link_down` replies before ADR 0017 |
 | **Disagreement gate** | top 3 past runs resolved different ways → `UNKNOWN`, model not asked | wrong answers 3 → 0, at a cost of 6 right ones |
 | **Checks** | `FIRMWARE` on a release the run didn't run, or on unchanged firmware; `TIMEOUT` beside an SCPI error; `ALIGNMENT` when the analyzer logged no signal | turned 3 wrong answers into `UNKNOWN`, cost none |
+| **Rules-only baseline** | the five checks applied with no evidence and no model: every answer is `UNKNOWN` | 0 of 13 faults solved — the controlled floor |
 
 ## Results
 
@@ -70,6 +71,21 @@ Every question's answer is in [`triage/results/rag.md`](../triage/results/rag.md
   says so.
 - **Two ideas didn't pay off:** leading the evidence with the SCPI error changed no score,
   and a similarity threshold gave up 6 right answers to prevent 3 wrong ones.
+- **Checks alone reduce wrong answers without solving more faults.** The "full + checks"
+  scenario — full evidence plus the five rule checks, no retrieval — solves 8 of 13 (same
+  as full evidence) but converts several wrong answers to `UNKNOWN`. The check that refuses
+  `TIMEOUT` beside a confirmed SCPI error catches `output_command_change`, turning 3 wrong
+  `TIMEOUT` answers into `UNKNOWN`; the fault still isn't solved because a correct answer
+  would need `FIRMWARE`.
+- **A rules-only baseline confirms the floor.** With no evidence passed to the model, only
+  the five checks applied, every question returns `UNKNOWN`: 0 of 13 faults, 0 of 39
+  questions, 0 wrong answers. This is the controlled baseline; any evidence scenario that
+  scores below it has introduced a regression.
+- **A larger model doesn't help at the ceiling.** `qwen2.5:7b` in CI matches `qwen2.5:3b`
+  on every retrieval scenario: 11 of 13 with retrieval and checks, 12 of 13 by majority
+  vote. It is marginally better without retrieval on some scenarios (6 of 13 at error-only
+  vs 5) but not consistently. The ceiling at 12 of 13 appears to be a data-set limit, not a
+  model-capacity limit.
 
 ## How the evaluation got more honest
 
@@ -85,3 +101,4 @@ Each review found a way the score could flatter the assistant, and closed it.
 | [0015](adr/0015-majority-vote-baseline.md) | a majority vote over the same past runs, with no model, as a baseline | 6 of 9; the vote 9 of 9 |
 | [0017](adr/0017-no-signal-line-and-alignment-check.md) | a "No signal" line in the evidence; `ALIGNMENT` without a signal becomes `UNKNOWN` | 6 of 9; without past runs 7 of 9 |
 | [0019](adr/0019-quote-same-action-fixes-and-four-new-faults.md) | quote every offered run with the verdict's action; score citations; four new faults, 13 in all | 11 of 13; behind the gate 9, all quoting their own fault's fix |
+| [0024](adr/0024-rules-baseline-checks-scenario-and-eval-ceiling-ci.md) | rules-only baseline (0/13 floor); full + checks scenario (checks without retrieval); three case-loader bug fixes; CI eval-ceiling on `qwen2.5:3b` and `qwen2.5:7b` | 7b matches 3b ceiling at 12/13; checks alone don't add faults |
