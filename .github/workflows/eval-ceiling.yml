@@ -1,6 +1,8 @@
 name: Eval ceiling
 
 on:
+  pull_request:
+    types: [labeled]
   workflow_dispatch:
     inputs:
       model:
@@ -19,12 +21,17 @@ env:
 
 jobs:
   eval-ceiling:
-    name: "Eval: ${{ inputs.model }}"
+    name: "Eval: ${{ inputs.model || 'qwen2.5:7b' }}"
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch'
+      || contains(github.event.pull_request.labels.*.name, 'eval-ceiling') }}
     # Free runner: 7 GB RAM, tight for a 7B q4 model but no desktop competing for memory.
     # If it times out or OOMs, switch to ubuntu-24.04-4core (16 GB, paid).
     runs-on: ubuntu-24.04
     continue-on-error: true
     timeout-minutes: 60
+    env:
+      EVAL_MODEL: ${{ inputs.model || 'qwen2.5:7b' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -45,7 +52,7 @@ jobs:
           path: |
             ~/ollama
             ~/.ollama/models
-          key: ollama-${{ env.OLLAMA_VERSION }}-${{ inputs.model }}-${{ env.EMBED_MODEL }}
+          key: ollama-${{ env.OLLAMA_VERSION }}-${{ env.EVAL_MODEL }}-${{ env.EMBED_MODEL }}
       - name: Install Ollama (pinned version, checksum verified, CPU libraries only)
         if: ${{ steps.ollama-cache.outputs.cache-hit != 'true' }}
         run: |
@@ -68,18 +75,18 @@ jobs:
       - name: Pull the models
         if: ${{ steps.ollama-cache.outputs.cache-hit != 'true' }}
         run: |
-          ~/ollama/bin/ollama pull "${{ inputs.model }}"
+          ~/ollama/bin/ollama pull "$EVAL_MODEL"
           ~/ollama/bin/ollama pull "$EMBED_MODEL"
 
       - name: Run the full evaluation on the stronger model
         run: >-
           make eval
-          MODEL="${{ inputs.model }}"
+          MODEL="$EVAL_MODEL"
           EVAL_REPORT="reports/eval-ceiling.md"
       - name: Evaluation summary on the run page
         if: ${{ !cancelled() && hashFiles('reports/eval-ceiling.md') != '' }}
         run: |
-          echo "## Eval ceiling: \`${{ inputs.model }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Eval ceiling: \`$EVAL_MODEL\`" >> "$GITHUB_STEP_SUMMARY"
           cat reports/eval-ceiling.md >> "$GITHUB_STEP_SUMMARY"
       - name: Keep the report
         if: ${{ !cancelled() }}
