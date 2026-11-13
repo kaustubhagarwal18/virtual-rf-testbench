@@ -210,8 +210,8 @@ def selection_note(run: Case) -> str:
         return ""
     totals = run.context.totals
     return (
-        f"Tests: {selection['selected']} of {selection['collected']} selected"
-        f" ({selection['deselected']} deselected); {totals.get('passed', 0)} passed,"
+        f"Tests: {selection.get('selected', '?')} of {selection.get('collected', '?')} selected"
+        f" ({selection.get('deselected', '?')} deselected); {totals.get('passed', 0)} passed,"
         f" {totals.get('failed', 0)} failed, {totals.get('error', 0)} errored."
     )
 

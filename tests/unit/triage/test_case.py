@@ -8,8 +8,10 @@ import pytest
 from triage.bench_run import RESULTS_FILE, load_case
 from triage.case import (
     CASE_FILE,
+    OUTCOMES,
     Case,
     CaseError,
+    Context,
     Item,
     LogLine,
     Reading,
@@ -18,7 +20,7 @@ from triage.case import (
     case_to_dict,
     save_case,
 )
-from triage.evidence import EVALUATED_LEVELS, build_evidence, first_failure
+from triage.evidence import EVALUATED_LEVELS, build_evidence, first_failure, selection_note
 
 RECORDED = sorted(
     folder
@@ -83,13 +85,13 @@ def test_only_warnings_and_errors_are_notable() -> None:
     assert not LogLine("x").notable
 
 
-def test_every_outcome_but_passed_is_a_failure() -> None:
-    """Failed, errored and skipped items are all failures, as the bench suite counted them."""
+def test_failed_and_error_are_failures_but_skipped_is_not() -> None:
+    """Skipped items were not run, so they are not failures; failed and errored ones are."""
     assert [Item("x", outcome).failed for outcome in ("passed", "failed", "error", "skipped")] == [
         False,
         True,
         True,
-        True,
+        False,
     ]
 
 
@@ -162,3 +164,42 @@ def test_a_malformed_bench_results_file_is_a_case_error_naming_it(
     (tmp_path / RESULTS_FILE).write_text(contents, encoding="utf-8")
     with pytest.raises(CaseError, match=RESULTS_FILE):
         load_case(tmp_path)
+
+
+@pytest.mark.parametrize("outcome", ["pas sed", "PASSED", "fail", "Skipped", ""])
+def test_a_misspelt_outcome_is_refused(tmp_path: Path, outcome: str) -> None:
+    """An outcome that isn't one of the known values is a CaseError, not a silent failure."""
+    raw = {"format": "triage-case/1", "items": [{"id": "x", "outcome": outcome}]}
+    with pytest.raises(CaseError, match="outcome"):
+        case_from_dict(raw, tmp_path)
+
+
+def test_every_known_outcome_is_accepted(tmp_path: Path) -> None:
+    """All four known outcomes load without error."""
+    items = [{"id": f"item-{i}", "outcome": outcome} for i, outcome in enumerate(OUTCOMES)]
+    case = case_from_dict({"format": "triage-case/1", "items": items}, tmp_path)
+    assert len(case.items) == len(OUTCOMES)
+
+
+def test_a_skipped_item_is_not_the_first_failure(tmp_path: Path) -> None:
+    """A skipped item before a failed one doesn't steal the first-failure spot."""
+    case = Case(
+        tmp_path,
+        items=(Item("skipped-one", "skipped"), Item("real-fail", "failed", "boom")),
+    )
+    assert [item.id for item in case.failed_items] == ["real-fail"]
+    failure = first_failure(case)
+    assert failure is not None
+    assert "real-fail" in failure.where
+
+
+def test_a_partial_selection_does_not_crash() -> None:
+    """A selection with some keys missing uses '?' instead of crashing with a KeyError."""
+    run = Case(
+        Path("/tmp/test"),
+        items=(Item("x", "failed", "boom"),),
+        context=Context(selection={"selected": 3}),
+    )
+    note = selection_note(run)
+    assert "3" in note
+    assert "?" in note

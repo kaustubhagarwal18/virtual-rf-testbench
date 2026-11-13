@@ -25,6 +25,9 @@ class CaseError(ValueError):
     """A case that can't be used, with one line saying what is wrong and where."""
 
 
+OUTCOMES = ("passed", "failed", "error", "skipped")
+"""The outcomes an item may have; anything else is a mistake in the producer."""
+
 NOTABLE_LOG_LEVELS = ("WARNING", "ERROR")
 """Log levels worth showing: a healthy run's INFO lines are noise."""
 
@@ -72,12 +75,12 @@ class Item:
 
     @property
     def failed(self) -> bool:
-        """Whether it didn't pass.
+        """Whether it failed or errored; skipped items were not run and are not failures.
 
         Returns:
-            True for any outcome other than passed.
+            True for failed and error, not for passed or skipped.
         """
-        return self.outcome != "passed"
+        return self.outcome in ("failed", "error")
 
 
 @dataclass(frozen=True)
@@ -298,19 +301,29 @@ def _case(raw: dict[str, Any], folder: Path) -> Case:
 
     Returns:
         The case.
+
+    Raises:
+        CaseError: If an item's outcome isn't one of the known values.
     """
-    return Case(
-        folder=folder,
-        items=tuple(
+    items = []
+    for item in raw.get("items", []):
+        outcome = str(item["outcome"])
+        if outcome not in OUTCOMES:
+            raise CaseError(
+                f"item {item.get('id', '?')!r} has outcome {outcome!r}; expected one of {OUTCOMES}"
+            )
+        items.append(
             Item(
                 id=str(item["id"]),
-                outcome=str(item["outcome"]),
+                outcome=outcome,
                 message=str(item.get("message", "")),
                 errors=tuple(str(error) for error in item.get("errors", [])),
                 readings=tuple(_reading(reading) for reading in item.get("readings", [])),
             )
-            for item in raw.get("items", [])
-        ),
+        )
+    return Case(
+        folder=folder,
+        items=tuple(items),
         steps=tuple(
             Step(
                 number=str(step.get("number", "?")),
