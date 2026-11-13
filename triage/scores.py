@@ -42,8 +42,9 @@ class Scenario:
         checked: Whether the verdict goes through the service's checks.
         gated: Whether the precedents go through the abstention gates before the model is
             asked, so a question with no basis for an answer gets UNKNOWN unasked.
-        vote: Whether the precedents' majority vote answers instead of the model, which is
-            then never asked; needs precedents to vote.
+        answerer: Who answers: 'model' (the default), 'vote' (precedents' majority vote,
+            never asks the model; needs precedents), or 'rules' (the check rules alone,
+            no model and no history).
         adds_to: The scenario this one changes exactly one thing in; empty for the first.
     """
 
@@ -52,8 +53,26 @@ class Scenario:
     precedents: Precedents = Precedents.NONE
     checked: bool = False
     gated: bool = False
-    vote: bool = False
+    answerer: str = "model"
     adds_to: str = ""
+
+    @property
+    def vote(self) -> bool:
+        """Whether the precedents' majority vote answers instead of the model.
+
+        Returns:
+            True for a vote scenario.
+        """
+        return self.answerer == "vote"
+
+    @property
+    def rules(self) -> bool:
+        """Whether the check rules answer instead of the model, with no history.
+
+        Returns:
+            True for a rules-only scenario.
+        """
+        return self.answerer == "rules"
 
     @property
     def retrieve(self) -> bool:

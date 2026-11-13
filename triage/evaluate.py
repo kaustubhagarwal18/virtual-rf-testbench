@@ -52,6 +52,7 @@ from triage.retrieval import (
     Retriever,
     history_index,
 )
+from triage.rules import rules_run
 from triage.scores import MALFORMED, Outcome, Precedents, Scenario, ScenarioResult, SourcesUsed
 from triage.service import triage_run
 from triage.vote import vote_run
@@ -65,6 +66,8 @@ SCENARIOS = (
     Scenario("full evidence", FULL, adds_to="error only"),
     Scenario("full evidence, no firmware line", FULL_WITHOUT_FIRMWARE, adds_to="full evidence"),
     Scenario("full evidence, no signal line", FULL_WITHOUT_SIGNAL, adds_to="full evidence"),
+    Scenario("full + checks", FULL, checked=True, adds_to="full evidence"),
+    Scenario("rules only", FULL, checked=True, answerer="rules", adds_to="full + checks"),
     Scenario("full + retrieval", FULL, precedents=Precedents.ALL, adds_to="full evidence"),
     Scenario(
         "full + retrieval + checks",
@@ -100,7 +103,7 @@ SCENARIOS = (
         "majority vote",
         FULL,
         precedents=Precedents.ALL,
-        vote=True,
+        answerer="vote",
         adds_to="full + retrieval",
     ),
     Scenario(
@@ -108,7 +111,7 @@ SCENARIOS = (
         FULL,
         precedents=Precedents.ALL,
         checked=True,
-        vote=True,
+        answerer="vote",
         adds_to="full + retrieval + checks",
     ),
     Scenario(
@@ -116,7 +119,7 @@ SCENARIOS = (
         FULL,
         precedents=Precedents.OWN_FAULT_HELD_OUT,
         checked=True,
-        vote=True,
+        answerer="vote",
         adds_to="full + retrieval + checks, own fault held out",
     ),
     Scenario(
@@ -125,7 +128,7 @@ SCENARIOS = (
         precedents=Precedents.ALL,
         checked=True,
         gated=True,
-        vote=True,
+        answerer="vote",
         adds_to="full + retrieval + checks + gates",
     ),
     Scenario(
@@ -134,7 +137,7 @@ SCENARIOS = (
         precedents=Precedents.OWN_FAULT_HELD_OUT,
         checked=True,
         gated=True,
-        vote=True,
+        answerer="vote",
         adds_to="full + retrieval + checks + gates, own fault held out",
     ),
 )
@@ -209,6 +212,8 @@ def _decide(
     """
     checks = DEFAULT_CHECKS if scenario.checked else ()
     gates = DEFAULT_GATES if scenario.gated else ()
+    if scenario.rules:
+        return rules_run(run, checks=checks)
     if scenario.vote:
         return vote_run(run, sources, checks=checks, gates=gates)
     return triage_run(run, provider, scenario.level, sources, checks=checks, gates=gates)
