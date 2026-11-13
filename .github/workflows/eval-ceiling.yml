@@ -22,7 +22,7 @@ jobs:
       || contains(github.event.pull_request.labels.*.name, 'eval-ceiling') }}
     runs-on: ubuntu-24.04
     continue-on-error: true
-    timeout-minutes: 120
+    timeout-minutes: 240
     env:
       EVAL_MODEL: "qwen2.5:3b"
     steps:
@@ -100,7 +100,7 @@ jobs:
     # If it OOMs consistently, switch to ubuntu-24.04-4core (16 GB, paid).
     runs-on: ubuntu-24.04
     continue-on-error: true
-    timeout-minutes: 120
+    timeout-minutes: 240
     env:
       EVAL_MODEL: "qwen2.5:7b"
     steps:
