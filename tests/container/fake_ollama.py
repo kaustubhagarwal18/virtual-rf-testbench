@@ -15,8 +15,10 @@ container started from the triage image, with this file mounted read-only:
 
 Settings come from the environment, so a test changes them by starting a new container:
 FAKE_OLLAMA_MODELS (comma-separated names as /api/tags lists them), FAKE_OLLAMA_EMBED_DIGEST
-(the digest every model is listed with) and FAKE_OLLAMA_EMBED_DELAY_S (how long each
-embedding takes, so a test can watch the service while it re-embeds).
+(the digest every model is listed with), FAKE_OLLAMA_EMBED_DELAY_S (how long each embedding
+takes, so a test can watch the service while it re-embeds), and FAKE_OLLAMA_EMBED_BARRIER
+(set to 1 to block every embedding until GET /barrier/release is called, so a test can
+reliably observe the not-ready state before the re-embed completes).
 """
 
 import hashlib
@@ -24,6 +26,7 @@ import json
 import logging
 import os
 import sys
+import threading
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -57,11 +60,13 @@ class FakeSettings:
         models: The model names /api/tags lists.
         digest: The digest each model is listed with.
         embed_delay_s: How long each embedding takes.
+        embed_barrier: When True, every embedding blocks until GET /barrier/release is called.
     """
 
     models: tuple[str, ...]
     digest: str
     embed_delay_s: float
+    embed_barrier: bool
 
     @classmethod
     def from_environment(cls, environ: Mapping[str, str]) -> "FakeSettings":
@@ -78,6 +83,7 @@ class FakeSettings:
             models=tuple(name.strip() for name in names.split(",") if name.strip()),
             digest=environ.get("FAKE_OLLAMA_EMBED_DIGEST") or DEFAULT_DIGEST,
             embed_delay_s=float(environ.get("FAKE_OLLAMA_EMBED_DELAY_S") or 0),
+            embed_barrier=environ.get("FAKE_OLLAMA_EMBED_BARRIER") == "1",
         )
 
 
@@ -97,9 +103,11 @@ class FakeOllamaHandler(BaseHTTPRequestHandler):
     """Answers the Ollama requests the triage service makes; everything else is a 404."""
 
     settings: ClassVar[FakeSettings] = FakeSettings.from_environment({})
+    # Starts set (unblocked); main() clears it when embed_barrier is on.
+    embed_gate: ClassVar[threading.Event] = threading.Event()
 
     def do_GET(self) -> None:  # pylint: disable=invalid-name
-        """Answer /api/version and /api/tags."""
+        """Answer /api/version, /api/tags, and /barrier/release."""
         if self.path == "/api/version":
             self._reply(HTTPStatus.OK, {"version": VERSION})
         elif self.path == "/api/tags":
@@ -107,6 +115,9 @@ class FakeOllamaHandler(BaseHTTPRequestHandler):
                 {"name": name, "digest": self.settings.digest} for name in self.settings.models
             ]
             self._reply(HTTPStatus.OK, {"models": models})
+        elif self.path == "/barrier/release":
+            self.embed_gate.set()
+            self._reply(HTTPStatus.OK, {"released": True})
         else:
             self._reply(HTTPStatus.NOT_FOUND, {"error": f"no route {self.path}"})
 
@@ -121,6 +132,7 @@ class FakeOllamaHandler(BaseHTTPRequestHandler):
         except (ValueError, KeyError, TypeError) as error:
             self._reply(HTTPStatus.BAD_REQUEST, {"error": f"unusable request: {error}"})
             return
+        self.embed_gate.wait()
         time.sleep(self.settings.embed_delay_s)
         self._reply(HTTPStatus.OK, {"embedding": vector_for(str(prompt))})
 
@@ -156,6 +168,9 @@ def main() -> int:
     """
     logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stderr)
     FakeOllamaHandler.settings = FakeSettings.from_environment(os.environ)
+    if FakeOllamaHandler.settings.embed_barrier:
+        # Clear the gate so embeddings block until GET /barrier/release sets it.
+        FakeOllamaHandler.embed_gate.clear()
     # Inside a container on a private test network: every interface is that network.
     server = ThreadingHTTPServer(("0.0.0.0", PORT), FakeOllamaHandler)  # nosec B104
     _LOG.info(json.dumps({"event": "listening", "port": PORT, **vars(FakeOllamaHandler.settings)}))

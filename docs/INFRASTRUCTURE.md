@@ -63,10 +63,27 @@ make triage-down
 - keeps history in the named volume `triage-history` at `/data`;
 - runs read-only with a tmpfs at `/tmp`, `cap_drop: ALL` and no-new-privileges.
 
-`host.docker.internal` is forwarded to the Mac's loopback by Docker Desktop and by the
-`extra_hosts: host.docker.internal:host-gateway` entry in `compose.yaml` for Linux. Whether
-it reaches Ollama on this machine has not been verified end-to-end; see USAGE.md for the
-manual check.
+**Docker Desktop (Mac and Windows):** `host.docker.internal` resolves to the host's loopback
+address automatically, so a default Ollama install on `127.0.0.1:11434` is reachable.
+
+**Linux Docker Engine:** `host-gateway` in `compose.yaml` resolves to the host's Docker
+bridge address (typically `172.17.0.1`), not `127.0.0.1`. A default Ollama install listens
+only on `127.0.0.1`, so the container cannot reach it. Before running `make triage-up` on
+Linux, bind Ollama to the bridge interface:
+
+```
+OLLAMA_HOST=0.0.0.0:11434 ollama serve
+```
+
+Or restrict it to the bridge address only (narrower, recommended if the host is shared):
+
+```
+OLLAMA_HOST=172.17.0.1:11434 ollama serve
+```
+
+The bridge address can be confirmed with `docker network inspect bridge | grep Gateway`.
+Whether it reaches Ollama on this machine has not been verified end-to-end; see USAGE.md for
+the manual check.
 
 `make bench-up` starts only the simulators. The triage profile is opt-in and does not
 affect bench runs.
@@ -95,5 +112,6 @@ which runs only when the bench fails.
 fake Ollama runs from the same triage image with `fake_ollama.py` mounted read-only. Each
 test gets its own Docker network and named volume, cleaned up afterwards.
 
-The tests skip with one line when `TRIAGE_IMAGE` is unset or Docker is not running. They
-run in the CI `triage-smoke` job and are not part of `make test`.
+The tests skip with one line when `TRIAGE_IMAGE` is unset. When `TRIAGE_IMAGE` is set but
+Docker is not running, they fail immediately so CI cannot silently skip them. They run in the
+CI `triage-smoke` job and are not part of `make test`.

@@ -123,16 +123,21 @@ def test_a_changed_digest_at_start_up_is_re_embedded_before_ready(
     service = _start_verified(bench, "digest")
     assert service.post("/history", RESOLVED_RUN).status == HTTPStatus.CREATED
     bench.stop_fake_ollama()
-    bench.start_fake_ollama(digest=DIGEST_B, embed_delay_s=DIP_EMBED_DELAY_S)
+    # The barrier holds every embedding until release_fake_ollama_barrier() is called,
+    # so the loop below is guaranteed to observe 503 before re-embedding can finish.
+    bench.start_fake_ollama(digest=DIGEST_B, embed_delay_s=DIP_EMBED_DELAY_S, barrier=True)
     service.restart()
     seen: list[int] = []
     deadline = time.monotonic() + DIP_TIMEOUT_S
+    while HTTPStatus.SERVICE_UNAVAILABLE not in seen:
+        assert time.monotonic() < deadline, (
+            f"service did not become not-ready within {DIP_TIMEOUT_S:g} s: {seen[-5:]}"
+        )
+        seen.append(service.get("/readyz").status)
+    bench.release_fake_ollama_barrier()
     while not seen or seen[-1] != HTTPStatus.OK:
         assert time.monotonic() < deadline, f"not ready within {DIP_TIMEOUT_S:g} s: {seen[-5:]}"
         seen.append(service.get("/readyz").status)
-    assert HTTPStatus.SERVICE_UNAVAILABLE in seen, (
-        f"never saw the service not ready while it re-embedded: {set(seen)}"
-    )
     store = service.store()
     assert store["digest"] == DIGEST_B
     assert store["digest_verified"] is True

@@ -5,9 +5,10 @@ exactly the image CI scanned and will publish; nothing here builds. The fake Oll
 the same image with fake_ollama.py mounted read-only. Each test gets its own network and a
 fresh named volume, and everything it created is removed afterwards, pass or fail.
 
-The tests skip, with one line, when TRIAGE_IMAGE is unset or Docker isn't running. An ID
-that is set but names no image is an error, not a skip: it means the wrong image was asked
-for. `make triage-smoke` sets TRIAGE_IMAGE to the image `make triage-image` built.
+The tests skip when TRIAGE_IMAGE is unset. When TRIAGE_IMAGE is set and Docker isn't running,
+the tests fail (a silent skip would let triage-smoke satisfy the CI gate without testing
+anything). An ID that is set but names no local image is also an error, not a skip.
+`make triage-smoke` sets TRIAGE_IMAGE to the image `make triage-image` built.
 """
 
 import http.client
@@ -289,12 +290,18 @@ class ContainerBench:
         docker("network", "create", self.network)
         docker("volume", "create", self.volume)
 
-    def start_fake_ollama(self, digest: str = DIGEST_A, embed_delay_s: float = 0.0) -> None:
+    def start_fake_ollama(
+        self,
+        digest: str = DIGEST_A,
+        embed_delay_s: float = 0.0,
+        barrier: bool = False,
+    ) -> None:
         """Start the fake Ollama on the network and wait until it answers.
 
         Args:
             digest: The embedding model's digest it lists.
             embed_delay_s: How long each embedding takes.
+            barrier: When True, embeddings block until release_fake_ollama_barrier() is called.
         """
         self.containers.append(self.fake_name)
         models = f"{full_model_name(DEFAULT_MODEL)},{full_model_name(DEFAULT_EMBED_MODEL)}"
@@ -306,12 +313,24 @@ class ContainerBench:
             "--env", f"FAKE_OLLAMA_MODELS={models}",
             "--env", f"FAKE_OLLAMA_EMBED_DIGEST={digest}",
             "--env", f"FAKE_OLLAMA_EMBED_DELAY_S={embed_delay_s}",
+            "--env", f"FAKE_OLLAMA_EMBED_BARRIER={'1' if barrier else '0'}",
             self.image, "python", "/fake/fake_ollama.py",
         )  # fmt: skip
         probe = (
             "import urllib.request; urllib.request.urlopen('http://127.0.0.1:11434/api/version')"
         )
         wait_for(lambda: self._exec_ok(self.fake_name, probe), 30.0, "the fake Ollama")
+
+    def release_fake_ollama_barrier(self) -> None:
+        """Release the embedding barrier so blocked embeddings can proceed.
+
+        Only meaningful when start_fake_ollama was called with barrier=True.
+        """
+        release = (
+            "import urllib.request; urllib.request.urlopen"
+            "('http://127.0.0.1:11434/barrier/release')"
+        )
+        self._exec_ok(self.fake_name, release)
 
     def stop_fake_ollama(self) -> None:
         """Remove the fake Ollama, so its name no longer resolves: an Ollama outage."""
@@ -412,7 +431,11 @@ def triage_image() -> str:
     if not image:
         pytest.skip(f"{IMAGE_VARIABLE} isn't set; build the image with 'make triage-image'")
     if not docker_running():
-        pytest.skip("Docker isn't running; start it to run the container tests")
+        # When TRIAGE_IMAGE is set the caller loaded the image and expects the tests to run.
+        # Skipping silently would let triage-smoke pass CI without testing anything.
+        pytest.fail(
+            "Docker isn't running; container tests cannot be skipped when TRIAGE_IMAGE is set"
+        )
     try:
         docker("image", "inspect", "--format", "{{.Id}}", image)
     except DockerError:
