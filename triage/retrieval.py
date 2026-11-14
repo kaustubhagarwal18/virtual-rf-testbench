@@ -36,14 +36,16 @@ SOURCE_ID_HEX_DIGITS = 8
 class Retriever(Protocol):
     """Anything that can return the past runs most like a new one."""
 
-    def similar_to(self, run: Case, count: int, exclude_fault: str | None = None) -> list[Source]:
+    def similar_to(
+        self, run: Case, count: int, exclude_faults: frozenset[str] = frozenset()
+    ) -> list[Source]:
         """Return the runs most like this one, most similar first.
 
         Args:
             run: The run being triaged.
             count: How many to return.
-            exclude_fault: A fault whose past runs must not be returned, so an evaluation
-                can ask what happens when a failure has no precedent; None excludes nothing.
+            exclude_faults: Faults whose past runs must not be returned, so an evaluation
+                can ask what happens when a failure has no precedent; empty excludes nothing.
 
         Returns:
             The closest past runs, as sources the model may cite.
@@ -91,7 +93,8 @@ def history_source(run: Case, label: dict[str, Any], pack: Pack = DEFAULT_PACK) 
 
     Returns:
         The source: the run's evidence plus its recorded cause and fix, and the key of the
-        action taken when the label records one, under a neutral id.
+        action taken when the label records one, under a neutral id. Its symptom_text keeps
+        the evidence alone, so an index can match symptoms to symptoms.
     """
     evidence = build_evidence(run, FULL, pack)
     text = f"{evidence}\nCause: {label['cause']}\nFix applied: {label['fix']}"
@@ -103,6 +106,7 @@ def history_source(run: Case, label: dict[str, Any], pack: Pack = DEFAULT_PACK) 
         fault=str(label.get("fault", "")),
         action=str(label.get("action") or ""),
         fix_applied=str(label["fix"]),
+        symptom_text=evidence,
     )
 
 
@@ -116,16 +120,25 @@ class InMemoryRetriever:
         embedder: How a new run is embedded for the search.
         pack: The domain pack that words both the history and the query, so they compare
             like with like.
+        symptom_index: True embeds each source's symptom text alone, leaving its recorded
+            cause and fix out of the index, so a query's symptoms are matched against
+            symptoms; the text a source shows the model is unchanged either way. False,
+            the default, embeds the full text, as the classification pipeline always has.
     """
 
     sources: list[Source]
     vectors: np.ndarray
     embedder: Embedder
     pack: Pack = DEFAULT_PACK
+    symptom_index: bool = False
 
     @classmethod
     def from_history(
-        cls, history: Path, embedder: Embedder, pack: Pack = DEFAULT_PACK
+        cls,
+        history: Path,
+        embedder: Embedder,
+        pack: Pack = DEFAULT_PACK,
+        symptom_index: bool = False,
     ) -> "InMemoryRetriever":
         """Build the index from a folder of labelled history runs.
 
@@ -133,6 +146,8 @@ class InMemoryRetriever:
             history: The folder of history runs.
             embedder: How to embed them.
             pack: The domain pack that words their evidence and the queries'.
+            symptom_index: True indexes each source by its symptom text alone; False, the
+                default, indexes the full text, cause and fix included.
 
         Returns:
             The retriever, ready to search. Runs whose sources are identical are indexed
@@ -144,8 +159,9 @@ class InMemoryRetriever:
             source = history_source(run, load_label(run), pack)
             unique.setdefault(source.source_id, source)
         sources = list(unique.values())
-        vectors = normalise(np.array(embedder.embed([source.text for source in sources])))
-        return cls(sources, vectors, embedder, pack)
+        texts = [_index_text(source, symptom_index) for source in sources]
+        vectors = normalise(np.array(embedder.embed(texts)))
+        return cls(sources, vectors, embedder, pack, symptom_index)
 
     def __len__(self) -> int:
         """Count the past runs in the index.
@@ -168,20 +184,20 @@ class InMemoryRetriever:
         source = history_source(run, label, self.pack)
         if any(known.source_id == source.source_id for known in self.sources):
             return source
-        vector = normalise(np.array(self.embedder.embed([source.text])))
+        vector = normalise(np.array(self.embedder.embed([_index_text(source, self.symptom_index)])))
         self.vectors = vector if not self.sources else np.vstack([self.vectors, vector])
         self.sources.append(source)
         return source
 
     def similar_to(
-        self, run: Case, count: int = DEFAULT_TOP_K, exclude_fault: str | None = None
+        self, run: Case, count: int = DEFAULT_TOP_K, exclude_faults: frozenset[str] = frozenset()
     ) -> list[Source]:
         """Return the history runs most like this one.
 
         Args:
             run: The run being triaged.
             count: How many to return.
-            exclude_fault: A fault whose runs are left out; None leaves nothing out.
+            exclude_faults: Faults whose runs are left out; empty leaves nothing out.
 
         Returns:
             The closest sources, most similar first, each carrying its cosine similarity.
@@ -194,9 +210,25 @@ class InMemoryRetriever:
         kept = [
             replace(self.sources[index], similarity=float(scores[index]))
             for index in order
-            if exclude_fault is None or self.sources[index].fault != exclude_fault
+            if self.sources[index].fault not in exclude_faults
         ]
         return kept[:count]
+
+
+def _index_text(source: Source, symptom_index: bool) -> str:
+    """Pick the text a source is embedded under.
+
+    Args:
+        source: The source.
+        symptom_index: True picks the symptom text, so the index holds no cause or fix;
+            False picks the full text.
+
+    Returns:
+        The text to embed; the full text when a symptom split isn't recorded.
+    """
+    if symptom_index and source.symptom_text:
+        return source.symptom_text
+    return source.text
 
 
 def normalise(vectors: np.ndarray) -> np.ndarray:

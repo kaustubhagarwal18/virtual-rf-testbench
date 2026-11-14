@@ -73,6 +73,9 @@ max-line-length = 100
 min-public-methods = 1
 max-args = 7
 
+[tool.pylint.similarities]
+min-similarity-lines = 8
+
 [tool.pytest.ini_options]
 testpaths = ["tests/unit", "tests/integration"]
 addopts = ["--strict-markers", "--cov", "--cov-report=term-missing"]
