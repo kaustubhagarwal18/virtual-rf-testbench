@@ -200,7 +200,32 @@ The reply is the verdict as JSON: `fix`, `action`, `where`, `because`, `cited`, 
 run, then of each other offered run resolved by the same action, quoted), plus `overruled` when a check stood in for the model and `gate_reason` when the
 past runs disagreed and the model wasn't asked. `POST /history` adds a resolved run (its evidence plus
 a `label` with `fault`, `cause`, `fix` and, optionally, `action`), and `GET /health` reports
-how many past runs are loaded. Interactive docs are at `http://127.0.0.1:8000/docs`. The
+how many past runs are loaded.
+
+Three more endpoints answer separate operational questions (ADR 0026):
+
+| Endpoint | Answers 200 when | Asks Ollama |
+|---|---|---|
+| `GET /livez` | the process answers | never |
+| `GET /readyz` | it can serve now, with its history loaded; otherwise 503 with the reason | never |
+| `GET /health/dependencies` | always; reports whether Ollama answers, which configured models are pulled and their digests, and `ok` or `degraded` | yes, with a 2 s timeout |
+
+Health checks should use `/livez` and `/readyz`, never `/health/dependencies`, so an Ollama
+outage gets requests a 503 instead of getting a healthy service restarted.
+
+Where Ollama is and which models to use come from flags or the environment. A flag beats its
+variable, and an unset or empty variable means the default:
+
+| Flag | Variable | Default |
+|---|---|---|
+| `--ollama-host` | `TRIAGE_OLLAMA_HOST` | `http://127.0.0.1:11434` |
+| `--model` | `TRIAGE_MODEL` | `qwen2.5:3b` |
+| `--embed-model` | `TRIAGE_EMBED_MODEL` | `nomic-embed-text` |
+
+The variables start with `TRIAGE_` because `OLLAMA_HOST` already means something else: it
+sets where the Ollama server itself listens. The service ignores `OLLAMA_HOST`, so both can
+be set at once. A host that isn't an `http://` or `https://` URL stops start-up with one line
+saying so. Interactive docs are at `http://127.0.0.1:8000/docs`. The
 service listens on localhost only and keeps its history in memory (ADR 0010); retrieval is
 an exact in-memory search behind a `Retriever` interface, so pgvector can replace it once the
 history outgrows memory.
