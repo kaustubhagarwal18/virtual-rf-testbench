@@ -31,6 +31,7 @@ make test
 | `make triage-api` | Serves triage over HTTP on localhost:8000: `POST /triage`, `POST /history`, `GET /health` (needs local Ollama answering and embedding models) |
 | `make image` / `image-scan` | Builds the simulator image, or scans it with Trivy as CI does (needs Trivy installed) |
 | `make eval [MODEL=…]` | Scores the triage against the labelled question runs and writes `triage/results/rag.md` (needs local Ollama answering and embedding models) |
+| `make retrieval-eval [SYMPTOM_INDEX=1]` | Scores retrieval alone (Recall@K, MRR) against the question runs, with history held out by fault and by category, independent of any model (needs a local Ollama embedding model) |
 | `make clean` | Removes the virtual environment, the tool caches and the pre-commit hook; `make setup` restores them |
 
 The pre-commit hooks run `make lint` before every commit, so the same checks run locally and

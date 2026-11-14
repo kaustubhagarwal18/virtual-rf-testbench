@@ -104,7 +104,7 @@ def test_a_held_out_fault_is_never_returned(tmp_path: Path) -> None:
     question = load_case(
         run_with_error(tmp_path / "q" / "cable_loss", "cable_loss", "path loss cable datasheet")
     )
-    kept = retriever.similar_to(question, count=3, exclude_fault="cable_loss")
+    kept = retriever.similar_to(question, count=3, exclude_faults=frozenset({"cable_loss"}))
     assert [source.fault for source in kept] == ["slow_responses"]
 
 
@@ -178,6 +178,47 @@ def test_a_history_source_keeps_the_fix_applied_apart(tmp_path: Path) -> None:
     run = load_case(labelled_run(tmp_path / "run", "cable_loss", "worn cable", "replaced it"))
     source = history_source(run, load_label(run))
     assert source.fix_applied == "replaced it"
+
+
+def test_a_history_source_keeps_its_symptoms_apart_from_its_resolution(tmp_path: Path) -> None:
+    """The symptom text holds the evidence alone; the cause and fix live only in the full text."""
+    run = load_case(labelled_run(tmp_path / "run", "cable_loss", "worn cable", "replaced it"))
+    source = history_source(run, load_label(run))
+    assert source.text.startswith(source.symptom_text)
+    assert "worn cable" not in source.symptom_text
+    assert "replaced it" not in source.symptom_text
+    assert "Cause: worn cable" in source.text
+
+
+def test_a_symptom_index_embeds_the_symptoms_and_shows_the_model_the_full_text(
+    tmp_path: Path,
+) -> None:
+    """With symptom_index on, no embedded text carries a cause or fix, but retrieved sources do."""
+    labelled_run(tmp_path / "history" / "cable_loss-1", "cable_loss", "worn cable", "replaced it")
+    embedder = FakeEmbedder()
+    retriever = InMemoryRetriever.from_history(tmp_path / "history", embedder, symptom_index=True)
+    indexed = embedder.calls[0]
+    assert all("worn cable" not in text and "replaced it" not in text for text in indexed)
+    question = load_case(labelled_run(tmp_path / "q" / "q", "cable_loss", "c", "f"))
+    found = retriever.similar_to(question, count=1)
+    assert "Cause: worn cable" in found[0].text
+
+
+def test_the_default_index_still_embeds_the_full_text(tmp_path: Path) -> None:
+    """Without the opt-in, the cause and fix stay in the index, as the pipeline always had."""
+    labelled_run(tmp_path / "history" / "cable_loss-1", "cable_loss", "worn cable", "replaced it")
+    embedder = FakeEmbedder()
+    InMemoryRetriever.from_history(tmp_path / "history", embedder)
+    assert any("worn cable" in text for text in embedder.calls[0])
+
+
+def test_a_run_added_later_is_embedded_the_same_way_as_the_index(tmp_path: Path) -> None:
+    """add() follows the retriever's index mode, so later runs match the built index."""
+    embedder = FakeEmbedder()
+    retriever = InMemoryRetriever([], np.zeros((0, 0)), embedder, symptom_index=True)
+    resolved = load_case(labelled_run(tmp_path / "new", "cable_loss", "worn cable", "replaced it"))
+    retriever.add(resolved, {"fault": "cable_loss", "cause": "worn cable", "fix": "replaced it"})
+    assert all("worn cable" not in text for text in embedder.calls[-1])
 
 
 def test_history_index_uses_the_embedder_given(tmp_path: Path) -> None:

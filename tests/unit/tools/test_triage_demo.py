@@ -44,19 +44,21 @@ class StubRetriever:
         """
         self.sources = sources
 
-    def similar_to(self, run: Case, count: int, exclude_fault: str | None = None) -> list[Source]:
+    def similar_to(
+        self, run: Case, count: int, exclude_faults: frozenset[str] = frozenset()
+    ) -> list[Source]:
         """Return the fixed sources, up to the count asked for.
 
         Args:
             run: The run being triaged (unused).
             count: How many to return at most.
-            exclude_fault: A fault to leave out; sources with it are dropped.
+            exclude_faults: Faults to leave out; sources with any of them are dropped.
 
         Returns:
-            The fixed sources without the excluded fault, at most count of them.
+            The fixed sources without the excluded faults, at most count of them.
         """
         del run
-        kept = [source for source in self.sources if source.fault != exclude_fault]
+        kept = [source for source in self.sources if source.fault not in exclude_faults]
         return kept[:count]
 
 

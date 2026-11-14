@@ -11,6 +11,8 @@ from triage.evidence import (
     EVALUATED_LEVELS,
     FULL,
     FULL_WITHOUT_FIRMWARE,
+    FULL_WITHOUT_LOGS,
+    FULL_WITHOUT_SEQUENCE,
     FULL_WITHOUT_SIGNAL,
     LEVELS,
     build_evidence,
@@ -276,7 +278,47 @@ def test_the_ablations_are_evaluated_but_not_offered_to_callers() -> None:
     """A request may ask for error-only or full; only the evaluation builds the ablations."""
     assert FULL_WITHOUT_FIRMWARE not in LEVELS
     assert FULL_WITHOUT_SIGNAL not in LEVELS
-    assert set(EVALUATED_LEVELS) == {*LEVELS, FULL_WITHOUT_FIRMWARE, FULL_WITHOUT_SIGNAL}
+    assert FULL_WITHOUT_LOGS not in LEVELS
+    assert FULL_WITHOUT_SEQUENCE not in LEVELS
+    assert set(EVALUATED_LEVELS) == {
+        *LEVELS,
+        FULL_WITHOUT_FIRMWARE,
+        FULL_WITHOUT_SIGNAL,
+        FULL_WITHOUT_LOGS,
+        FULL_WITHOUT_SEQUENCE,
+    }
+
+
+def test_without_logs_drops_the_log_lines_but_keeps_the_rest(tmp_path: Path) -> None:
+    """Stripping logs removes the log-count line and all indented log lines, nothing else."""
+    folder = write_run(tmp_path / "run", [FAILING_TEST])
+    (folder / "logs.txt").write_text(NO_SIGNAL_LINE + "\n", encoding="utf-8")
+    run = load_case(folder)
+    full_lines = build_evidence(run, FULL).splitlines()
+    ablated_lines = build_evidence(run, FULL_WITHOUT_LOGS).splitlines()
+    log_lines = [line for line in full_lines if line.startswith("Logs:") or line.startswith("  ")]
+    assert log_lines, "full evidence must include the log-count line and at least one log line"
+    assert all(line not in ablated_lines for line in log_lines)
+    non_log_lines = [line for line in full_lines if line not in log_lines]
+    assert non_log_lines == ablated_lines
+
+
+def test_without_sequence_drops_the_step_detail_and_reads_the_test_instead(
+    tmp_path: Path,
+) -> None:
+    """Stripping the sequence uses the failed test as the first failure, not the setup step."""
+    sequence = (
+        "17:00:00.001 INFO  step=1 action=read bench configuration instrument=station result=ok\n"
+        "17:00:00.002 ERROR step=2 action=verify level offset instrument=generator "
+        "parameter=level_offset_db expected=0.0 reason=AssertionError: it carries -2 dB\n"
+    )
+    folder = write_run(tmp_path / "run", [FAILING_TEST], sequence)
+    run = load_case(folder)
+    full = build_evidence(run, FULL)
+    ablated = build_evidence(run, FULL_WITHOUT_SEQUENCE)
+    assert "step 2" in full
+    assert "step 2" not in ablated
+    assert "test_level_at_1ghz" in ablated
 
 
 NO_SIGNAL_LINE = (

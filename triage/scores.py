@@ -29,6 +29,10 @@ class Precedents(StrEnum):
     model does with no precedent of that fault. Another fault with the same fix (link_down
     for link_flaky) may still be offered."""
 
+    CATEGORY_HELD_OUT = "category held out"
+    """The same, with every fault in the question's category kept out, so no related fault
+    can substitute as a look-alike.  Measures generalisation across categories."""
+
 
 @dataclass(frozen=True)
 class Scenario:
@@ -81,7 +85,7 @@ class Scenario:
         Returns:
             True unless the scenario offers no precedents.
         """
-        return self.precedents is not Precedents.NONE
+        return self.precedents not in (Precedents.NONE,)
 
     @property
     def hold_out(self) -> bool:
@@ -91,6 +95,15 @@ class Scenario:
             True when the scenario holds the question's own fault out.
         """
         return self.precedents is Precedents.OWN_FAULT_HELD_OUT
+
+    @property
+    def category_held_out(self) -> bool:
+        """Whether past runs of the question's entire fault category are kept out.
+
+        Returns:
+            True when the scenario holds the question's whole category out.
+        """
+        return self.precedents is Precedents.CATEGORY_HELD_OUT
 
 
 @dataclass(frozen=True)

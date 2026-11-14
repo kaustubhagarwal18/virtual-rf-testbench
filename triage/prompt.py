@@ -29,6 +29,8 @@ class Source:
             scored them (cosine, 1 is identical); None when the retriever doesn't say.
         fix_applied: What fixed this past run, as its label records it, so an answer citing
             it can quote it word for word; empty when not recorded. The text states it too.
+        symptom_text: The run's evidence alone, without its recorded cause and fix, so an
+            index can match symptoms to symptoms; empty when the source has no such split.
     """
 
     source_id: str
@@ -37,6 +39,7 @@ class Source:
     action: str = ""
     similarity: float | None = None
     fix_applied: str = ""
+    symptom_text: str = ""
 
 
 SYSTEM_PROMPT = system_prompt(DEFAULT_PACK)

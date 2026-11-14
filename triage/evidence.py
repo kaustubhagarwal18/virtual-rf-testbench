@@ -124,10 +124,23 @@ FULL_WITHOUT_FIRMWARE = "full-without-firmware"
 FULL_WITHOUT_SIGNAL = "full-without-signal"
 """FULL minus its "No signal" line: an ablation, to measure what that one line does."""
 
+FULL_WITHOUT_LOGS = "full-without-logs"
+"""FULL minus all instrument log lines: an ablation, to measure what the logs contribute."""
+
+FULL_WITHOUT_SEQUENCE = "full-without-sequence"
+"""FULL as if the sequence log didn't exist: the failed test is the first failure, not the
+setup step that caused it.  An ablation to measure how much the step detail helps."""
+
 LEVELS = (ERROR_ONLY, FULL)
 """The evidence levels a caller may ask for."""
 
-EVALUATED_LEVELS = (*LEVELS, FULL_WITHOUT_FIRMWARE, FULL_WITHOUT_SIGNAL)
+EVALUATED_LEVELS = (
+    *LEVELS,
+    FULL_WITHOUT_FIRMWARE,
+    FULL_WITHOUT_SIGNAL,
+    FULL_WITHOUT_LOGS,
+    FULL_WITHOUT_SEQUENCE,
+)
 """Every level the evaluation can score, the ablations included."""
 
 MAX_NOTABLE_LOGS = 6
@@ -322,8 +335,26 @@ _LEFT_OUT: dict[str, frozenset[str]] = {
     FULL: frozenset(),
     FULL_WITHOUT_FIRMWARE: frozenset({VERSIONS_LINE}),
     FULL_WITHOUT_SIGNAL: frozenset({SIGNAL_NOTE}),
+    FULL_WITHOUT_LOGS: frozenset(),
 }
-"""What each full level leaves out: nothing, or one line for an ablation."""
+"""What each full level leaves out as note names or line sentinels; logs ablation is handled
+separately in build_evidence because it removes whole output lines, not note names."""
+
+
+def _strip_logs(evidence: str) -> str:
+    """Remove the log-count line and all indented log lines from full evidence.
+
+    Args:
+        evidence: The full evidence text.
+
+    Returns:
+        The evidence with every line that starts with 'Logs:' or '  ' removed.
+    """
+    return "\n".join(
+        line
+        for line in evidence.splitlines()
+        if not line.startswith("Logs:") and not line.startswith("  ")
+    )
 
 
 def build_evidence(run: Case, level: str = FULL, pack: Pack = DEFAULT_PACK) -> str:
@@ -342,7 +373,22 @@ def build_evidence(run: Case, level: str = FULL, pack: Pack = DEFAULT_PACK) -> s
     """
     if level == ERROR_ONLY:
         return error_only_evidence(run)
+    if level == FULL_WITHOUT_SEQUENCE:
+        # Ignore the sequence log: build full evidence as if no setup steps exist, so
+        # first_failure falls through to the failed tests rather than the step that caused them.
+        no_seq = Case(
+            folder=run.folder,
+            items=run.items,
+            steps=(),
+            logs=run.logs,
+            context=run.context,
+            focus=run.focus,
+        )
+        return full_evidence(no_seq, pack)
     left_out = _LEFT_OUT.get(level)
     if left_out is None:
         raise ValueError(f"unknown evidence level {level!r}; expected one of {EVALUATED_LEVELS}")
-    return full_evidence(run, pack, left_out)
+    text = full_evidence(run, pack, left_out)
+    if level == FULL_WITHOUT_LOGS:
+        return _strip_logs(text)
+    return text

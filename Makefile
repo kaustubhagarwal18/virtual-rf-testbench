@@ -9,7 +9,7 @@ BENCH_BUILD ?= --build
 export FIRMWARE_VERSION REVISION
 PYTHON_PATHS := $(PACKAGES) tests
 
-.PHONY: setup lint fmt test summary image image-name image-scan bench-up bench-down bench-logs bench-test bench-summary fault fault-dataset triage triage-demo triage-api eval clean
+.PHONY: setup lint fmt test summary image image-name image-scan bench-up bench-down bench-logs bench-test bench-summary fault fault-dataset triage triage-demo triage-api eval retrieval-eval clean
 
 setup:
 	uv sync
@@ -79,6 +79,9 @@ triage-api:
 
 eval:
 	uv run python -m triage.evaluate $(if $(MODEL),--model $(MODEL)) --report $(EVAL_REPORT)
+
+retrieval-eval:
+	uv run python -m triage.retrieval_metrics $(if $(SYMPTOM_INDEX),--symptom-index)
 
 clean:
 	-uv run --no-sync pre-commit uninstall

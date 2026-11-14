@@ -300,6 +300,28 @@ def test_the_held_out_scenario_never_offers_the_questions_own_fault(tmp_path: Pa
     assert "said UNKNOWN 1 times and named a wrong action 0 times" in " ".join(findings([result]))
 
 
+def test_the_category_held_out_scenario_excludes_all_faults_in_the_category(
+    tmp_path: Path,
+) -> None:
+    """With the category held out, no fault from that category is offered, but others are."""
+    history = tmp_path / "history"
+    history_with(history / "cable_loss-1", "cable_loss")  # bench category
+    history_with(history / "slow_responses-1", "slow_responses")  # test category
+    history_with(history / "firmware_frequency_error-1", "firmware_frequency_error")  # firmware
+    question(tmp_path / "q" / "cable_loss-1", "cable_loss")  # cable_loss is bench
+    retriever = InMemoryRetriever.from_history(history, FakeEmbedder())
+    cat_held_out = Scenario("cat held out", FULL, precedents=Precedents.CATEGORY_HELD_OUT)
+    provider = FakeProvider([verdict(UNKNOWN)])
+    result = evaluate(tmp_path / "q", provider, [cat_held_out], retriever)[0]
+    offered = result.outcomes[0].sources.offered_faults
+    assert "cable_loss" not in offered, "own fault's category must be excluded"
+    assert all(f not in offered for f in ["link_down", "link_flaky", "analyzer_needs_alignment"]), (
+        "all bench faults must be excluded"
+    )
+    # other-category faults are still offered
+    assert len(offered) > 0
+
+
 def test_the_checked_scenario_overrules_firmware_on_unchanged_firmware(tmp_path: Path) -> None:
     """The same FIRMWARE reply is a confident miss unchecked, and UNKNOWN once checked."""
     folder = question(tmp_path / "q" / "cable_loss-1", "cable_loss")

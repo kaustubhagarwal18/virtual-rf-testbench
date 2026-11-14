@@ -9,6 +9,14 @@ it, so the package version moves only with a release.
 
 ### Added
 
+- **Harder RF questions and retrieval scored on its own** (ADR 0025): two evidence
+  ablations (no logs, no sequence log), a category-held-out precedent scenario next to the
+  existing own-fault-held-out one, a retrieval-only benchmark (`triage/retrieval_metrics.py`,
+  `make retrieval-eval`) scoring Recall@K and MRR independent of any model, and an opt-in
+  symptom-only retrieval index. Measured: stripping the raw log lines changes no fault's
+  score; category hold-out solves 1 of 13 against 4 of 13 for fault hold-out; the
+  symptom-only index raises retrieval's Recall@1 from 36/39 to 39/39 by fixing a
+  `reset_leaks_offset` near-duplicate miss.
 - **A domain-free case** (ADR 0023): the pipeline reads cases (`triage/case.py`) with a
   `case.json` format any system can write; bench runs are one adapter
   (`triage/bench_run.py`). The evidence's RF wording and notes move into the pack's

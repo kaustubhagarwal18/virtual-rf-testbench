@@ -23,6 +23,7 @@ from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
 
+from tools.faults import CATALOGUE
 from triage.abstain import DEFAULT_GATES
 from triage.answer import VERDICT_SCHEMA, MalformedAnswerError, Verdict
 from triage.bench_run import load_case
@@ -32,6 +33,8 @@ from triage.evidence import (
     ERROR_ONLY,
     FULL,
     FULL_WITHOUT_FIRMWARE,
+    FULL_WITHOUT_LOGS,
+    FULL_WITHOUT_SEQUENCE,
     FULL_WITHOUT_SIGNAL,
     error_only_evidence,
 )
@@ -66,6 +69,8 @@ SCENARIOS = (
     Scenario("full evidence", FULL, adds_to="error only"),
     Scenario("full evidence, no firmware line", FULL_WITHOUT_FIRMWARE, adds_to="full evidence"),
     Scenario("full evidence, no signal line", FULL_WITHOUT_SIGNAL, adds_to="full evidence"),
+    Scenario("full evidence, no logs", FULL_WITHOUT_LOGS, adds_to="full evidence"),
+    Scenario("full evidence, no sequence", FULL_WITHOUT_SEQUENCE, adds_to="full evidence"),
     Scenario("full + checks", FULL, checked=True, adds_to="full evidence"),
     Scenario("rules only", FULL, checked=True, answerer="rules", adds_to="full + checks"),
     Scenario("full + retrieval", FULL, precedents=Precedents.ALL, adds_to="full evidence"),
@@ -80,6 +85,13 @@ SCENARIOS = (
         "full + retrieval + checks, own fault held out",
         FULL,
         precedents=Precedents.OWN_FAULT_HELD_OUT,
+        checked=True,
+        adds_to="full + retrieval + checks",
+    ),
+    Scenario(
+        "full + retrieval + checks, category held out",
+        FULL,
+        precedents=Precedents.CATEGORY_HELD_OUT,
         checked=True,
         adds_to="full + retrieval + checks",
     ),
@@ -121,6 +133,14 @@ SCENARIOS = (
         checked=True,
         answerer="vote",
         adds_to="full + retrieval + checks, own fault held out",
+    ),
+    Scenario(
+        "majority vote + checks, category held out",
+        FULL,
+        precedents=Precedents.CATEGORY_HELD_OUT,
+        checked=True,
+        answerer="vote",
+        adds_to="full + retrieval + checks, category held out",
     ),
     Scenario(
         "majority vote + checks + gates",
@@ -192,8 +212,14 @@ def _sources_for(
         return ()
     if retriever is None:
         raise ValueError(f"scenario {scenario.name!r} retrieves but no retriever was given")
-    excluded = fault if scenario.hold_out else None
-    return tuple(retriever.similar_to(run, DEFAULT_TOP_K, exclude_fault=excluded))
+    if scenario.hold_out:
+        excluded = frozenset({fault})
+    elif scenario.category_held_out:
+        category = str(CATALOGUE[fault].label.category) if fault in CATALOGUE else ""
+        excluded = frozenset(name for name, f in CATALOGUE.items() if f.label.category == category)
+    else:
+        excluded = frozenset()
+    return tuple(retriever.similar_to(run, DEFAULT_TOP_K, exclude_faults=excluded))
 
 
 def _decide(

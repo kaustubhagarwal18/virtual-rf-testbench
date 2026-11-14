@@ -59,14 +59,14 @@
 
 ## Next, in order
 
-0. **A domain-free core**, so the pipeline serves any domain where failures recur (wafer
-   test, payments, device fleets), with the RF bench as one pack. Done: the actions, causes
-   and description in a pack file, behind a behaviour lock (ADR 0021); the checks as rules
-   over domain-free fact kinds, and a pack passed through the pipeline (ADR 0022); a
-   domain-free case with a `case.json` format, bench runs as one adapter, and the
-   evidence's wording in the pack (ADR 0023). Next: a second pack from another domain,
-   with its own data set and evaluation, to prove it; the API taking cases and a pack;
-   `make eval` and `tools/calibrate_abstention.py` taking a pack.
+0. **Prove the core on the RF bench before a second domain.** The domain-free core (ADR
+   0021–0023) made the pipeline able to take another pack, but the evaluation couldn't yet
+   say what the retrieval, the checks or the model each contribute on *this* domain: 8 of 13
+   faults repeat their history run almost word for word, and a majority vote with no model
+   already beat `qwen2.5:3b`. Harder RF questions come first (stripped artefacts, a category
+   held out instead of only the question's own fault, retrieval scored on its own); a second
+   pack (payments or another domain) is deferred until the RF numbers are honest. See ADR
+   0025.
 1. **Triage unit and integration failures, not only bench failures.** CI triages only a
    failed bench run: when a pull request breaks a unit or integration test, the comment lists
    the failure but doesn't explain it. These failures have no measurements, instrument logs
