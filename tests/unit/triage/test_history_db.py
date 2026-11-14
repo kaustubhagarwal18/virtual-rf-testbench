@@ -57,3 +57,39 @@ def test_a_missing_folder_is_reported_with_the_fix(tmp_path: Path) -> None:
     with pytest.raises(DatabaseError, match="folder exists") as raised:
         Database.open(path)
     assert str(path) in str(raised.value)
+
+
+def test_a_failing_statement_in_a_transaction_is_a_database_error(tmp_path: Path) -> None:
+    """A write SQLite rejects becomes one DatabaseError naming the file, and writes nothing."""
+    database = Database.open(tmp_path / "history.db")
+    with (
+        pytest.raises(DatabaseError, match=r"history\.db") as raised,
+        database.transaction() as cursor,
+    ):
+        cursor.execute("INSERT INTO embed_model VALUES ('m', 'd', 1.0)")
+        cursor.execute("INSERT INTO no_such_table VALUES (1)")
+    assert "disk has space" in str(raised.value)
+    assert database.query("SELECT COUNT(*) FROM embed_model") == [(0,)]
+
+
+@pytest.mark.parametrize("operation", ["query", "transaction"])
+def test_a_database_that_fails_after_opening_raises_one_error(
+    tmp_path: Path, operation: str
+) -> None:
+    """Reads and writes on a connection that has failed raise DatabaseError, never sqlite3.Error."""
+    database = Database.open(tmp_path / "history.db")
+    database.connection.close()
+    with pytest.raises(DatabaseError, match=r"history\.db"):
+        if operation == "query":
+            database.query("SELECT 1")
+        else:
+            with database.transaction() as cursor:
+                cursor.execute("SELECT 1")
+
+
+def test_an_error_from_the_block_is_not_relabelled(tmp_path: Path) -> None:
+    """Only SQLite's own failures become DatabaseError; the caller's exception passes through."""
+    database = Database.open(tmp_path / "history.db")
+    with pytest.raises(KeyError), database.transaction():
+        raise KeyError("the caller's own problem")
+    assert not database.connection.in_transaction

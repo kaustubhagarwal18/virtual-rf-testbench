@@ -408,16 +408,19 @@ class StoreResponse(BaseModel):
     Attributes:
         digest: The embedding model digest the active index uses, or None before a load.
         digest_verified: Whether Ollama confirmed that digest since start-up.
-        stored_runs: How many runs added over HTTP the database holds.
+        stored_runs: How many runs added over HTTP the database holds, or None when it
+            couldn't be read.
         cache_hits: How many texts the active index read from the embedding cache.
         cache_misses: How many it had to embed.
+        error: Why the database couldn't be read, or None when it could.
     """
 
     digest: str | None
     digest_verified: bool
-    stored_runs: int
+    stored_runs: int | None
     cache_hits: int
     cache_misses: int
+    error: str | None
 
 
 class DependenciesResponse(BaseModel):
@@ -491,7 +494,7 @@ def _dependencies_response(
     check, report = service_health.dependencies, service_health.store
     found = check() if check is not None else None
     stored = report() if report is not None else None
-    healthy = (found is None or found.healthy) and (stored is None or stored.digest_verified)
+    healthy = (found is None or found.healthy) and (stored is None or stored.healthy)
     return DependenciesResponse(
         status="ok" if healthy else "degraded",
         ollama=_ollama_response(found) if found is not None else None,

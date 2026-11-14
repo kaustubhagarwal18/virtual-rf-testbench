@@ -17,8 +17,11 @@ from tests.unit.triage.history_fakes import (
     write_dataset,
 )
 from tests.unit.triage.test_api import CABLE_REPLY, LABEL, RESULTS
+from triage import history_store
 from triage.api import create_app, main
+from triage.embed_cache import EmbeddingCache
 from triage.health import ServiceHealth
+from triage.history_db import DatabaseError
 from triage.history_loader import HistoryLoader
 from triage.history_store import STALE_REASON, PersistentHistory
 from triage.llm import FakeProvider
@@ -126,6 +129,7 @@ def test_the_dependency_report_shows_the_store(
         "stored_runs": 0,
         "cache_hits": len(DATASET_RUNS),
         "cache_misses": 0,
+        "error": None,
     }
 
 
@@ -198,3 +202,57 @@ def test_main_without_a_history_db_starts_no_loader(tmp_path: Path) -> None:
     assert not started.loaders
     assert TestClient(started.apps[0]).get("/readyz").status_code == status.HTTP_200_OK
     assert not (tmp_path / "history.db").exists()
+
+
+DISK_FULL = DatabaseError("the history database history.db failed (database or disk is full)")
+
+
+def full_disk(*_: object, **__: object) -> Any:
+    """Fail as a full disk does."""
+    raise DISK_FULL
+
+
+@pytest.mark.parametrize("step", ["embed", "insert"])
+def test_a_database_failure_while_adding_history_is_a_one_line_503(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, step: str
+) -> None:
+    """POST /history on a full disk is 503 with the reason, never a 500."""
+    history = open_history(tmp_path)
+    history.load()
+    if step == "embed":
+        monkeypatch.setattr(EmbeddingCache, "store", full_disk)
+    else:
+        monkeypatch.setattr(history_store, "insert_run", full_disk)
+    response = client_for(history).post("/history", json={"results": RESULTS, "label": LABEL})
+    assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    assert "disk is full" in response.json()["detail"]
+    assert "\n" not in response.json()["detail"]
+
+
+def test_a_database_failure_while_triaging_is_a_503(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A cache read that fails while embedding the question is 503, never a 500."""
+    history = open_history(tmp_path)
+    history.load()
+    monkeypatch.setattr(EmbeddingCache, "vectors", full_disk)
+    response = client_for(history).post("/triage", json={"results": RESULTS})
+    assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    assert "disk is full" in response.json()["detail"]
+
+
+def test_a_store_that_cant_be_read_leaves_the_report_200_and_degraded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The dependency report still answers, shows the store's error, and says degraded."""
+    history = open_history(tmp_path)
+    history.load()
+    assert history.database is not None
+    monkeypatch.setattr(history.database, "query", full_disk)
+    response = client_for(history).get("/health/dependencies")
+    assert response.status_code == status.HTTP_200_OK
+    body = response.json()
+    assert body["status"] == "degraded"
+    assert body["store"]["stored_runs"] is None
+    assert "disk is full" in body["store"]["error"]
+    assert client_for(history).get("/livez").status_code == status.HTTP_200_OK

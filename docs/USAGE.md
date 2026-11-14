@@ -237,6 +237,7 @@ service stops. To keep them, give it a file (ADR 0027):
 | `--history-db` | `TRIAGE_HISTORY_DB` | unset: memory only |
 
 ```
+mkdir -p .cache
 TRIAGE_HISTORY_DB=.cache/triage-history.db make triage-api
 ```
 

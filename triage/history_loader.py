@@ -9,14 +9,33 @@ rebuild under the new digest. Waiting goes through an injected function, so test
 the loop without sleeping.
 """
 
+import json
+import logging
 import sqlite3
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from triage.case import CaseError
+from triage.history_db import DatabaseError
 from triage.history_store import HistoryUnavailableError, PersistentHistory
 from triage.llm import ModelUnavailableError
+
+EXPECTED_FAILURES: tuple[type[Exception], ...] = (
+    ModelUnavailableError,
+    CaseError,
+    DatabaseError,
+    HistoryUnavailableError,
+    OSError,
+    sqlite3.Error,
+    ValueError,
+    KeyError,
+)
+"""What a load or a digest check can fail with and recover from on a later try: Ollama down
+or answering nonsense, a bad history run or label, the database failing. The loop records the
+failure and retries; it never ends because of one, since nothing else would restart it."""
+
+_LOG = logging.getLogger(__name__)
 
 BACKOFF_START_S = 2.0
 """The first wait after a failed load or an unanswered digest check."""
@@ -66,13 +85,7 @@ class HistoryLoader:
         self.history.rebuild.clear()
         try:
             self.history.load()
-        except (
-            ModelUnavailableError,
-            CaseError,
-            OSError,
-            sqlite3.Error,
-            HistoryUnavailableError,
-        ) as error:
+        except EXPECTED_FAILURES as error:
             self.history.wait_reason(str(error))
             return False
         return True
@@ -94,13 +107,26 @@ class HistoryLoader:
         """Wait until a rebuild is needed: a rebuild request, a changed digest, or a stop."""
         delay_s = BACKOFF_START_S
         while not self.stop.is_set():
-            verified = self.history.status().digest_verified
+            verified = self.history.digest_verified()
             woken = self._wait(VERIFY_INTERVAL_S if verified else delay_s)
             if woken or self.history.rebuild.is_set() or self.stop.is_set():
                 return
-            if self.history.verify_digest():
+            if self._digest_changed():
                 return
+            verified = self.history.digest_verified()
             delay_s = BACKOFF_START_S if verified else next_delay(delay_s)
+
+    def _digest_changed(self) -> bool:
+        """Check the digest; a failed check is logged and retried, never fatal to the loop.
+
+        Returns:
+            True when the digest changed and the index must be rebuilt.
+        """
+        try:
+            return self.history.verify_digest()
+        except EXPECTED_FAILURES as error:
+            _LOG.warning(json.dumps({"event": "digest_check_failed", "cause": str(error)}))
+            return False
 
     def _wait(self, seconds: float) -> bool:
         """Wait through the injected function, or on the history's rebuild event.

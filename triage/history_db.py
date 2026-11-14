@@ -7,6 +7,7 @@ nothing here ever deletes it, and a file that fails its integrity check is repor
 the fix, never replaced.
 """
 
+import contextlib
 import sqlite3
 import threading
 from collections.abc import Iterator
@@ -103,19 +104,26 @@ class Database:
 
         Yields:
             sqlite3.Cursor: A cursor to write with; everything it does is rolled back if the
-            block raises or the commit fails, and the exception carries on to the caller.
+            block raises or the commit fails.
+
+        Raises:
+            DatabaseError: If SQLite fails while running the transaction, such as on a full
+                disk; the message names the file and what to check. Other exceptions from the
+                block carry on to the caller unchanged.
         """
         with self.lock:
-            cursor = self.connection.cursor()
-            cursor.execute("BEGIN IMMEDIATE")
             committed = False
             try:
+                cursor = self.connection.cursor()
+                cursor.execute("BEGIN IMMEDIATE")
                 yield cursor
                 cursor.execute("COMMIT")
                 committed = True
+            except sqlite3.Error as error:
+                raise DatabaseError(_failed(self.path, error)) from error
             finally:
                 if not committed:
-                    cursor.execute("ROLLBACK")
+                    self._roll_back()
 
     def query(self, sql: str, parameters: tuple[Any, ...] = ()) -> list[tuple[Any, ...]]:
         """Read rows.
@@ -126,9 +134,27 @@ class Database:
 
         Returns:
             Every row it returned.
+
+        Raises:
+            DatabaseError: If SQLite fails to read, such as on an I/O error; the message
+                names the file and what to check.
         """
         with self.lock:
-            return list(self.connection.execute(sql, parameters).fetchall())
+            try:
+                return list(self.connection.execute(sql, parameters).fetchall())
+            except sqlite3.Error as error:
+                raise DatabaseError(_failed(self.path, error)) from error
+
+    def _roll_back(self) -> None:
+        """Undo an unfinished transaction; one SQLite already ended needs nothing undone.
+
+        A connection that has failed can't even say whether a transaction is open; SQLite
+        then rolls back on its own, so there is nothing more to do and nothing to report
+        beyond the error already on its way to the caller.
+        """
+        with contextlib.suppress(sqlite3.Error):
+            if self.connection.in_transaction:
+                self.connection.execute("ROLLBACK")
 
     def close(self) -> None:
         """Close the connection."""
@@ -157,6 +183,22 @@ def _prepare(connection: sqlite3.Connection) -> None:
     if check != ["ok"]:
         raise _CorruptError("; ".join(str(line) for line in check[:3]))
     connection.executescript(SCHEMA)
+
+
+def _failed(path: Path, error: Exception) -> str:
+    """Say that a read or write on an open database failed, and what to check.
+
+    Args:
+        path: The file.
+        error: What SQLite reported.
+
+    Returns:
+        One line naming the file and the fix.
+    """
+    return (
+        f"the history database {path} failed ({error}); check the disk has space and the "
+        "file is writable"
+    )
 
 
 def _cannot_open(path: Path, error: Exception) -> str:

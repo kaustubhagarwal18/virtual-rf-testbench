@@ -21,14 +21,14 @@ import logging
 import threading
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
 from triage.bench_run import load_case
-from triage.case import Case
+from triage.case import Case, CaseError
 from triage.embed import Embedder
 from triage.embed_cache import CachedEmbedder, DigestSource, EmbeddingCache
 from triage.health import StoreStatus
@@ -81,7 +81,7 @@ class _IndexState:
         digest: The digest the active index was built with.
         digest_verified: Whether Ollama confirmed that digest since start-up.
         rebuild_reason: Why the active index can't be used until a rebuild, or None.
-        waiting_reason: Why the last load attempt failed, while there is no index yet.
+        last_failure: Why the last load attempt failed, or None before one has failed.
     """
 
     index: InMemoryRetriever | None = None
@@ -89,7 +89,7 @@ class _IndexState:
     digest: str | None = None
     digest_verified: bool = False
     rebuild_reason: str | None = None
-    waiting_reason: str = "starting"
+    last_failure: str | None = None
 
 
 @dataclass
@@ -160,14 +160,21 @@ class PersistentHistory:
             The closest past runs.
 
         Raises:
-            HistoryUnavailableError: If the history isn't ready; the message says why.
+            HistoryUnavailableError: If the history isn't ready, or its database fails while
+                the question is embedded; the message says why.
         """
         with self.lock:
             reason = self._reason()
             index = self.state.index
-        if reason is not None or index is None:
+            # A writer appends to the index under this lock; a copy of its source list, with
+            # the vectors as they are now, can't show a vector whose source isn't there yet.
+            snapshot = replace(index, sources=list(index.sources)) if index is not None else None
+        if reason is not None or snapshot is None:
             raise HistoryUnavailableError(reason or LOADING_REASON)
-        return index.similar_to(run, count, exclude_faults)
+        try:
+            return snapshot.similar_to(run, count, exclude_faults)
+        except DatabaseError as error:
+            raise HistoryUnavailableError(str(error)) from error
 
     def add(self, run: Case, label: dict[str, Any]) -> Source:
         """Add a resolved run: embed it, commit it, then put it in the active index.
@@ -178,11 +185,19 @@ class PersistentHistory:
 
         Returns:
             The source it became; the same source for a run submitted twice.
+            ModelUnavailableError propagates when the run can't be embedded.
+
+        Raises:
+            HistoryUnavailableError: If the database can't take the run, such as on a full
+                disk; nothing reaches the index then.
         """
         database = self._open_database()
         source = history_source(run, label, self.config.pack)
-        self._writer_embedder(database).embed_and_store([source.text])
-        created = _insert_run(database, source, label, self.config.clock())
+        try:
+            self._writer_embedder(database).embed_and_store([source.text])
+            created = insert_run(database, source, label, self.config.clock())
+        except DatabaseError as error:
+            raise HistoryUnavailableError(str(error)) from error
         with self.lock:
             self._apply(run, label, source, created)
         return source
@@ -210,14 +225,19 @@ class PersistentHistory:
                 digest=digest,
                 digest_verified=verified,
             )
-        EmbeddingCache(database).prune(self.config.model, digest)
+        self._prune(database, digest)
 
     def verify_digest(self) -> bool:
         """Check the active index's digest against Ollama's.
 
+        The digest counts as verified only once Ollama has confirmed it and the check is
+        recorded, so an offline restart reads the cache under a digest that was confirmed.
+
         Returns:
             True when the digest changed and the index must be rebuilt; it is then not
-            ready. False when it matched, or Ollama couldn't be asked.
+            ready. False when it matched, or Ollama couldn't be asked. If the check can't be
+            recorded, such as on a full disk, DatabaseError from the cache propagates and the
+            digest stays unverified, for the caller to try again later.
         """
         try:
             current = self.config.digest_source()
@@ -227,12 +247,22 @@ class PersistentHistory:
             if self.state.digest != current:
                 self.state.rebuild_reason = MODEL_CHANGED_REASON
                 return True
-            self.state.digest_verified = True
         if self.database is not None:
             EmbeddingCache(self.database).record_digest(
                 self.config.model, current, self.config.clock()
             )
+        with self.lock:
+            self.state.digest_verified = self.state.digest == current
         return False
+
+    def digest_verified(self) -> bool:
+        """Say whether Ollama has confirmed the active index's digest, without the database.
+
+        Returns:
+            True once confirmed since start-up.
+        """
+        with self.lock:
+            return self.state.digest_verified
 
     def wait_reason(self, reason: str) -> None:
         """Record why the last load attempt failed, for readiness to report.
@@ -241,41 +271,61 @@ class PersistentHistory:
             reason: One line from the failure.
         """
         with self.lock:
-            self.state.waiting_reason = reason
+            self.state.last_failure = reason
 
     def status(self) -> StoreStatus:
-        """Describe the history for the dependency report.
+        """Describe the history for the dependency report; a database failure is reported.
 
         Returns:
-            The digest in use, whether it is verified, and the stored and cached counts.
+            The digest in use, whether it is verified, and the stored and cached counts;
+            with no stored count and the reason when the database can't be read.
         """
         with self.lock:
             embedder, digest = self.state.embedder, self.state.digest
             verified = self.state.digest_verified
-        stored = 0
+        stored: int | None = 0
+        error: str | None = None
         if self.database is not None:
-            stored = int(self.database.query("SELECT COUNT(*) FROM runs")[0][0])
+            try:
+                stored = int(self.database.query("SELECT COUNT(*) FROM runs")[0][0])
+            except DatabaseError as failure:
+                stored, error = None, str(failure)
         return StoreStatus(
             digest=digest,
             digest_verified=verified,
             stored_runs=stored,
             cache_hits=embedder.hits if embedder is not None else 0,
             cache_misses=embedder.misses if embedder is not None else 0,
+            error=error,
         )
 
     def _reason(self) -> str | None:
         """Say why the history can't serve, with the state lock held.
 
         Returns:
-            The reason, or None when it is ready.
+            The reason, with the last failed attempt's when there is one; None when ready.
         """
         if self.open_error is not None:
             return self.open_error
+        failure = self.state.last_failure
         if self.state.rebuild_reason is not None:
-            return self.state.rebuild_reason
+            suffix = f" (last attempt: {failure})" if failure is not None else ""
+            return f"{self.state.rebuild_reason}{suffix}"
         if self.state.index is None:
-            return f"{LOADING_REASON}: {self.state.waiting_reason}"
+            return f"{LOADING_REASON}: {failure or 'starting'}"
         return None
+
+    def _prune(self, database: Database, digest: str) -> None:
+        """Drop vectors stored under other digests; a failure only leaves them for later.
+
+        Args:
+            database: The open database.
+            digest: The digest the new active index was built with.
+        """
+        try:
+            EmbeddingCache(database).prune(self.config.model, digest)
+        except DatabaseError as error:
+            _LOG.warning(json.dumps({"event": "history_prune_failed", "cause": str(error)}))
 
     def _open_database(self) -> Database:
         """Return the database, or say why there is none.
@@ -312,14 +362,20 @@ class PersistentHistory:
     def _apply(self, run: Case, label: dict[str, Any], source: Source, created: bool) -> None:
         """Put a committed run in the active index, with the state lock held.
 
+        The run's vector is stored first through the active index's embedder. A load may
+        have swapped in a new digest since the write began, and the vector must exist under
+        the digest in use, or an offline restart couldn't load this run from the cache.
+        Any failure here marks the index stale: the run is committed, so the rebuild
+        brings it back.
+
         Args:
             run: The run's evidence.
             label: Its label.
             source: The source it became.
             created: Whether the insert created the row; False for a duplicate.
         """
-        index = self.state.index
-        if index is None:
+        index, embedder = self.state.index, self.state.embedder
+        if index is None or embedder is None:
             return
         known = any(existing.source_id == source.source_id for existing in index.sources)
         if not created:
@@ -327,8 +383,9 @@ class PersistentHistory:
                 self._mark_stale(source.source_id, "a stored run is missing from the index")
             return
         try:
+            embedder.embed_and_store([source.text])
             index.add(run, label)
-        except (ValueError, MemoryError, ModelUnavailableError) as error:
+        except (ValueError, MemoryError, ModelUnavailableError, DatabaseError) as error:
             self._mark_stale(source.source_id, str(error))
 
     def _mark_stale(self, source_id: str, cause: str) -> None:
@@ -374,8 +431,30 @@ class PersistentHistory:
             One source per run folder, as InMemoryRetriever.from_history reads them.
         """
         folders = sorted(folder for folder in self.config.dataset.iterdir() if folder.is_dir())
-        runs = [load_case(folder) for folder in folders]
-        return [history_source(run, load_label(run), self.config.pack) for run in runs]
+        return [_labelled_source(load_case(folder), self.config.pack) for folder in folders]
+
+
+def _labelled_source(run: Case, pack: Pack) -> Source:
+    """Turn a shipped history run into a source, naming its folder if its label is unusable.
+
+    Args:
+        run: The history run.
+        pack: The domain pack that words its evidence.
+
+    Returns:
+        Its source.
+
+    Raises:
+        CaseError: If its label.json can't be read, isn't an object, or lacks the cause or
+            the fix; the message names the folder and the problem.
+    """
+    try:
+        return history_source(run, load_label(run), pack)
+    except (OSError, ValueError, TypeError, KeyError, AttributeError) as error:
+        raise CaseError(
+            f"{run.folder}: label.json is unusable ({type(error).__name__}: {error}); it must "
+            "be a JSON object with at least the cause and the fix"
+        ) from error
 
 
 def _unique(sources: list[Source]) -> list[Source]:
@@ -416,7 +495,7 @@ def _extended(
     return InMemoryRetriever([*old_sources, *sources], vectors, embedder, pack)
 
 
-def _insert_run(database: Database, source: Source, label: dict[str, Any], now: float) -> bool:
+def insert_run(database: Database, source: Source, label: dict[str, Any], now: float) -> bool:
     """Commit a run, unless one with the same id is already stored.
 
     Args:

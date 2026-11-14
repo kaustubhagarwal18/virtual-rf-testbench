@@ -17,7 +17,7 @@ from dataclasses import dataclass
 
 from triage.embed import Embedder
 from triage.health import Opener, full_model_name, ollama_status
-from triage.history_db import Database
+from triage.history_db import Database, DatabaseError
 from triage.llm import ModelUnavailableError, open_url
 
 
@@ -80,7 +80,8 @@ class EmbeddingCache:
             keys: The texts' keys, from text_key.
 
         Returns:
-            Each cached key's vector; keys with no vector are left out.
+            Each cached key's vector; keys with no vector are left out. A stored vector that
+            can't be read back propagates DatabaseError from _parse.
         """
         found: dict[str, list[float]] = {}
         for key in set(keys):
@@ -89,8 +90,44 @@ class EmbeddingCache:
                 (model, digest, key),
             )
             if rows:
-                found[key] = [float(value) for value in json.loads(rows[0][0])]
+                found[key] = self._parse(rows[0][0])
         return found
+
+    def _parse(self, stored: str) -> list[float]:
+        """Read a stored vector back as a non-empty list of numbers.
+
+        Args:
+            stored: The vector as it was stored, JSON text.
+
+        Returns:
+            The vector.
+
+        Raises:
+            DatabaseError: If it isn't a non-empty JSON list of numbers; the message names
+                the file and the fix.
+        """
+        try:
+            parsed = json.loads(stored)
+            values = [float(value) for value in parsed] if isinstance(parsed, list) else []
+        except (TypeError, ValueError) as error:
+            raise DatabaseError(self._unreadable(str(error))) from error
+        if not values:
+            raise DatabaseError(self._unreadable(f"expected a non-empty list: {stored[:40]!r}"))
+        return values
+
+    def _unreadable(self, problem: str) -> str:
+        """Say that a stored vector can't be used, and how to recover.
+
+        Args:
+            problem: What is wrong with it.
+
+        Returns:
+            One line naming the file and the fix.
+        """
+        return (
+            f"{self.database.path} holds an unreadable vector ({problem}); move the file "
+            "aside and restart to rebuild the cache"
+        )
 
     def store(self, model: str, digest: str, vectors: dict[str, list[float]]) -> None:
         """Store vectors, keeping any already there.
@@ -207,13 +244,43 @@ class CachedEmbedder:
             ModelUnavailableError from it unchanged, after the vectors before it are stored.
         """
         if not store:
-            return dict(zip(missing, self.inner.embed(list(missing.values())), strict=True))
+            return dict(zip(missing, self._ask(list(missing.values())), strict=True))
         fetched: dict[str, list[float]] = {}
         for key, text in missing.items():
-            vector = self.inner.embed([text])[0]
+            vector = self._ask([text])[0]
             self.cache.store(self.model, self.digest, {key: vector})
             fetched[key] = vector
         return fetched
+
+    def _ask(self, texts: list[str]) -> list[list[float]]:
+        """Ask the inner embedder, treating an unusable reply as an unavailable model.
+
+        Ollama can answer with something that isn't JSON, or with an embedding that holds
+        something other than numbers. Either way there is no vector to use, which callers
+        already handle as ModelUnavailableError: a 503, or a load retried with backoff.
+
+        Args:
+            texts: The texts to embed.
+
+        Returns:
+            One vector of floats per text. ModelUnavailableError from the inner embedder
+            propagates unchanged.
+
+        Raises:
+            ModelUnavailableError: If the reply can't be read as one list of numbers per text.
+        """
+        try:
+            usable = [[float(value) for value in vector] for vector in self.inner.embed(texts)]
+        except (TypeError, ValueError) as error:
+            raise ModelUnavailableError(
+                f"the embedding model's reply couldn't be used ({error}); check that "
+                f"{self.model} is an embedding model and Ollama is healthy"
+            ) from error
+        if len(usable) != len(texts):
+            raise ModelUnavailableError(
+                f"the embedding model returned {len(usable)} vectors for {len(texts)} texts"
+            )
+        return usable
 
 
 DigestSource = Callable[[], str]

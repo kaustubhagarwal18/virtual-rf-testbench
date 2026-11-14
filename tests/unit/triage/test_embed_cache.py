@@ -1,7 +1,9 @@
 """Tests for the embedding cache: hits, misses, digests, and resuming an interrupted load."""
 
 import json
+from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -9,7 +11,7 @@ from tests.unit.triage.history_fakes import DIGEST, NEW_DIGEST, NOW, CountingEmb
 from triage.embed import FakeEmbedder
 from triage.embed_cache import CachedEmbedder, EmbeddingCache, ollama_digest, text_key
 from triage.health import Opener
-from triage.history_db import Database
+from triage.history_db import Database, DatabaseError
 from triage.llm import ModelUnavailableError
 
 MODEL = "nomic-embed-text"
@@ -121,3 +123,59 @@ def test_a_digest_that_cant_be_read_says_why(tags: object, message: str) -> None
     """A missing model, a missing digest or a bad reply is ModelUnavailableError with the fix."""
     with pytest.raises(ModelUnavailableError, match=message):
         ollama_digest("http://ollama", MODEL, opener=tags_opener(tags))
+
+
+class OddEmbedder:
+    """An embedder whose reply is unusable in a given way, as a misbehaving Ollama's can be."""
+
+    def __init__(self, reply: Any) -> None:
+        """Answer every call with this reply, or raise it when it is an exception."""
+        self.reply = reply
+
+    def embed(self, texts: Sequence[str]) -> list[list[float]]:
+        """Return or raise the configured reply."""
+        del texts
+        if isinstance(self.reply, Exception):
+            raise self.reply
+        reply: list[list[float]] = self.reply
+        return reply
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        json.JSONDecodeError("Expecting value", "<html>", 0),
+        ValueError("could not convert string to float: 'x'"),
+        TypeError("float() argument must be a string or a real number"),
+        [["x", "y"]],
+        [[None, 1.0]],
+        [[1.0], [2.0]],
+        [],
+    ],
+    ids=["not-json", "value-error", "type-error", "strings", "null", "too-many", "none"],
+)
+@pytest.mark.parametrize("store", [False, True], ids=["embed", "embed_and_store"])
+def test_an_unusable_embedding_reply_is_an_unavailable_model(
+    tmp_path: Path, reply: object, store: bool
+) -> None:
+    """Every malformed reply becomes ModelUnavailableError, which callers already handle."""
+    cache = EmbeddingCache(Database.open(tmp_path / "history.db"))
+    embedder = CachedEmbedder(OddEmbedder(reply), cache, MODEL, DIGEST)
+    with pytest.raises(ModelUnavailableError, match="embedding model"):
+        if store:
+            embedder.embed_and_store(["one text"])
+        else:
+            embedder.embed(["one text"])
+    assert not cache.vectors(MODEL, DIGEST, [text_key("one text")])
+
+
+@pytest.mark.parametrize("stored", ["not json", '["x"]', "{}", "3"])
+def test_an_unreadable_stored_vector_is_a_database_error(tmp_path: Path, stored: str) -> None:
+    """A vector row that can't be read back as numbers names the file and the fix."""
+    database = Database.open(tmp_path / "history.db")
+    with database.transaction() as cursor:
+        cursor.execute(
+            "INSERT INTO vectors VALUES (?, ?, ?, ?)", (MODEL, DIGEST, text_key("t"), stored)
+        )
+    with pytest.raises(DatabaseError, match="move the file aside"):
+        EmbeddingCache(database).vectors(MODEL, DIGEST, [text_key("t")])
