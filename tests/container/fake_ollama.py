@@ -171,6 +171,9 @@ def main() -> int:
     if FakeOllamaHandler.settings.embed_barrier:
         # Clear the gate so embeddings block until GET /barrier/release sets it.
         FakeOllamaHandler.embed_gate.clear()
+    else:
+        # Gate starts unset; set it so embeddings pass through immediately.
+        FakeOllamaHandler.embed_gate.set()
     # Inside a container on a private test network: every interface is that network.
     server = ThreadingHTTPServer(("0.0.0.0", PORT), FakeOllamaHandler)  # nosec B104
     _LOG.info(json.dumps({"event": "listening", "port": PORT, **vars(FakeOllamaHandler.settings)}))
