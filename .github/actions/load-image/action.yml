@@ -1,0 +1,42 @@
+name: Load a built image
+description: >-
+  Load an image another job built and scanned, and fail unless its ID is the one that job
+  recorded, so every later job runs or pushes exactly the scanned image.
+inputs:
+  archive:
+    description: The docker save archive, such as simulators.tar.
+    required: true
+  id-file:
+    description: The file holding the image ID the build job recorded.
+    required: true
+  name-target:
+    description: The make target that prints the image's local name, such as image-name.
+    required: true
+outputs:
+  image:
+    description: The loaded image's local name.
+    value: ${{ steps.load.outputs.image }}
+  id:
+    description: The loaded image's ID.
+    value: ${{ steps.load.outputs.id }}
+runs:
+  using: composite
+  steps:
+    - name: Load the image and check its ID
+      id: load
+      shell: bash
+      env:
+        ARCHIVE: ${{ inputs.archive }}
+        ID_FILE: ${{ inputs.id-file }}
+        NAME_TARGET: ${{ inputs.name-target }}
+      run: |
+        docker load --input "$ARCHIVE"
+        image=$(make --silent "$NAME_TARGET")
+        expected=$(cat "$ID_FILE")
+        loaded=$(docker image inspect --format '{{.Id}}' "$image")
+        if [ "$loaded" != "$expected" ]; then
+          echo "::error::$image loaded as $loaded, but the build job recorded $expected; rerun the build job"
+          exit 1
+        fi
+        echo "image=$image" >> "$GITHUB_OUTPUT"
+        echo "id=$loaded" >> "$GITHUB_OUTPUT"

@@ -115,9 +115,11 @@ dev = [
     "pylint>=4.1.3",
     "pytest>=9.2.0",
     "pytest-cov>=7.1.0",
+    "pyyaml>=6.0.3",
     "rsinstrument>=1.131.0",
     "ruff>=0.17.3",
     "types-defusedxml>=0.7.0.20260504",
+    "types-pyyaml>=6.0.12.20261113",
     "uvicorn>=0.32",
 ]
 

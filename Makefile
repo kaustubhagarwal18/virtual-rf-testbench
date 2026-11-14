@@ -4,12 +4,15 @@ EVAL_REPORT ?= triage/results/rag.md
 FIRMWARE_VERSION ?= $(shell uv version --short 2>/dev/null)
 REVISION ?= $(shell git rev-parse --short HEAD 2>/dev/null)
 IMAGE := virtual-rf-testbench-simulators:$(or $(FIRMWARE_VERSION),dev)
+TRIAGE_IMAGE_NAME := virtual-rf-testbench-triage:$(or $(FIRMWARE_VERSION),dev)
+# The triage image the container tests run, by ID; defaults to the one make triage-image built.
+TRIAGE_IMAGE ?= $(shell docker image inspect --format '{{.Id}}' $(TRIAGE_IMAGE_NAME) 2>/dev/null)
 BENCH_BUILD ?= --build
 
 export FIRMWARE_VERSION REVISION
 PYTHON_PATHS := $(PACKAGES) tests
 
-.PHONY: setup lint fmt test summary image image-name image-scan bench-up bench-down bench-logs bench-test bench-summary fault fault-dataset triage triage-demo triage-api eval retrieval-eval clean
+.PHONY: setup lint fmt test summary image image-name image-scan bench-up bench-down bench-logs bench-test bench-summary fault fault-dataset triage triage-demo triage-api triage-image triage-image-name triage-up triage-down triage-smoke eval retrieval-eval clean
 
 setup:
 	uv sync
@@ -76,6 +79,21 @@ triage-demo:
 
 triage-api:
 	uv run --extra api python -m triage.api
+
+triage-image:
+	docker compose --profile triage build triage
+
+triage-image-name:
+	@echo $(TRIAGE_IMAGE_NAME)
+
+triage-up:
+	docker compose --profile triage up --build --detach --wait --wait-timeout 60 triage
+
+triage-down:
+	docker compose --profile triage rm --stop --force triage
+
+triage-smoke:
+	TRIAGE_IMAGE="$(TRIAGE_IMAGE)" uv run pytest tests/container --no-cov --durations=0 --junitxml=reports/triage-smoke-junit.xml
 
 eval:
 	uv run python -m triage.evaluate $(if $(MODEL),--model $(MODEL)) --report $(EVAL_REPORT)

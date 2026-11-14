@@ -45,9 +45,11 @@ GitHub Actions runs on every pull request and on every push to `main`:
 |---|---|
 | Lint | Every pre-commit hook on all files: trailing whitespace, final newlines, YAML and TOML syntax, large files, merge conflict markers, then `make lint` |
 | Test (Python 3.13) | `make test`, including the 80% coverage floor, then `make summary`, whose table appears on the run's summary page |
-| Image (build and scan) | Builds the simulator image once and scans it with Trivy 0.76.1 (pinned, checksum-verified); fails on a fixable high or critical vulnerability |
-| Bench (containers) | Loads that same image, `make bench-up BENCH_BUILD=--no-build`, `make bench-test`, then `make bench-summary` on the run's summary page; shows the simulator logs if anything failed, and saves a failed run for the triage job |
-| Publish image | On pushes to `main` only, once every other job passed: pushes the scanned image to GitHub Container Registry as `virtual-rf-testbench-simulators:<version>-<commit>` |
+| Image (build and scan) | Builds the simulator image once, scans it with Trivy 0.76.1 (pinned, checksum-verified), generates a Syft SBOM, saves the image and writes its ID to `image-id.txt`; fails on a fixable high or critical vulnerability |
+| Bench (containers) | Loads that same image, checks the ID, `make bench-up BENCH_BUILD=--no-build`, `make bench-test`, then `make bench-summary` on the run's summary page; shows the simulator logs if anything failed, and saves a failed run for the triage job |
+| Triage image (build and scan) | Same as the Image job, for the triage API image (`triage-runtime` stage) |
+| Triage smoke | Loads the triage image by ID, checks it matches `image-id.txt`, runs `make triage-smoke` with the container tests against a fake Ollama; builds nothing |
+| Publish image | On pushes to `main` only, once every required job passed: pushes both scanned images to GitHub Container Registry as `<name>:<version>-<commit>`, checking the loaded ID before pushing |
 | Secret scan | gitleaks 8.30.1 over the full git history, including merge commits; the download is checksum-verified |
 | Triage (allowed to fail) | Only when the bench job failed: starts Ollama 0.40.14 (pinned, checksum-verified, cached with its models) on the runner and triages each distinct failure in the saved run, up to five, as the API does (`tools/ci_triage.py`); the answers go on the run's summary page and into the results comment |
 | Results comment | On pull requests, once the other jobs finish: posts one comment with the test and bench results, coverage, any failures, the triage verdict when the bench failed, and each job's result, and updates that same comment on every push |

@@ -40,3 +40,36 @@ services:
     depends_on:
       signal-generator:
         condition: service_healthy
+
+  # The triage API, under its own profile: make image and make bench-up never build or start
+  # it. make triage-image builds it and make triage-up starts it. It talks to the Ollama on
+  # this machine through host.docker.internal; added runs and cached vectors persist in the
+  # triage-history volume (docs/INFRASTRUCTURE.md).
+  triage:
+    profiles: [triage]
+    image: virtual-rf-testbench-triage:${FIRMWARE_VERSION:-dev}
+    build:
+      context: .
+      target: triage-runtime
+      args:
+        FIRMWARE_VERSION: ${FIRMWARE_VERSION:-}
+        REVISION: ${REVISION:-unknown}
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 512m
+    restart: "no"
+    environment:
+      TRIAGE_OLLAMA_HOST: ${TRIAGE_OLLAMA_HOST:-http://host.docker.internal:11434}
+    # Docker Desktop resolves host.docker.internal itself; this line does the same on Linux.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - triage-history:/data
+    ports:
+      - "127.0.0.1:8000:8000"
+
+volumes:
+  triage-history:

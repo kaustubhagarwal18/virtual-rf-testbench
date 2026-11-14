@@ -18,6 +18,8 @@ env:
   GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
   TRIVY_VERSION: "0.76.1"
   TRIVY_SHA256: "c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0"
+  SYFT_VERSION: "1.57.1"
+  SYFT_SHA256: "bf52519eb57f675d47c07d43213cb6dff6449f3d6d1147ff6701ed91f44eef0c"
   # The triage job's local model server and the models triage/llm.py and triage/embed.py use.
   OLLAMA_VERSION: "0.40.14"
   OLLAMA_SHA256: "993e83d08c3d13d17c55009a3e2664c8a25445e644aec3a68bef5abb6abce67d"
@@ -91,26 +93,124 @@ jobs:
           version: ${{ env.UV_VERSION }}
       - name: Build the simulator image
         run: make image
-      - name: Install Trivy (pinned version, checksum verified)
-        run: |
-          archive="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
-          curl -sSfL --retry 5 --retry-delay 10 -o "$archive" \
-            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/${archive}"
-          echo "${TRIVY_SHA256}  ${archive}" | sha256sum --check --strict
-          tar -xzf "$archive" trivy
+      - name: Record its ID, so later jobs can check they load this exact image
+        run: docker image inspect --format '{{.Id}}' "$(make --silent image-name)" > image-id.txt
+      - name: Install Trivy and Syft
+        uses: ./.github/actions/install-scanners
+        with:
+          trivy-version: ${{ env.TRIVY_VERSION }}
+          trivy-sha256: ${{ env.TRIVY_SHA256 }}
+          syft-version: ${{ env.SYFT_VERSION }}
+          syft-sha256: ${{ env.SYFT_SHA256 }}
       - name: Scan the image; fail on a fixable high or critical vulnerability
         run: >-
           ./trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed --no-progress
           "$(make --silent image-name)"
+      - name: Software bill of materials (SPDX JSON)
+        run: >-
+          ./syft scan "docker:$(make --silent image-name)"
+          --output spdx-json=simulators.sbom.spdx.json
       - name: Save the image, so the bench tests and publishes exactly what was scanned
         run: docker save "$(make --silent image-name)" --output simulators.tar
-      - name: Keep the image for the bench and publish jobs
+      - name: Keep the image and its ID for the bench and publish jobs
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: simulator-image
-          path: simulators.tar
+          path: |
+            simulators.tar
+            image-id.txt
           if-no-files-found: error
           retention-days: 1
+      - name: Keep the bill of materials
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: simulator-sbom
+          path: simulators.sbom.spdx.json
+          if-no-files-found: error
+          retention-days: 30
+
+  triage-image:
+    name: Triage image (build and scan)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+      - name: Build the triage image
+        run: make triage-image
+      - name: Record its ID, so later jobs can check they load this exact image
+        run: >-
+          docker image inspect --format '{{.Id}}' "$(make --silent triage-image-name)"
+          > image-id.txt
+      - name: Install Trivy and Syft
+        uses: ./.github/actions/install-scanners
+        with:
+          trivy-version: ${{ env.TRIVY_VERSION }}
+          trivy-sha256: ${{ env.TRIVY_SHA256 }}
+          syft-version: ${{ env.SYFT_VERSION }}
+          syft-sha256: ${{ env.SYFT_SHA256 }}
+      - name: Scan the image; fail on a fixable high or critical vulnerability
+        run: >-
+          ./trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed --no-progress
+          "$(make --silent triage-image-name)"
+      - name: Software bill of materials (SPDX JSON)
+        run: >-
+          ./syft scan "docker:$(make --silent triage-image-name)"
+          --output spdx-json=triage.sbom.spdx.json
+      - name: Save the image, so the container tests and publish use exactly what was scanned
+        run: docker save "$(make --silent triage-image-name)" --output triage.tar
+      - name: Keep the image and its ID for the container tests and publish jobs
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: triage-image
+          path: |
+            triage.tar
+            image-id.txt
+          if-no-files-found: error
+          retention-days: 1
+      - name: Keep the bill of materials
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: triage-sbom
+          path: triage.sbom.spdx.json
+          if-no-files-found: error
+          retention-days: 30
+
+  triage-smoke:
+    name: Triage image (container tests)
+    needs: [triage-image]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+          cache-python: true
+      - name: Install dependencies from the lockfile
+        run: uv sync --locked
+      - name: Fetch the scanned image
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: triage-image
+      - name: Load it, checking it is the image that was scanned; nothing is rebuilt
+        id: triage-image
+        uses: ./.github/actions/load-image
+        with:
+          archive: triage.tar
+          id-file: image-id.txt
+          name-target: triage-image-name
+      - name: Container tests against that image, by ID
+        env:
+          TRIAGE_IMAGE: ${{ steps.triage-image.outputs.id }}
+        run: make triage-smoke
 
   bench:
     name: Bench (containers)
@@ -132,10 +232,14 @@ jobs:
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: simulator-image
-      - name: Load the scanned image and start the bench from it, without rebuilding
-        run: |
-          docker load --input simulators.tar
-          make bench-up BENCH_BUILD=--no-build
+      - name: Load it, checking it is the image that was scanned
+        uses: ./.github/actions/load-image
+        with:
+          archive: simulators.tar
+          id-file: image-id.txt
+          name-target: image-name
+      - name: Start the bench from it, without rebuilding
+        run: make bench-up BENCH_BUILD=--no-build
       - name: Bench suite against the containers
         run: make bench-test
       - name: Results summary on the run page
@@ -244,11 +348,25 @@ jobs:
           retention-days: 7
 
   publish:
-    name: Publish image
-    needs: [lint, test, image, bench, secrets]
-    # Only main is published: a pull request's image is built and scanned, never pushed.
+    name: Publish image (${{ matrix.image.repository }})
+    # Both images publish only once both have passed their own tests and every other check.
+    # The bench's triage is advisory and allowed to fail, so it is never a gate here.
+    needs: [lint, test, secrets, image, bench, triage-image, triage-smoke]
+    # Only main is published: a pull request's images are built and scanned, never pushed.
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - artifact: simulator-image
+            archive: simulators.tar
+            name-target: image-name
+            repository: virtual-rf-testbench-simulators
+          - artifact: triage-image
+            archive: triage.tar
+            name-target: triage-image-name
+            repository: virtual-rf-testbench-triage
     permissions:
       contents: read
       packages: write
@@ -262,20 +380,34 @@ jobs:
       - name: Fetch the scanned image
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: simulator-image
+          name: ${{ matrix.image.artifact }}
+      - name: Load it, checking it is the image that was scanned and tested
+        id: loaded
+        uses: ./.github/actions/load-image
+        with:
+          archive: ${{ matrix.image.archive }}
+          id-file: image-id.txt
+          name-target: ${{ matrix.image.name-target }}
       - name: Push it to GitHub Container Registry, tagged with its version and commit
         env:
           GH_TOKEN: ${{ github.token }}
-        # Tags are immutable by convention (version-commit), so a deployment pins one exactly.
+          LOCAL_IMAGE: ${{ steps.loaded.outputs.image }}
+          REPOSITORY: ${{ matrix.image.repository }}
+        # Tags are immutable by convention (version-commit), so a deployment pins one exactly;
+        # nothing is ever tagged latest.
         run: |
-          docker load --input simulators.tar
-          local_image=$(make --silent image-name)
           owner=$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
-          remote="ghcr.io/${owner}/virtual-rf-testbench-simulators:${local_image##*:}-${GITHUB_SHA::7}"
+          remote="ghcr.io/${owner}/${REPOSITORY}:${LOCAL_IMAGE##*:}-${GITHUB_SHA::7}"
           echo "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-          docker tag "$local_image" "$remote"
+          docker tag "$LOCAL_IMAGE" "$remote"
           docker push "$remote"
-          echo "Pushed \`$remote\`" >> "$GITHUB_STEP_SUMMARY"
+          digest=$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' \
+            "$remote" | grep -m 1 "^ghcr.io/${owner}/${REPOSITORY}@" || true)
+          if [ -z "$digest" ]; then
+            echo "::warning::docker didn't report a digest for $remote; the push log above has it"
+            digest="not reported"
+          fi
+          echo "Pushed \`$remote\` as \`$digest\`" >> "$GITHUB_STEP_SUMMARY"
 
   secrets:
     name: Secret scan
@@ -299,7 +431,7 @@ jobs:
 
   report:
     name: Results comment
-    needs: [lint, test, image, bench, secrets, triage]
+    needs: [lint, test, image, bench, secrets, triage, triage-image, triage-smoke]
     # Pull requests from this repository only: GitHub gives fork pull requests a read-only token.
     if: >-
       ${{ !cancelled() && github.event_name == 'pull_request'
@@ -334,6 +466,8 @@ jobs:
           IMAGE_RESULT: ${{ needs.image.result }}
           BENCH_RESULT: ${{ needs.bench.result }}
           SECRETS_RESULT: ${{ needs.secrets.result }}
+          TRIAGE_IMAGE_RESULT: ${{ needs.triage-image.result }}
+          TRIAGE_SMOKE_RESULT: ${{ needs.triage-smoke.result }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
         # The test-reports folder name follows the Python version in the test job's matrix.
@@ -348,7 +482,10 @@ jobs:
             --coverage reports/test-reports-3.13/coverage.xml --coverage-floor 80 \
             --job "Lint=$LINT_RESULT" --job "Test (Python 3.13)=$TEST_RESULT" \
             --job "Image (build and scan)=$IMAGE_RESULT" \
-            --job "Bench (containers)=$BENCH_RESULT" --job "Secret scan=$SECRETS_RESULT" \
+            --job "Bench (containers)=$BENCH_RESULT" \
+            --job "Triage image (build and scan)=$TRIAGE_IMAGE_RESULT" \
+            --job "Triage image (container tests)=$TRIAGE_SMOKE_RESULT" \
+            --job "Secret scan=$SECRETS_RESULT" \
             --run-url "$RUN_URL" --commit "$COMMIT_SHA" "${triage[@]}" \
             > reports/comment.md
       - name: Post the comment, or update the one posted before
