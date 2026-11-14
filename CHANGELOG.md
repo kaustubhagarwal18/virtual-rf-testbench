@@ -9,6 +9,18 @@ it, so the package version moves only with a release.
 
 ### Added
 
+- **Triage API container image** (ADR 0028): `triage-runtime` stage in the Dockerfile builds
+  a minimal image (fastapi, uvicorn, pydantic, numpy; no pip, rsinstrument or simulators).
+  The seed history is baked in; added runs and embedding vectors live on a named volume.
+  `make triage-image`, `triage-up`, `triage-down` and `triage-smoke` are added to the
+  Makefile.
+- **Container tests** (`tests/container/`): four scenarios run against a fake Ollama from
+  the same image — history survives container replacement, an Ollama outage stays out of the
+  probes, an offline start succeeds from the cache, and a changed model digest is re-embedded
+  before the service becomes ready.
+- **CI: build-once chain** (ADR 0028): `triage-image` and `triage-smoke` jobs; each image is
+  built once, scanned with Trivy, SBOM'd with Syft, and its ID is verified before every
+  subsequent load; both images are published from main as `<version>-<sha7>`.
 - **Persistent triage history** (ADR 0027): `--history-db` / `TRIAGE_HISTORY_DB` keeps runs
   added with `POST /history` in SQLite.
   - Writes are committed before the 201, and duplicates are idempotent.

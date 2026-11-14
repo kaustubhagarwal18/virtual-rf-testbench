@@ -253,3 +253,18 @@ With a file set:
 - The folder must exist. A file that isn't a usable database leaves the service not ready
   with a message saying to move it aside. It's never deleted.
 - SQLite has one writer, so run one copy of the service per file.
+
+## Container image
+
+```
+make triage-image          # build the triage API image
+make triage-image-name     # print its name:tag (for docker push, etc.)
+make triage-up             # start the triage API in a container (needs Docker Desktop)
+make triage-down           # stop it
+make triage-smoke          # run the container tests (requires TRIAGE_IMAGE=<id>)
+```
+
+`make triage-up` starts the `triage` Compose profile, which runs the API with a named
+volume for history and calls your Mac's Ollama through `http://host.docker.internal:11434`.
+See `docs/INFRASTRUCTURE.md` for details on what is baked into the image and what lives on
+the volume.

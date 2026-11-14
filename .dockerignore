@@ -1,4 +1,4 @@
-# Allowlist: the image gets only what the build needs.
+# Allowlist: the images get only what the builds need.
 *
 !pyproject.toml
 !uv.lock
@@ -6,4 +6,10 @@
 !simulators/
 !drivers/
 !measurements/
+!triage/
+# The evaluation's questions are its answer key, results are local output, and Finder files
+# are clutter: none of them ships.
+triage/data/runs/questions/
+triage/results/
 **/__pycache__
+triage/**/.DS_Store

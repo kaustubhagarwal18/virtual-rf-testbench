@@ -1,0 +1,42 @@
+name: Install the image scanners
+description: >-
+  Trivy and Syft at pinned versions, each checked against its published SHA-256 before it is
+  unpacked into the workspace as ./trivy and ./syft.
+inputs:
+  trivy-version:
+    description: The Trivy release, such as 0.76.1.
+    required: true
+  trivy-sha256:
+    description: The SHA-256 of that release's Linux 64-bit archive.
+    required: true
+  syft-version:
+    description: The Syft release, such as 1.57.1.
+    required: true
+  syft-sha256:
+    description: The SHA-256 of that release's linux_amd64 archive.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Install Trivy (pinned version, checksum verified)
+      shell: bash
+      env:
+        TRIVY_VERSION: ${{ inputs.trivy-version }}
+        TRIVY_SHA256: ${{ inputs.trivy-sha256 }}
+      run: |
+        archive="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+        curl -sSfL --retry 5 --retry-delay 10 -o "$archive" \
+          "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/${archive}"
+        echo "${TRIVY_SHA256}  ${archive}" | sha256sum --check --strict
+        tar -xzf "$archive" trivy
+    - name: Install Syft (pinned version, checksum verified)
+      shell: bash
+      env:
+        SYFT_VERSION: ${{ inputs.syft-version }}
+        SYFT_SHA256: ${{ inputs.syft-sha256 }}
+      run: |
+        archive="syft_${SYFT_VERSION}_linux_amd64.tar.gz"
+        curl -sSfL --retry 5 --retry-delay 10 -o "$archive" \
+          "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/${archive}"
+        echo "${SYFT_SHA256}  ${archive}" | sha256sum --check --strict
+        tar -xzf "$archive" syft
