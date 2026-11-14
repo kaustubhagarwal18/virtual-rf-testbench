@@ -113,6 +113,41 @@ def test_any_failure_is_reported_not_raised(failure: Exception | bytes) -> None:
     assert found.models == (ModelStatus("qwen2.5:3b", present=False, digest=None),)
 
 
+@pytest.mark.parametrize(
+    "tags",
+    [{"models": None}, {"models": "qwen2.5:3b"}, {"models": {"name": "qwen2.5:3b"}}, {"models": 3}],
+    ids=["null", "string", "object", "number"],
+)
+def test_a_model_list_of_the_wrong_shape_is_reported_not_raised(tags: dict[str, object]) -> None:
+    """A tags reply whose models isn't a list is unreachable with a reason, never a crash."""
+
+    def opener(url: str, timeout_s: float) -> bytes:
+        """Answer the version request normally and the tags request with the odd shape."""
+        del timeout_s
+        reply: object = {"version": "0.40.14"} if url.endswith("/api/version") else tags
+        return json.dumps(reply).encode()
+
+    found = ollama_status(HOST, ["qwen2.5:3b"], opener=opener)
+    assert not found.reachable and not found.healthy
+    assert found.error is not None and "not a list" in found.error
+    assert found.models == (ModelStatus("qwen2.5:3b", present=False, digest=None),)
+
+
+def test_an_entry_without_a_string_name_is_skipped() -> None:
+    """A listed model with no name, or a non-string one, can't be mistaken for a configured one."""
+    tags = {"models": [{"digest": "abc"}, {"name": None, "digest": "def"}, {"name": 7}]}
+
+    def opener(url: str, timeout_s: float) -> bytes:
+        """Answer both requests; the tags carry only unnamed entries."""
+        del timeout_s
+        reply: object = {"version": "0.40.14"} if url.endswith("/api/version") else tags
+        return json.dumps(reply).encode()
+
+    found = ollama_status(HOST, ["None"], opener=opener)
+    assert found.reachable
+    assert found.models == (ModelStatus("None", present=False, digest=None),)
+
+
 def test_a_host_without_a_scheme_is_refused_before_anything_is_sent() -> None:
     """With the real opener, a schemeless host fails at the scheme check, not on the network."""
     found = ollama_status("localhost:11434", ["qwen2.5:3b"])

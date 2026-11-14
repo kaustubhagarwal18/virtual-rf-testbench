@@ -682,7 +682,7 @@ def _parser(environ: Mapping[str, str]) -> argparse.ArgumentParser:
 
 
 def _bad_ollama_host(host: str) -> str | None:
-    """Check that the Ollama host is an http(s) URL with a host name.
+    """Check that the Ollama host is an http(s) URL with a host name and a valid port.
 
     Args:
         host: The configured host.
@@ -690,8 +690,17 @@ def _bad_ollama_host(host: str) -> str | None:
     Returns:
         One line saying what is wrong and how to fix it, or None when it is usable.
     """
-    parts = urllib.parse.urlparse(host)
-    if parts.scheme in ALLOWED_SCHEMES and parts.netloc:
+    try:
+        parts = urllib.parse.urlparse(host)
+        # Reading .port raises ValueError for a port that isn't a number from 0 to 65535;
+        # 0 parses but can't be connected to.
+        port = parts.port
+        usable = (
+            parts.scheme in ALLOWED_SCHEMES and bool(parts.hostname) and (port is None or port > 0)
+        )
+    except ValueError:  # an unmatched '[' in an IPv6 address, or a bad port
+        usable = False
+    if usable:
         return None
     return (
         f"--ollama-host (or ${OLLAMA_HOST_VARIABLE}) must be an http(s) URL such as "

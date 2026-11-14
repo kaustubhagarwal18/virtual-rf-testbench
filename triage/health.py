@@ -130,6 +130,24 @@ def _json_object(body: bytes) -> dict[str, Any]:
     return parsed
 
 
+def _model_list(tags: dict[str, Any]) -> list[Any]:
+    """Read the model list out of an /api/tags reply.
+
+    Args:
+        tags: The parsed reply.
+
+    Returns:
+        Its `models` list; an empty list when the key is absent.
+
+    Raises:
+        ValueError: If `models` is present but isn't a list, such as null.
+    """
+    listed = tags.get("models", [])
+    if not isinstance(listed, list):
+        raise ValueError(f"/api/tags gave 'models' as {type(listed).__name__}, not a list")
+    return listed
+
+
 def ollama_status(
     host: str,
     models: Sequence[str],
@@ -153,13 +171,16 @@ def ollama_status(
     """
     try:
         version = _json_object(opener(f"{host}/api/version", timeout_s)).get("version")
-        listed = _json_object(opener(f"{host}/api/tags", timeout_s)).get("models", [])
-    # URLError and TimeoutError are OSErrors; ValueError covers a reply that isn't JSON.
+        listed = _model_list(_json_object(opener(f"{host}/api/tags", timeout_s)))
+    # URLError and TimeoutError are OSErrors; ValueError covers a reply that isn't JSON or
+    # isn't shaped as /api/tags documents it.
     except (OSError, ValueError, ModelUnavailableError) as error:
         missing = tuple(ModelStatus(name, present=False, digest=None) for name in models)
         return OllamaStatus(host, reachable=False, version=None, error=str(error), models=missing)
     digests = {
-        str(entry.get("name")): entry.get("digest") for entry in listed if isinstance(entry, dict)
+        entry["name"]: entry.get("digest")
+        for entry in listed
+        if isinstance(entry, dict) and isinstance(entry.get("name"), str)
     }
     statuses = []
     for name in models:

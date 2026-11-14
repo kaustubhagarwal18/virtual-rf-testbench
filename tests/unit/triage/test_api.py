@@ -558,7 +558,21 @@ def test_without_a_history_only_the_answering_model_is_checked(wiring: Wiring) -
     assert wiring.checks == [(DEFAULT_HOST, (DEFAULT_MODEL,))]
 
 
-@pytest.mark.parametrize("host", ["localhost:11434", "file:///etc/passwd", "ftp://x", "http://"])
+@pytest.mark.parametrize(
+    "host",
+    [
+        "localhost:11434",
+        "file:///etc/passwd",
+        "ftp://x",
+        "http://",
+        "http://[::1",
+        "http://[::1:11434",
+        "http://:11434",
+        "http://localhost:abc",
+        "http://localhost:99999",
+        "http://localhost:0",
+    ],
+)
 def test_an_unusable_ollama_host_stops_start_up_in_one_line(
     tmp_path: Path, wiring: Wiring, capsys: pytest.CaptureFixture[str], host: str
 ) -> None:
@@ -569,3 +583,18 @@ def test_an_unusable_ollama_host_stops_start_up_in_one_line(
     assert len(output) == 1
     assert "TRIAGE_OLLAMA_HOST" in output[0]
     assert (wiring.embedders, wiring.apps) == ([], [])
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "http://127.0.0.1:11434",
+        "https://ollama.example",
+        "http://[::1]:11434",
+        "http://host.minikube.internal:11434",
+    ],
+)
+def test_a_usable_ollama_host_is_accepted(wiring: Wiring, host: str) -> None:
+    """IPv4, IPv6, a name, and https without a port all pass the check and are served."""
+    assert main(["--no-history"], wiring.serve, {"TRIAGE_OLLAMA_HOST": host}) == 0
+    assert len(wiring.apps) == 1
