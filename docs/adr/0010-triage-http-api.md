@@ -37,7 +37,8 @@ names Redis, an ingestion worker and Postgres with pgvector.
   `triage/data/runs/history/` (27 runs) into the same `InMemoryRetriever` the evaluation
   uses. At this size an exact in-memory search returns the same top 3 a database would. The
   `Retriever` and `HistoryStore` interfaces are what a pgvector store would implement, so it
-  can drop in later without the endpoints noticing.
+  can drop in later without the endpoints noticing. (Later: ADR 0027 keeps added runs in
+  SQLite when `--history-db` is set, behind the same interfaces.)
 - **Localhost by default.** It binds `127.0.0.1` and talks only to the local Ollama, so no
   run data leaves the machine.
 

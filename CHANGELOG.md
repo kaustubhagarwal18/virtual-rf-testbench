@@ -9,6 +9,15 @@ it, so the package version moves only with a release.
 
 ### Added
 
+- **Persistent triage history** (ADR 0027): `--history-db` / `TRIAGE_HISTORY_DB` keeps runs
+  added with `POST /history` in SQLite.
+  - Writes are committed before the 201, and duplicates are idempotent.
+  - Embedding vectors are cached under the model's digest, so a restart doesn't re-embed
+    the history, and a cached history loads with Ollama down.
+  - The history loads in the background. `/readyz` answers 503 until it's loaded, and while
+    it's being rebuilt after a failed update or a changed model digest.
+  - `/health/dependencies` gains a `store` section.
+  - Unset, the service behaves as before.
 - **Health endpoints and Ollama settings for the triage API** (ADR 0026):
   - `GET /livez` (the process answers) and `GET /readyz` (it can serve now) never ask Ollama.
   - `GET /health/dependencies` reports whether Ollama answers and which configured models are pulled, with their digests. It always returns 200 and isn't meant for probes.

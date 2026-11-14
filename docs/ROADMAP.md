@@ -122,7 +122,8 @@
   question's own fault is held out (6 against 3); ADR 0013 shows why no threshold fixes it.
 - `qwen2.5:3b` is sensitive to wording: rewording two action descriptions moved the
   error-only scenario, whose evidence didn't change, from 12 to 9 questions right.
-- The API's history lives in memory: runs added with `POST /history` are gone when the
-  service stops.
+- By default the API's history lives in memory: runs added with `POST /history` are gone when
+  the service stops. With `--history-db` they're kept in SQLite and replayed at start
+  (ADR 0027). SQLite has one writer, so that means one copy of the service per file.
 - Starlette warns that its test client's use of `httpx` is deprecated. The warning comes from
   the library; switching the test dependency is a follow-up.

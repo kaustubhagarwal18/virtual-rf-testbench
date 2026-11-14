@@ -226,6 +226,30 @@ The variables start with `TRIAGE_` because `OLLAMA_HOST` already means something
 sets where the Ollama server itself listens. The service ignores `OLLAMA_HOST`, so both can
 be set at once. A host that isn't an `http://` or `https://` URL stops start-up with one line
 saying so. Interactive docs are at `http://127.0.0.1:8000/docs`. The
-service listens on localhost only and keeps its history in memory (ADR 0010); retrieval is
-an exact in-memory search behind a `Retriever` interface, so pgvector can replace it once the
-history outgrows memory.
+service listens on localhost only. Retrieval is an exact in-memory search behind a
+`Retriever` interface (ADR 0010).
+
+By default the history lives in memory: runs added with `POST /history` are gone when the
+service stops. To keep them, give it a file (ADR 0027):
+
+| Flag | Variable | Default |
+|---|---|---|
+| `--history-db` | `TRIAGE_HISTORY_DB` | unset: memory only |
+
+```
+mkdir -p .cache
+TRIAGE_HISTORY_DB=.cache/triage-history.db make triage-api
+```
+
+With a file set:
+
+- Runs added over HTTP are committed before the 201 and replayed at the next start.
+- The embedding vectors are cached under the model's digest, so a restart doesn't
+  re-embed the history.
+- The service starts at once and loads the history in the background. `/readyz` answers
+  503 with the reason until it's loaded.
+- If Ollama is down at start, a cached history still loads, and the digest is checked once
+  Ollama answers. A changed digest makes the service not ready until the history is rebuilt.
+- The folder must exist. A file that isn't a usable database leaves the service not ready
+  with a message saying to move it aside. It's never deleted.
+- SQLite has one writer, so run one copy of the service per file.
