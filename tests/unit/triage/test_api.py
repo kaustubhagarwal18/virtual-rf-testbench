@@ -457,7 +457,13 @@ def test_an_ollama_outage_is_degraded_but_the_probes_still_pass() -> None:
 def test_dependencies_without_a_check_report_no_ollama() -> None:
     """A service built around a fake model has nothing to ask, and says so."""
     body = probed(ServiceHealth()).get("/health/dependencies").json()
-    assert body == {"status": "ok", "ollama": None, "retrieval": False, "history_size": 0}
+    assert body == {
+        "status": "ok",
+        "ollama": None,
+        "store": None,
+        "retrieval": False,
+        "history_size": 0,
+    }
 
 
 def test_health_keeps_its_response_when_dependencies_are_down() -> None:

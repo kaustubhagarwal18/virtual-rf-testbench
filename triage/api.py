@@ -27,11 +27,12 @@ configures where the Ollama server itself listens.
 """
 
 import argparse
+import dataclasses
 import os
 import sys
 import threading
 import urllib.parse
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from functools import partial
 from pathlib import Path
 from typing import Annotated, Any, Literal, Protocol
@@ -46,7 +47,10 @@ from triage.bench_run import case_from_bench
 from triage.case import Case, CaseError
 from triage.checks import DEFAULT_CHECKS, VerdictCheck
 from triage.embed import DEFAULT_EMBED_MODEL, OllamaEmbedder
-from triage.health import OllamaStatus, ServiceHealth, ollama_status
+from triage.embed_cache import ollama_digest
+from triage.health import OllamaStatus, Readiness, ServiceHealth, StoreStatus, ollama_status
+from triage.history_loader import HistoryLoader, start_in_background
+from triage.history_store import HistoryConfig, HistoryUnavailableError, PersistentHistory
 from triage.llm import (
     ALLOWED_SCHEMES,
     DEFAULT_HOST,
@@ -96,6 +100,12 @@ MODEL_VARIABLE = "TRIAGE_MODEL"
 
 EMBED_MODEL_VARIABLE = "TRIAGE_EMBED_MODEL"
 """Which Ollama model embeds the history and the questions."""
+
+HISTORY_DB_VARIABLE = "TRIAGE_HISTORY_DB"
+"""The SQLite file that keeps the history across restarts; unset keeps it in memory only."""
+
+LoaderStarter = Callable[[HistoryLoader], object]
+"""Starts the history loader; a background thread unless a test passes something else."""
 
 ActionKey = Literal[
     "CABLE", "LINK", "ALIGNMENT", "CONFIGURATION", "TIMEOUT", "TEST_CLEANUP", "FIRMWARE", "UNKNOWN"
@@ -392,18 +402,39 @@ class OllamaResponse(BaseModel):
     models: list[ModelResponse]
 
 
+class StoreResponse(BaseModel):
+    """The persistent history's state.
+
+    Attributes:
+        digest: The embedding model digest the active index uses, or None before a load.
+        digest_verified: Whether Ollama confirmed that digest since start-up.
+        stored_runs: How many runs added over HTTP the database holds.
+        cache_hits: How many texts the active index read from the embedding cache.
+        cache_misses: How many it had to embed.
+    """
+
+    digest: str | None
+    digest_verified: bool
+    stored_runs: int
+    cache_hits: int
+    cache_misses: int
+
+
 class DependenciesResponse(BaseModel):
     """The state of what the service depends on: informational, never a probe.
 
     Attributes:
-        status: "ok" when every dependency is up, "degraded" when one isn't.
+        status: "ok" when every dependency is up, "degraded" when one isn't or the
+            history's model digest is unverified.
         ollama: What Ollama reported; None when no check is configured.
+        store: The persistent history's state; None when history isn't kept in a database.
         retrieval: Whether a history is loaded to retrieve from.
         history_size: How many past runs it holds.
     """
 
     status: Literal["ok", "degraded"]
     ollama: OllamaResponse | None
+    store: StoreResponse | None = None
     retrieval: bool
     history_size: int
 
@@ -457,11 +488,14 @@ def _dependencies_response(
     Returns:
         The response: ok when nothing is checked or everything is up, degraded otherwise.
     """
-    check = service_health.dependencies
+    check, report = service_health.dependencies, service_health.store
     found = check() if check is not None else None
+    stored = report() if report is not None else None
+    healthy = (found is None or found.healthy) and (stored is None or stored.digest_verified)
     return DependenciesResponse(
-        status="ok" if found is None or found.healthy else "degraded",
+        status="ok" if healthy else "degraded",
         ollama=_ollama_response(found) if found is not None else None,
+        store=StoreResponse(**dataclasses.asdict(stored)) if stored is not None else None,
         retrieval=history is not None,
         history_size=_history_size(history),
     )
@@ -569,8 +603,9 @@ def create_app(
             The verdict.
 
         Raises:
-            HTTPException: 503 when the model can't be reached, 502 when its answer can't be
-                used; the detail is one line saying what is wrong.
+            HTTPException: 503 when the model can't be reached or the history isn't ready
+                to search, 502 when its answer can't be used; the detail is one line saying
+                what is wrong.
         """
         run = request.saved_run()
         sources = []
@@ -579,7 +614,7 @@ def create_app(
                 with lock:
                     sources = history.similar_to(run, top_k)
             verdict = triage_run(run, provider, request.level, sources, checks=checks, gates=gates)
-        except ModelUnavailableError as error:
+        except (ModelUnavailableError, HistoryUnavailableError) as error:
             raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(error)) from error
         except MalformedAnswerError as error:
             raise HTTPException(
@@ -612,7 +647,7 @@ def create_app(
 
         Raises:
             HTTPException: 409 when the service runs without a history, 503 when the
-                embedding model can't be reached.
+                embedding model can't be reached or the history database can't be used.
         """
         if history is None:
             raise HTTPException(
@@ -623,7 +658,7 @@ def create_app(
             with lock:
                 source = history.add(request.saved_run(), request.label.model_dump())
                 size = len(history)
-        except ModelUnavailableError as error:
+        except (ModelUnavailableError, HistoryUnavailableError) as error:
             raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(error)) from error
         return AddedResponse(source_id=source.source_id, history_size=size)
 
@@ -677,6 +712,13 @@ def _parser(environ: Mapping[str, str]) -> argparse.ArgumentParser:
         "--ollama-host",
         default=_setting(environ, OLLAMA_HOST_VARIABLE, DEFAULT_HOST),
         help=f"where Ollama listens (default: ${OLLAMA_HOST_VARIABLE}, else {DEFAULT_HOST})",
+    )
+    parser.add_argument(
+        "--history-db",
+        type=Path,
+        default=environ.get(HISTORY_DB_VARIABLE) or None,
+        help=f"SQLite file that keeps added runs and cached vectors across restarts "
+        f"(default: ${HISTORY_DB_VARIABLE}; unset keeps the history in memory only)",
     )
     return parser
 
@@ -732,10 +774,90 @@ def _load_history(parsed: argparse.Namespace) -> InMemoryRetriever | str | None:
         return str(error)
 
 
+def _bad_history_db(parsed: argparse.Namespace) -> str | None:
+    """Check that a history database, if asked for, can be created where it is asked for.
+
+    A missing folder is a setting to fix, so start-up stops; a file that is there but
+    unusable leaves the service up and not ready, saying so, since the file is user data.
+
+    Args:
+        parsed: The parsed command line.
+
+    Returns:
+        One line saying what is wrong and how to fix it, or None when it is usable.
+    """
+    if parsed.history_db is None:
+        return None
+    if parsed.no_history:
+        return "--history-db keeps a history, so it can't be used with --no-history"
+    if not parsed.history.is_dir():
+        return f"no history at {parsed.history}; build it with 'make fault-dataset'"
+    if not parsed.history_db.parent.is_dir():
+        return (
+            f"the folder for --history-db (or ${HISTORY_DB_VARIABLE}) doesn't exist: "
+            f"{parsed.history_db.parent}; create it, or mount a volume there"
+        )
+    return None
+
+
+def _persistent_history(parsed: argparse.Namespace, start: LoaderStarter) -> PersistentHistory:
+    """Open the history database and start loading it in the background.
+
+    Args:
+        parsed: The parsed command line, with --history-db set.
+        start: Starts the loader.
+
+    Returns:
+        The history: not ready until the loader has swapped its first index in.
+    """
+    config = HistoryConfig(
+        dataset=parsed.history,
+        inner=OllamaEmbedder(model=parsed.embed_model, host=parsed.ollama_host),
+        model=parsed.embed_model,
+        digest_source=partial(ollama_digest, parsed.ollama_host, parsed.embed_model),
+    )
+    history = PersistentHistory.open(parsed.history_db, config)
+    start(HistoryLoader(history))
+    return history
+
+
+def _service(
+    parsed: argparse.Namespace, start: LoaderStarter
+) -> tuple[SearchableHistory | None, ServiceHealth] | str:
+    """Build the history and the health answers the settings ask for.
+
+    Args:
+        parsed: The parsed command line.
+        start: Starts the loader of a persistent history.
+
+    Returns:
+        The history and the service's health answers, or one line saying why start-up
+        must stop.
+    """
+    problem = _bad_ollama_host(parsed.ollama_host) or _bad_history_db(parsed)
+    if problem is not None:
+        return problem
+    history: SearchableHistory | None
+    readiness: Readiness
+    store: Callable[[], StoreStatus] | None
+    if parsed.history_db is not None:
+        persistent = _persistent_history(parsed, start)
+        history, readiness, store = persistent, persistent, persistent.status
+    else:
+        loaded = _load_history(parsed)
+        if isinstance(loaded, str):
+            return loaded
+        history, readiness, store = loaded, DEFAULT_HEALTH.readiness, None
+    models = (parsed.model,) if history is None else (parsed.model, parsed.embed_model)
+    check = partial(ollama_status, parsed.ollama_host, models)
+    return history, ServiceHealth(readiness=readiness, dependencies=check, store=store)
+
+
 def main(
     arguments: Sequence[str] | None = None,
     serve: Any = None,
     environ: Mapping[str, str] | None = None,
+    start: LoaderStarter = start_in_background,
 ) -> int:
     """Load the history and serve the API until stopped.
 
@@ -743,25 +865,22 @@ def main(
         arguments: The command-line arguments; None reads them from sys.argv.
         serve: What runs the app, given the app, host and port; None uses uvicorn.run.
         environ: The environment settings are read from; None uses os.environ.
+        start: Starts the loader of a persistent history; a background thread unless a
+            test passes something else.
 
     Returns:
         0 when the server stopped, 1 if the settings were unusable or the history couldn't
         be loaded.
     """
     parsed = _parser(os.environ if environ is None else environ).parse_args(arguments)
-    problem = _bad_ollama_host(parsed.ollama_host)
-    if problem is not None:
-        sys.stdout.write(f"{problem}\n")
+    built = _service(parsed, start)
+    if isinstance(built, str):
+        sys.stdout.write(f"{built}\n")
         return 1
-    history = _load_history(parsed)
-    if isinstance(history, str):
-        sys.stdout.write(f"{history}\n")
-        return 1
+    history, service_health = built
     provider = OllamaProvider(
         model=parsed.model, host=parsed.ollama_host, response_format=VERDICT_SCHEMA
     )
-    models = (parsed.model,) if history is None else (parsed.model, parsed.embed_model)
-    service_health = ServiceHealth(dependencies=partial(ollama_status, parsed.ollama_host, models))
     app = create_app(provider, history, service_health=service_health)
     serve = serve or uvicorn.run
     serve(app, host=parsed.host, port=parsed.port)

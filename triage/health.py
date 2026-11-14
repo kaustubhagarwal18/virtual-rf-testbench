@@ -197,6 +197,26 @@ def ollama_status(
 
 
 @dataclass(frozen=True)
+class StoreStatus:
+    """The state of a persistent history: what it was built with and how the cache did.
+
+    Attributes:
+        digest: The embedding model digest the active index uses, or None before a load.
+        digest_verified: Whether Ollama confirmed that digest since start-up; False when the
+            index was loaded from the cache while Ollama was down.
+        stored_runs: How many runs added over HTTP the database holds.
+        cache_hits: How many texts the active index's embedder read from the cache.
+        cache_misses: How many it had to embed.
+    """
+
+    digest: str | None
+    digest_verified: bool
+    stored_runs: int
+    cache_hits: int
+    cache_misses: int
+
+
+@dataclass(frozen=True)
 class ServiceHealth:
     """How the service answers its readiness and dependency questions.
 
@@ -205,7 +225,10 @@ class ServiceHealth:
             before serving started.
         dependencies: Asks Ollama for its status; None when nothing is configured to ask,
             as with a fake model in tests.
+        store: Reports the persistent history's state; None when the history isn't kept in
+            a database.
     """
 
     readiness: Readiness = ALWAYS_READY
     dependencies: Callable[[], OllamaStatus] | None = None
+    store: Callable[[], StoreStatus] | None = None
