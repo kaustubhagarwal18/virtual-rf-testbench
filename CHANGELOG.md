@@ -9,6 +9,11 @@ it, so the package version moves only with a release.
 
 ### Added
 
+- **Health endpoints and Ollama settings for the triage API** (ADR 0026):
+  - `GET /livez` (the process answers) and `GET /readyz` (it can serve now) never ask Ollama.
+  - `GET /health/dependencies` reports whether Ollama answers and which configured models are pulled, with their digests. It always returns 200 and isn't meant for probes.
+  - `--ollama-host`, `--model` and `--embed-model` can come from `TRIAGE_OLLAMA_HOST`, `TRIAGE_MODEL` and `TRIAGE_EMBED_MODEL`. A non-http(s) host stops start-up with one line.
+  - The defaults, and the existing `/health`, `/triage` and `/history` responses, are unchanged.
 - **Harder RF questions and retrieval scored on its own** (ADR 0025): two evidence
   ablations (no logs, no sequence log), a category-held-out precedent scenario next to the
   existing own-fault-held-out one, a retrieval-only benchmark (`triage/retrieval_metrics.py`,

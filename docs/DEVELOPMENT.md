@@ -28,7 +28,7 @@ make test
 | `make fault-dataset` | Rebuilds the triage data set in `triage/data/runs/`: every fault, three history runs and three question runs each |
 | `make triage RUN=…` | Explains one saved run: names the likely cause and fix from its evidence alone, without retrieving past runs (needs a local Ollama model) |
 | `make triage-demo RUN=…` | Triages one run with and without retrieval, side by side, to show what the past runs add (needs local Ollama answering and embedding models) |
-| `make triage-api` | Serves triage over HTTP on localhost:8000: `POST /triage`, `POST /history`, `GET /health` (needs local Ollama answering and embedding models) |
+| `make triage-api` | Serves triage over HTTP on localhost:8000: `POST /triage`, `POST /history`, `GET /health`, and the probes `GET /livez`, `GET /readyz` and `GET /health/dependencies`. Needs Ollama's answering and embedding models; `TRIAGE_OLLAMA_HOST`, `TRIAGE_MODEL` and `TRIAGE_EMBED_MODEL` say where and which |
 | `make image` / `image-scan` | Builds the simulator image, or scans it with Trivy as CI does (needs Trivy installed) |
 | `make eval [MODEL=…]` | Scores the triage against the labelled question runs and writes `triage/results/rag.md` (needs local Ollama answering and embedding models) |
 | `make retrieval-eval [SYMPTOM_INDEX=1]` | Scores retrieval alone (Recall@K, MRR) against the question runs, with history held out by fault and by category, independent of any model (needs a local Ollama embedding model) |

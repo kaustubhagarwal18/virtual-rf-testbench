@@ -3,6 +3,7 @@
 import json
 import subprocess
 import sys
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, get_args
 
@@ -23,9 +24,10 @@ from triage.api import (
     main,
 )
 from triage.bench_run import load_case
-from triage.embed import FakeEmbedder
+from triage.embed import DEFAULT_EMBED_MODEL, FakeEmbedder, OllamaEmbedder
 from triage.evidence import LEVELS, build_evidence
-from triage.llm import FakeProvider, ModelUnavailableError
+from triage.health import ModelStatus, OllamaStatus, ServiceHealth
+from triage.llm import DEFAULT_HOST, DEFAULT_MODEL, FakeProvider, ModelUnavailableError
 from triage.pack import DEFAULT_PACK
 from triage.prompt import build_prompt
 from triage.retrieval import InMemoryRetriever
@@ -382,3 +384,217 @@ def test_main_reports_a_malformed_history_case_in_one_line(
     (broken / "case.json").write_text("{", encoding="utf-8")
     assert main(["--history", str(tmp_path / "history")], lambda *_, **__: None) == 1
     assert "case.json" in capsys.readouterr().out
+
+
+OLLAMA = "http://ollama.test:11434"
+
+
+class NotReady:
+    """A readiness that is still waiting for its history."""
+
+    def not_ready_reason(self) -> str | None:
+        """Say what it is waiting for."""
+        return "history still loading"
+
+
+def ollama_up() -> OllamaStatus:
+    """Report Ollama up with the answering model pulled."""
+    return OllamaStatus(OLLAMA, True, "0.40.14", None, (ModelStatus("qwen2.5:3b", True, "d1"),))
+
+
+def ollama_down() -> OllamaStatus:
+    """Report Ollama unreachable."""
+    return OllamaStatus(
+        OLLAMA, False, None, "connection refused", (ModelStatus("qwen2.5:3b", False, None),)
+    )
+
+
+def probed(health: ServiceHealth) -> TestClient:
+    """Return a client for a service with the given readiness and dependency check."""
+    return TestClient(create_app(FakeProvider([CABLE_REPLY]), service_health=health))
+
+
+def test_livez_answers_even_when_not_ready_and_ollama_is_down() -> None:
+    """Liveness depends on nothing, so neither a loading history nor an outage fails it."""
+    response = probed(ServiceHealth(NotReady(), ollama_down)).get("/livez")
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == {"status": "ok"}
+
+
+def test_readyz_is_ready_by_default() -> None:
+    """A service whose history was loaded before serving is ready."""
+    response = probed(ServiceHealth()).get("/readyz")
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == {"status": "ready", "reason": ""}
+
+
+def test_readyz_is_503_with_the_reason_while_not_ready() -> None:
+    """Not ready is a 503 that says what it is waiting for."""
+    response = probed(ServiceHealth(NotReady())).get("/readyz")
+    assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    assert response.json() == {"status": "not ready", "reason": "history still loading"}
+
+
+def test_dependencies_report_ollama_and_its_models() -> None:
+    """With Ollama up and its model pulled, the report is ok and lists the digest."""
+    body = probed(ServiceHealth(dependencies=ollama_up)).get("/health/dependencies").json()
+    assert body["status"] == "ok"
+    assert body["ollama"]["reachable"] is True
+    assert body["ollama"]["models"] == [{"name": "qwen2.5:3b", "present": True, "digest": "d1"}]
+
+
+def test_an_ollama_outage_is_degraded_but_the_probes_still_pass() -> None:
+    """An outage shows only in the dependency report: liveness and readiness stay 200."""
+    client = probed(ServiceHealth(dependencies=ollama_down))
+    report = client.get("/health/dependencies")
+    assert report.status_code == status.HTTP_200_OK
+    assert report.json()["status"] == "degraded"
+    assert report.json()["ollama"]["error"] == "connection refused"
+    assert client.get("/livez").status_code == status.HTTP_200_OK
+    assert client.get("/readyz").status_code == status.HTTP_200_OK
+
+
+def test_dependencies_without_a_check_report_no_ollama() -> None:
+    """A service built around a fake model has nothing to ask, and says so."""
+    body = probed(ServiceHealth()).get("/health/dependencies").json()
+    assert body == {"status": "ok", "ollama": None, "retrieval": False, "history_size": 0}
+
+
+def test_health_keeps_its_response_when_dependencies_are_down() -> None:
+    """The existing /health answer is unchanged by the new checks."""
+    body = probed(ServiceHealth(NotReady(), ollama_down)).get("/health").json()
+    assert body == {"status": "ok", "retrieval": False, "history_size": 0}
+
+
+@dataclass
+class Wiring:
+    """What main built, recorded instead of reaching Ollama.
+
+    Attributes:
+        providers: The keyword arguments each OllamaProvider was built with.
+        embedders: The embedder each history index was built with.
+        checks: The host and models each dependency check was asked about.
+        apps: The apps main would have served.
+    """
+
+    providers: list[dict[str, Any]] = field(default_factory=list)
+    embedders: list[Any] = field(default_factory=list)
+    checks: list[tuple[str, tuple[str, ...]]] = field(default_factory=list)
+    apps: list[Any] = field(default_factory=list)
+
+    def serve(self, app: Any, host: str, port: int) -> None:
+        """Record the app instead of serving it."""
+        del host, port
+        self.apps.append(app)
+
+
+@pytest.fixture(name="wiring")
+def fixture_wiring(monkeypatch: pytest.MonkeyPatch) -> Wiring:
+    """Replace everything main would send to Ollama with recorders."""
+    recorded = Wiring()
+
+    def provider(**kwargs: Any) -> FakeProvider:
+        """Record how the answering model was configured."""
+        recorded.providers.append(kwargs)
+        return FakeProvider([CABLE_REPLY])
+
+    def index(history: Path, embedder: Any) -> InMemoryRetriever:
+        """Record the embedder instead of embedding the history."""
+        del history
+        recorded.embedders.append(embedder)
+        return empty_history()
+
+    def check(host: str, models: Any, *_: Any, **__: Any) -> OllamaStatus:
+        """Record what the dependency check would have asked."""
+        recorded.checks.append((host, tuple(models)))
+        return ollama_up()
+
+    monkeypatch.setattr("triage.api.OllamaProvider", provider)
+    monkeypatch.setattr("triage.api.history_index", index)
+    monkeypatch.setattr("triage.api.ollama_status", check)
+    return recorded
+
+
+SETTINGS = {
+    "TRIAGE_OLLAMA_HOST": "http://gpu.lan:11434",
+    "TRIAGE_MODEL": "qwen2.5:7b",
+    "TRIAGE_EMBED_MODEL": "mxbai-embed-large",
+}
+FLAGS = ["--ollama-host", "http://flag.lan:1", "--model", "m-flag", "--embed-model", "e-flag"]
+
+
+@pytest.mark.parametrize(
+    ("arguments", "environ", "expected"),
+    [
+        ([], {}, (DEFAULT_HOST, DEFAULT_MODEL, DEFAULT_EMBED_MODEL)),
+        ([], SETTINGS, ("http://gpu.lan:11434", "qwen2.5:7b", "mxbai-embed-large")),
+        (FLAGS, SETTINGS, ("http://flag.lan:1", "m-flag", "e-flag")),
+        ([], dict.fromkeys(SETTINGS, ""), (DEFAULT_HOST, DEFAULT_MODEL, DEFAULT_EMBED_MODEL)),
+        ([], {"OLLAMA_HOST": "0.0.0.0:11434"}, (DEFAULT_HOST, DEFAULT_MODEL, DEFAULT_EMBED_MODEL)),
+    ],
+    ids=["defaults", "environment", "flags-beat-environment", "empty-is-unset", "server-var"],
+)
+def test_ollama_settings_reach_the_model_embedder_and_check(
+    tmp_path: Path,
+    wiring: Wiring,
+    arguments: list[str],
+    environ: dict[str, str],
+    expected: tuple[str, str, str],
+) -> None:
+    """A flag beats TRIAGE_*, which beats the default; Ollama's own OLLAMA_HOST is ignored."""
+    host, model, embed_model = expected
+    assert main([*arguments, "--history", str(tmp_path)], wiring.serve, environ) == 0
+    assert (wiring.providers[0]["host"], wiring.providers[0]["model"]) == (host, model)
+    assert wiring.embedders == [OllamaEmbedder(model=embed_model, host=host)]
+    TestClient(wiring.apps[0]).get("/health/dependencies")
+    assert wiring.checks == [(host, (model, embed_model))]
+
+
+def test_without_a_history_only_the_answering_model_is_checked(wiring: Wiring) -> None:
+    """With --no-history no embedder is built, so the embedding model isn't required."""
+    assert main(["--no-history"], wiring.serve, {}) == 0
+    assert wiring.embedders == []
+    TestClient(wiring.apps[0]).get("/health/dependencies")
+    assert wiring.checks == [(DEFAULT_HOST, (DEFAULT_MODEL,))]
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "localhost:11434",
+        "file:///etc/passwd",
+        "ftp://x",
+        "http://",
+        "http://[::1",
+        "http://[::1:11434",
+        "http://:11434",
+        "http://localhost:abc",
+        "http://localhost:99999",
+        "http://localhost:0",
+    ],
+)
+def test_an_unusable_ollama_host_stops_start_up_in_one_line(
+    tmp_path: Path, wiring: Wiring, capsys: pytest.CaptureFixture[str], host: str
+) -> None:
+    """A host that isn't an http(s) URL exits 1 before the history is loaded or served."""
+    environ = {"TRIAGE_OLLAMA_HOST": host}
+    assert main(["--history", str(tmp_path)], wiring.serve, environ) == 1
+    output = capsys.readouterr().out.strip().splitlines()
+    assert len(output) == 1
+    assert "TRIAGE_OLLAMA_HOST" in output[0]
+    assert (wiring.embedders, wiring.apps) == ([], [])
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "http://127.0.0.1:11434",
+        "https://ollama.example",
+        "http://[::1]:11434",
+        "http://host.minikube.internal:11434",
+    ],
+)
+def test_a_usable_ollama_host_is_accepted(wiring: Wiring, host: str) -> None:
+    """IPv4, IPv6, a name, and https without a port all pass the check and are served."""
+    assert main(["--no-history"], wiring.serve, {"TRIAGE_OLLAMA_HOST": host}) == 0
+    assert len(wiring.apps) == 1
