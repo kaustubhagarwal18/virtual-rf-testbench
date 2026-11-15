@@ -1,6 +1,6 @@
 # ADR 0029: One Helm chart for the bench and the triage API
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-15
 
 ## Context
