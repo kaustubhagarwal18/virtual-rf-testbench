@@ -65,3 +65,27 @@ def test_the_container_tests_need_the_triage_image(jobs: dict[str, Any]) -> None
     commands = " ".join(step.get("run", "") for step in jobs["triage-smoke"]["steps"])
     assert "docker build" not in commands
     assert "make triage-image" not in commands
+
+
+@pytest.mark.parametrize(
+    ("job_id", "runs_make"),
+    [("lint", "uv run pre-commit run"), ("test", "make test")],
+)
+def test_jobs_that_render_the_chart_install_helm_first(
+    jobs: dict[str, Any],  # pylint: disable=redefined-outer-name
+    job_id: str,
+    runs_make: str,
+) -> None:
+    """Lint (make chart-lint) and Test (the chart tests) install the pinned helm before use."""
+    steps = jobs[job_id]["steps"]
+    install = next(
+        index
+        for index, step in enumerate(steps)
+        if step.get("uses") == "./.github/actions/install-helm"
+    )
+    runs = next(index for index, step in enumerate(steps) if runs_make in step.get("run", ""))
+    assert install < runs
+    assert steps[install]["with"] == {
+        "version": "${{ env.HELM_VERSION }}",
+        "sha256": "${{ env.HELM_SHA256 }}",
+    }

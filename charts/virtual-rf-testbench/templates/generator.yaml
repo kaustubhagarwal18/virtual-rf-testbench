@@ -1,0 +1,68 @@
+{{- /*
+The SG-1 signal generator: one pod, an SCPI Service and a separate admin Service. The admin
+port carries the fault switches and the state the analyzer reads, so it is never part of
+the SCPI Service.
+*/ -}}
+{{- $component := dict "context" . "component" "generator" -}}
+{{- $fullname := include "vrf.fullname" . -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}-generator
+  labels:
+    {{- include "vrf.labels" $component | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "vrf.selectorLabels" $component | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "vrf.labels" $component | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "vrf.podSecurityContext" . | nindent 8 }}
+      containers:
+        - name: generator
+          image: {{ include "vrf.image" (dict "context" . "image" "simulators") }}
+          command: ["python", "-m", "simulators.signal_generator", "--host", "0.0.0.0"]
+          ports:
+            - name: scpi
+              containerPort: 5025
+            - name: admin
+              containerPort: 5125
+          {{- include "vrf.simulatorProbes" . | nindent 10 }}
+          securityContext:
+            {{- include "vrf.containerSecurityContext" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.generator.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-generator
+  labels:
+    {{- include "vrf.labels" $component | nindent 4 }}
+spec:
+  selector:
+    {{- include "vrf.selectorLabels" $component | nindent 4 }}
+  ports:
+    - name: scpi
+      port: 5025
+      targetPort: scpi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "vrf.generatorAdminService" . }}
+  labels:
+    {{- include "vrf.labels" $component | nindent 4 }}
+spec:
+  selector:
+    {{- include "vrf.selectorLabels" $component | nindent 4 }}
+  ports:
+    - name: admin
+      port: 5125
+      targetPort: admin

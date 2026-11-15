@@ -94,6 +94,26 @@ capabilities:
 {{- end }}
 
 {{/*
+Probes for a simulator container. Readiness runs the image's own healthcheck, which asks
+*IDN? and expects a VirtualRF reply, the same check Docker's HEALTHCHECK runs; liveness
+only opens the SCPI port, so a slow reply under load never restarts the instrument.
+*IDN? changes no state, and the server takes concurrent connections, so a probe never
+blocks or disturbs a test's session.
+*/}}
+{{- define "vrf.simulatorProbes" -}}
+readinessProbe:
+  exec:
+    command: ["python", "-m", "simulators.healthcheck", "--port", "5025"]
+  periodSeconds: 5
+  timeoutSeconds: 3
+livenessProbe:
+  tcpSocket:
+    port: scpi
+  periodSeconds: 10
+  failureThreshold: 3
+{{- end }}
+
+{{/*
 The generator's admin Service name. It is a bare name: the analyzer's --generator-admin
 takes host:port with no scheme, so pass "<this name>:5125", never "http://...".
 */}}

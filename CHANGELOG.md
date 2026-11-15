@@ -9,6 +9,15 @@ it, so the package version moves only with a release.
 
 ### Added
 
+- **Helm chart** (`charts/virtual-rf-testbench/`, ADR 0029): Deployments and Services for
+  the generator, analyzer and triage API, separate admin Services, a claim for the triage
+  history, and optional ingress NetworkPolicies. Every workload runs one replica, hardened
+  as in compose; image tags must be pinned in a values file or rendering fails. Not yet
+  deployed to a cluster.
+- **Chart checks:** `make chart-lint` (helm lint and helm template, part of `make lint`) and
+  `tests/unit/charts/`, which render the chart and check selectors, Service ports, replicas,
+  hardening, probes, image tags, storage class and NetworkPolicy. CI installs Helm 4.3.1,
+  pinned and checksum-verified, in the Lint and Test jobs.
 - **Triage API container image** (ADR 0028): `triage-runtime` stage in the Dockerfile builds
   a minimal image (fastapi, uvicorn, pydantic, numpy; no pip, rsinstrument or simulators).
   The seed history is baked in; added runs and embedding vectors live on a named volume.

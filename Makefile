@@ -8,11 +8,13 @@ TRIAGE_IMAGE_NAME := virtual-rf-testbench-triage:$(or $(FIRMWARE_VERSION),dev)
 # The triage image the container tests run, by ID; defaults to the one make triage-image built.
 TRIAGE_IMAGE ?= $(shell docker image inspect --format '{{.Id}}' $(TRIAGE_IMAGE_NAME) 2>/dev/null)
 BENCH_BUILD ?= --build
+HELM ?= helm
+CHART := charts/virtual-rf-testbench
 
 export FIRMWARE_VERSION REVISION
 PYTHON_PATHS := $(PACKAGES) tests
 
-.PHONY: setup lint fmt test summary image image-name image-scan bench-up bench-down bench-logs bench-test bench-summary fault fault-dataset triage triage-demo triage-api triage-image triage-image-name triage-up triage-down triage-smoke eval retrieval-eval clean
+.PHONY: setup lint chart-lint fmt test summary image image-name image-scan bench-up bench-down bench-logs bench-test bench-summary fault fault-dataset triage triage-demo triage-api triage-image triage-image-name triage-up triage-down triage-smoke eval retrieval-eval clean
 
 setup:
 	uv sync
@@ -29,6 +31,12 @@ lint:
 	uv run hadolint Dockerfile
 	uv run mbake validate Makefile
 	uv run mbake format --check Makefile
+	$(MAKE) --no-print-directory chart-lint
+
+chart-lint:
+	$(HELM) lint --strict $(CHART) --values $(CHART)/ci/test-values.yaml
+	$(HELM) template vrf $(CHART) --values $(CHART)/ci/test-values.yaml > /dev/null
+	$(HELM) template vrf $(CHART) --values $(CHART)/ci/test-values.yaml --set networkPolicy.enabled=true --set triage.persistence.enabled=false > /dev/null
 
 fmt:
 	uv run ruff check --fix-only .

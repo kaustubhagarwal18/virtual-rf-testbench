@@ -1,7 +1,7 @@
 # Infrastructure
 
 This document covers the container images, how history is stored, running locally with
-Compose, and the CI chain.
+Compose, the Helm chart, and the CI chain.
 
 ## Images
 
@@ -87,6 +87,43 @@ the manual check.
 
 `make bench-up` starts only the simulators. The triage profile is opt-in and does not
 affect bench runs.
+
+## Helm chart
+
+`charts/virtual-rf-testbench/` deploys the same two images to Kubernetes (ADR 0029). Nothing
+has been deployed with it yet; `make chart-lint` and `tests/unit/charts/` check what it
+renders. A release renders:
+
+| Object | Port | Reached from |
+|---|---|---|
+| `<release>-generator` Deployment and Service | 5025 (SCPI) | any pod in the namespace |
+| `<release>-generator-admin` Service | 5125 (admin) | the analyzer only, when NetworkPolicy is on |
+| `<release>-analyzer` Deployment and Service | 5025 (SCPI) | any pod in the namespace |
+| `<release>-analyzer-admin` Service | 5126 (admin) | nothing in the cluster when NetworkPolicy is on; use port-forward |
+| `<release>-triage` Deployment and Service | 8000 (HTTP) | any pod in the namespace |
+| `<release>-triage-history` PersistentVolumeClaim | | the triage pod, at `/data` |
+
+The admin ports carry the fault switches, so they have their own Services and are never part
+of an SCPI Service. Every workload runs one replica; triage uses the `Recreate` strategy
+because its SQLite history is on a ReadWriteOnce volume. Pods run as uid 10001 with a
+read-only root filesystem, no capabilities, no service account token and seccomp
+`RuntimeDefault`, as in compose.
+
+Image tags are empty in `values.yaml` and rendering fails until they are set. Each
+environment's values file in Git pins them to a `<version>-<sha7>` tag the publish job
+pushed. To render locally:
+
+```
+helm template vrf charts/virtual-rf-testbench --values charts/virtual-rf-testbench/ci/test-values.yaml
+```
+
+**What leaves the cluster:** the triage pod calls Ollama at `triage.ollamaHost`
+(`http://host.minikube.internal:11434` by default, the Mac's Ollama seen from minikube).
+Nothing else calls out. Egress isn't restricted by the chart.
+
+**NetworkPolicy** is off by default (`networkPolicy.enabled`), since minikube's default
+network doesn't enforce it. When on, every pod of the release denies ingress except the ports
+in the table above.
 
 ## CI chain
 

@@ -1,0 +1,27 @@
+name: Install Helm
+description: >-
+  Helm at a pinned version, checked against its published SHA-256 before it is unpacked,
+  and put on the PATH for the job's later steps (make chart-lint and the chart tests).
+inputs:
+  version:
+    description: The Helm release, such as 4.3.1.
+    required: true
+  sha256:
+    description: The SHA-256 of that release's linux-amd64 archive.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Install Helm (pinned version, checksum verified)
+      shell: bash
+      env:
+        HELM_VERSION: ${{ inputs.version }}
+        HELM_SHA256: ${{ inputs.sha256 }}
+      run: |
+        archive="helm-v${HELM_VERSION}-linux-amd64.tar.gz"
+        curl -sSfL --retry 5 --retry-delay 10 -o "$archive" "https://get.helm.sh/${archive}"
+        echo "${HELM_SHA256}  ${archive}" | sha256sum --check --strict
+        mkdir -p "${RUNNER_TEMP}/helm"
+        tar -xzf "$archive" -C "${RUNNER_TEMP}/helm" --strip-components=1 linux-amd64/helm
+        rm "$archive"
+        echo "${RUNNER_TEMP}/helm" >> "$GITHUB_PATH"

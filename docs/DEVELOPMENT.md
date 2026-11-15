@@ -3,8 +3,9 @@
 The commands, checks and CI jobs behind the project. The README lists the three you need
 most.
 
-You need [uv](https://docs.astral.sh/uv/) and `make`. uv installs Python 3.13 for the project,
-so it doesn't matter which Python your system has.
+You need [uv](https://docs.astral.sh/uv/), `make` and [Helm](https://helm.sh/) (`brew install helm`),
+which `make lint` and the chart tests use. uv installs Python 3.13 for the project, so it
+doesn't matter which Python your system has.
 
 ```
 make setup
@@ -17,7 +18,8 @@ make test
 | Command | What it does |
 |---|---|
 | `make setup` | Installs Python 3.13 and the dependencies, and installs the pre-commit hooks |
-| `make lint` | Runs ruff, mypy (strict), pylint, pydoclint (docstring Args, Returns and Raises), bandit and codespell, checks the Makefile with mbake and the Dockerfile with hadolint |
+| `make lint` | Runs ruff, mypy (strict), pylint, pydoclint (docstring Args, Returns and Raises), bandit and codespell, checks the Makefile with mbake and the Dockerfile with hadolint, then runs `make chart-lint` |
+| `make chart-lint` | Lints the Helm chart with `helm lint --strict` and renders it with NetworkPolicy and persistence both ways (`HELM=…` picks the helm binary) |
 | `make fmt` | Formats the code and the Makefile, and applies safe lint fixes |
 | `make test` | Runs the tests and fails if coverage is below 80%; writes `reports/junit.xml` and `reports/coverage.xml` |
 | `make summary` | Prints a results summary from those files: tests run, passed, failed and skipped per suite, coverage, failures and the slowest tests |
@@ -43,8 +45,8 @@ GitHub Actions runs on every pull request and on every push to `main`:
 
 | Job | What it checks |
 |---|---|
-| Lint | Every pre-commit hook on all files: trailing whitespace, final newlines, YAML and TOML syntax, large files, merge conflict markers, then `make lint` |
-| Test (Python 3.13) | `make test`, including the 80% coverage floor, then `make summary`, whose table appears on the run's summary page |
+| Lint | Installs Helm 4.3.1 (pinned, checksum-verified), then every pre-commit hook on all files: trailing whitespace, final newlines, YAML and TOML syntax (Helm templates excluded), large files, merge conflict markers, then `make lint` |
+| Test (Python 3.13) | Installs the same Helm for the chart tests, then `make test`, including the 80% coverage floor, then `make summary`, whose table appears on the run's summary page |
 | Image (build and scan) | Builds the simulator image once, scans it with Trivy 0.76.1 (pinned, checksum-verified), generates a Syft SBOM, saves the image and writes its ID to `image-id.txt`; fails on a fixable high or critical vulnerability |
 | Bench (containers) | Loads that same image, checks the ID, `make bench-up BENCH_BUILD=--no-build`, `make bench-test`, then `make bench-summary` on the run's summary page; shows the simulator logs if anything failed, and saves a failed run for the triage job |
 | Triage image (build and scan) | Same as the Image job, for the triage API image (`triage-runtime` stage) |

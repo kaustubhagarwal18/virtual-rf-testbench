@@ -77,7 +77,10 @@
    answer per distinct failure, as CI does (ADR 0020), with the same cap; `POST /triage`
    stays as it is.
 3. **The cluster.** k3s runs the same images through Helm charts, deployed by Argo CD from
-   Git, with secrets from OpenBao and observability.
+   Git, with secrets from OpenBao and observability. The chart is drafted
+   (`charts/virtual-rf-testbench/`, ADR 0029) and checked by `make chart-lint` and its unit
+   tests, but not yet deployed to a cluster. Argo CD, the environment values files that pin
+   the image tags, OpenBao and observability are planned.
 4. **The tag-bump pull request.** Once a chart's values file pins the image, CI opens a pull
    request that bumps it to the tag the publish job just pushed. It waits for the chart: there
    is no file to bump yet.
