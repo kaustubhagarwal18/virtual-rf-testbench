@@ -1,0 +1,55 @@
+nameOverride: ""
+fullnameOverride: ""
+
+# Images CI publishes to GitHub Container Registry, tagged <version>-<sha7>. Tags are left
+# empty here on purpose: each environment's values file in Git pins them, and rendering
+# fails while one is empty.
+images:
+  simulators:
+    repository: ghcr.io/kaustubhagarwal18/virtual-rf-testbench-simulators
+    tag: ""  # required: set in the environment's values file, for example 0.1.0-a3f8c12
+  triage:
+    repository: ghcr.io/kaustubhagarwal18/virtual-rf-testbench-triage
+    tag: ""  # required: set in the environment's values file, for example 0.1.0-a3f8c12
+
+# No replica counts: each simulator is one stateful instrument (the analyzer reads its
+# generator's state), and triage keeps its history in SQLite on a ReadWriteOnce volume.
+# The templates fix every workload at one replica, triage with the Recreate strategy.
+
+generator:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 256Mi  # compose mem_limit
+
+analyzer:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 256Mi  # compose mem_limit
+
+triage:
+  ollamaHost: "http://host.minikube.internal:11434"
+  model: "qwen2.5:3b"
+  embedModel: "nomic-embed-text"
+  persistence:
+    enabled: true
+    # Empty: the template leaves the field out and the cluster's default class is used
+    # (minikube "standard", k3s "local-path").
+    storageClassName: ""
+    size: 1Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi  # compose mem_limit
+
+# Off by default: minikube's default network doesn't enforce NetworkPolicy. k3s does, so
+# enable it there (not yet verified on a cluster).
+networkPolicy:
+  enabled: false

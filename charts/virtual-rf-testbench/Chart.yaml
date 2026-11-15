@@ -1,0 +1,6 @@
+apiVersion: v2
+name: virtual-rf-testbench
+description: Simulated RF instruments and triage assistant
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
