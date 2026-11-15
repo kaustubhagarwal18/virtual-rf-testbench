@@ -1,16 +1,17 @@
 {{- /*
 The triage API: one pod with the Recreate strategy, since its SQLite history sits on a
 ReadWriteOnce volume that two pods can't share; a Service on port 8000; and the volume
-claim when persistence is on. With persistence off, /data is an emptyDir and added runs
-and cached vectors are lost when the pod goes.
+claim when persistence is on. The claim carries helm.sh/resource-policy: keep, so neither
+helm uninstall nor turning persistence off deletes the history; delete the claim by hand
+to drop it. With persistence off, /data is an emptyDir: a kept claim goes unused, and runs
+added from then on are lost when the pod goes.
 */ -}}
 {{- $component := dict "context" . "component" "triage" -}}
-{{- $fullname := include "vrf.fullname" . -}}
 {{- $persistence := .Values.triage.persistence -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ $fullname }}-triage
+  name: {{ include "vrf.componentName" (dict "context" . "suffix" "triage") }}
   labels:
     {{- include "vrf.labels" $component | nindent 4 }}
 spec:
@@ -30,7 +31,7 @@ spec:
         {{- include "vrf.podSecurityContext" . | nindent 8 }}
       containers:
         - name: triage
-          image: {{ include "vrf.image" (dict "context" . "image" "triage") }}
+          image: {{ include "vrf.image" (dict "context" . "image" "triage") | quote }}
           env:
             - name: TRIAGE_OLLAMA_HOST
               value: {{ .Values.triage.ollamaHost | quote }}
@@ -76,7 +77,7 @@ spec:
         - name: history
           {{- if $persistence.enabled }}
           persistentVolumeClaim:
-            claimName: {{ $fullname }}-triage-history
+            claimName: {{ include "vrf.componentName" (dict "context" . "suffix" "triage-history") }}
           {{- else }}
           emptyDir: {}
           {{- end }}
@@ -86,7 +87,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ $fullname }}-triage
+  name: {{ include "vrf.componentName" (dict "context" . "suffix" "triage") }}
   labels:
     {{- include "vrf.labels" $component | nindent 4 }}
 spec:
@@ -101,7 +102,9 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ $fullname }}-triage-history
+  name: {{ include "vrf.componentName" (dict "context" . "suffix" "triage-history") }}
+  annotations:
+    helm.sh/resource-policy: keep
   labels:
     {{- include "vrf.labels" $component | nindent 4 }}
 spec:
@@ -112,5 +115,5 @@ spec:
   {{- end }}
   resources:
     requests:
-      storage: {{ $persistence.size }}
+      storage: {{ $persistence.size | quote }}
 {{- end }}

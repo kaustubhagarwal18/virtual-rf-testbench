@@ -1,18 +1,20 @@
 {{- /*
 The SG-1 signal generator: one pod, an SCPI Service and a separate admin Service. The admin
 port carries the fault switches and the state the analyzer reads, so it is never part of
-the SCPI Service.
+the SCPI Service. The pod is replaced, not rolled: the instrument's state lives in the
+process, and two pods during a rollout would be two instruments behind one Service.
 */ -}}
 {{- $component := dict "context" . "component" "generator" -}}
-{{- $fullname := include "vrf.fullname" . -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ $fullname }}-generator
+  name: {{ include "vrf.componentName" (dict "context" . "suffix" "generator") }}
   labels:
     {{- include "vrf.labels" $component | nindent 4 }}
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       {{- include "vrf.selectorLabels" $component | nindent 6 }}
@@ -26,7 +28,7 @@ spec:
         {{- include "vrf.podSecurityContext" . | nindent 8 }}
       containers:
         - name: generator
-          image: {{ include "vrf.image" (dict "context" . "image" "simulators") }}
+          image: {{ include "vrf.image" (dict "context" . "image" "simulators") | quote }}
           command: ["python", "-m", "simulators.signal_generator", "--host", "0.0.0.0"]
           ports:
             - name: scpi
@@ -42,7 +44,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ $fullname }}-generator
+  name: {{ include "vrf.componentName" (dict "context" . "suffix" "generator") }}
   labels:
     {{- include "vrf.labels" $component | nindent 4 }}
 spec:

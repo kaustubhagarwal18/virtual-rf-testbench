@@ -2,8 +2,8 @@ The virtual RF bench is deployed as release {{ .Release.Name }} in namespace {{ 
 
 Reach the instruments and the triage API from this machine:
 
-  kubectl --namespace {{ .Release.Namespace }} port-forward service/{{ include "vrf.fullname" . }}-generator 5025:5025
-  kubectl --namespace {{ .Release.Namespace }} port-forward service/{{ include "vrf.fullname" . }}-analyzer 5026:5025
-  kubectl --namespace {{ .Release.Namespace }} port-forward service/{{ include "vrf.fullname" . }}-triage 8000:8000
+  kubectl --namespace {{ .Release.Namespace }} port-forward service/{{ include "vrf.componentName" (dict "context" . "suffix" "generator") }} 5025:5025
+  kubectl --namespace {{ .Release.Namespace }} port-forward service/{{ include "vrf.componentName" (dict "context" . "suffix" "analyzer") }} 5026:5025
+  kubectl --namespace {{ .Release.Namespace }} port-forward service/{{ include "vrf.componentName" (dict "context" . "suffix" "triage") }} 8000:8000
 
 Triage calls Ollama at {{ .Values.triage.ollamaHost }}; /readyz answers 503 until the history has loaded.

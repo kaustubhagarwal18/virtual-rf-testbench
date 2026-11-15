@@ -7,7 +7,7 @@ rule fails here without a test of its own.
 
 import shutil
 import subprocess  # nosec B404 - runs the helm CLI with fixed arguments, no shell
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -44,6 +44,15 @@ SERVICE_PORTS = {
 }
 """Every Service and the only ports it may expose: no admin port in an SCPI Service."""
 
+MAX_NAME_LENGTH = 63
+"""The longest name Kubernetes accepts for a Service (a DNS label) and for a label value."""
+
+LONGEST_RELEASE = "vrf-" + "a" * 49
+"""A 53-character release name, the longest Helm accepts."""
+
+MISTYPED_STRINGS = ("true", "false", "123", "null", "on", "yes", "1e3")
+"""Valid release names and overrides that unquoted YAML would read as a bool, number or null."""
+
 Manifest = dict[str, Any]
 """One rendered Kubernetes object."""
 
@@ -63,18 +72,24 @@ def _helm() -> str:
     return found
 
 
-def _run_template(*settings: str) -> subprocess.CompletedProcess[str]:
+def _run_template(
+    *settings: str, release: str = RELEASE, string_settings: tuple[str, ...] = ()
+) -> subprocess.CompletedProcess[str]:
     """Run helm template on the chart with the test values and extra --set values.
 
     Args:
         *settings: Values as key=value, each passed with --set.
+        release: The release name to render under.
+        string_settings: Values as key=value, each passed with --set-string.
 
     Returns:
         The finished process, with its output and error text.
     """
-    arguments = [_helm(), "template", RELEASE, str(CHART), "--values", str(TEST_VALUES)]
+    arguments = [_helm(), "template", release, str(CHART), "--values", str(TEST_VALUES)]
     for setting in settings:
         arguments += ["--set", setting]
+    for setting in string_settings:
+        arguments += ["--set-string", setting]
     return subprocess.run(  # nosec B603 - fixed arguments, no shell
         arguments, capture_output=True, text=True, check=False, timeout=60
     )
@@ -84,16 +99,20 @@ def _run_template(*settings: str) -> subprocess.CompletedProcess[str]:
 def _render_fixture() -> Render:
     """Return a function that renders the chart and parses the objects, failing on errors."""
 
-    def render(*settings: str) -> list[Manifest]:
+    def render(
+        *settings: str, release: str = RELEASE, string_settings: tuple[str, ...] = ()
+    ) -> list[Manifest]:
         """Render the chart and parse every object it produces.
 
         Args:
             *settings: Values as key=value, each passed with --set.
+            release: The release name to render under.
+            string_settings: Values as key=value, each passed with --set-string.
 
         Returns:
             The rendered objects, empty documents dropped.
         """
-        finished = _run_template(*settings)
+        finished = _run_template(*settings, release=release, string_settings=string_settings)
         assert finished.returncode == 0, finished.stderr
         return [found for found in yaml.safe_load_all(finished.stdout) if found]
 
@@ -176,6 +195,45 @@ def _pod_labels(deployment: Manifest) -> dict[str, str]:
     return labels
 
 
+def _label_maps(node: Any) -> Iterator[dict[str, Any]]:
+    """Yield every label map in an object: labels, matchLabels and Service selectors.
+
+    Args:
+        node: A rendered object, or any part of one.
+
+    Yields:
+        Each mapping of label keys to values found.
+    """
+    if isinstance(node, dict):
+        if node.get("kind") == "Service":
+            yield node["spec"]["selector"]
+        for key, value in node.items():
+            if key in ("labels", "matchLabels"):
+                yield value
+            else:
+                yield from _label_maps(value)
+    elif isinstance(node, list):
+        for item in node:
+            yield from _label_maps(item)
+
+
+def _simulator_container(manifests: list[Manifest], workload: str) -> Manifest:
+    """Return a workload's only container.
+
+    Args:
+        manifests: The rendered objects.
+        workload: The component, such as generator.
+
+    Returns:
+        The container.
+    """
+    containers: list[Manifest] = _deployment(manifests, workload)["spec"]["template"]["spec"][
+        "containers"
+    ]
+    (container,) = containers
+    return container
+
+
 def test_the_chart_renders_every_expected_object(manifests: list[Manifest]) -> None:
     """With defaults, the chart renders three Deployments, five Services and one claim."""
     kinds = sorted((found["kind"], found["metadata"]["name"]) for found in manifests)
@@ -225,9 +283,10 @@ def test_every_workload_runs_one_replica(manifests: list[Manifest], workload: st
     assert _deployment(manifests, workload)["spec"]["replicas"] == 1
 
 
-def test_triage_is_replaced_not_rolled(manifests: list[Manifest]) -> None:
-    """Triage uses Recreate, so two pods never hold its ReadWriteOnce volume at once."""
-    assert _deployment(manifests, "triage")["spec"]["strategy"] == {"type": "Recreate"}
+@pytest.mark.parametrize("workload", WORKLOADS)
+def test_every_workload_is_replaced_not_rolled(manifests: list[Manifest], workload: str) -> None:
+    """Every Deployment uses Recreate: two pods would be two instruments, or share one volume."""
+    assert _deployment(manifests, workload)["spec"]["strategy"] == {"type": "Recreate"}
 
 
 @pytest.mark.parametrize("workload", WORKLOADS)
@@ -249,8 +308,9 @@ def test_every_workload_is_hardened(manifests: list[Manifest], workload: str) ->
 def test_every_container_has_probes_and_a_memory_limit(
     manifests: list[Manifest], workload: str
 ) -> None:
-    """Each container has readiness and liveness probes and a memory limit."""
+    """Each container has start-up, readiness and liveness probes and a memory limit."""
     for container in _deployment(manifests, workload)["spec"]["template"]["spec"]["containers"]:
+        assert "startupProbe" in container
         assert "readinessProbe" in container
         assert "livenessProbe" in container
         assert container["resources"]["limits"]["memory"]
@@ -339,3 +399,74 @@ def test_the_default_deny_policy_covers_every_workload(render: Render, workload:
         policy["spec"]["podSelector"]["matchLabels"],
         _pod_labels(_deployment(manifests, workload)),
     )
+
+
+@pytest.mark.parametrize("workload", ["generator", "analyzer"])
+def test_simulators_check_identity_only_at_start_up(
+    manifests: list[Manifest], workload: str
+) -> None:
+    """Only start-up asks *IDN?; readiness and liveness open the port, so faults can't flip them."""
+    container = _simulator_container(manifests, workload)
+    assert container["startupProbe"]["exec"]["command"] == [
+        "python",
+        "-m",
+        "simulators.healthcheck",
+        "--port",
+        "5025",
+    ]
+    for probe in ("readinessProbe", "livenessProbe"):
+        assert container[probe]["tcpSocket"] == {"port": "scpi"}
+        assert "exec" not in container[probe]
+
+
+@pytest.mark.parametrize("value", MISTYPED_STRINGS)
+@pytest.mark.parametrize("set_as", ["release", "nameOverride", "nameOverride-string"])
+def test_every_label_value_stays_a_string(render: Render, value: str, set_as: str) -> None:
+    """A release name or nameOverride YAML would read as bool, number or null stays a string."""
+    if set_as == "release":
+        manifests = render("networkPolicy.enabled=true", release=value)
+    elif set_as == "nameOverride":
+        manifests = render("networkPolicy.enabled=true", f"nameOverride={value}")
+    else:
+        manifests = render("networkPolicy.enabled=true", string_settings=(f"nameOverride={value}",))
+    label_maps = [labels for found in manifests for labels in _label_maps(found)]
+    assert label_maps
+    for labels in label_maps:
+        for key, label_value in labels.items():
+            assert isinstance(label_value, str), f"{key}: {label_value!r}"
+
+
+@pytest.mark.parametrize(
+    ("settings", "release"),
+    [
+        ((), LONGEST_RELEASE),
+        (("fullnameOverride=" + "f" * 70,), RELEASE),
+        (("nameOverride=" + "n" * 70,), LONGEST_RELEASE),
+    ],
+    ids=["long-release", "long-fullnameOverride", "long-nameOverride"],
+)
+def test_every_name_fits_and_stays_distinct(
+    render: Render, settings: tuple[str, ...], release: str
+) -> None:
+    """With the longest names allowed, every object's name fits in 63 and none collide."""
+    manifests = render("networkPolicy.enabled=true", *settings, release=release)
+    names = [(found["kind"], found["metadata"]["name"]) for found in manifests]
+    for kind, name in names:
+        assert len(name) <= MAX_NAME_LENGTH, f"{kind} {name} is {len(name)} characters"
+        assert not name.endswith("-")
+    assert len(set(names)) == len(names)
+    (analyzer,) = [
+        found
+        for found in _of_kind(manifests, "Deployment")
+        if found["metadata"]["labels"]["app.kubernetes.io/component"] == "analyzer"
+    ]
+    command = analyzer["spec"]["template"]["spec"]["containers"][0]["command"]
+    host, _, port = command[command.index("--generator-admin") + 1].rpartition(":")
+    assert port == "5125"
+    assert ("Service", host) in names
+
+
+def test_the_history_claim_survives_uninstall(manifests: list[Manifest]) -> None:
+    """The claim is kept by Helm on uninstall, or when persistence is turned off."""
+    claim = _find(manifests, "PersistentVolumeClaim", f"{PREFIX}-triage-history")
+    assert claim["metadata"]["annotations"] == {"helm.sh/resource-policy": "keep"}

@@ -1,17 +1,19 @@
 {{- /*
 The SA-1 spectrum analyzer: one pod that reads the generator's state over the generator's
 admin Service, an SCPI Service and a separate admin Service for its own fault switches.
+Replaced, not rolled, for the same reason as the generator: its state lives in the process.
 */ -}}
 {{- $component := dict "context" . "component" "analyzer" -}}
-{{- $fullname := include "vrf.fullname" . -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ $fullname }}-analyzer
+  name: {{ include "vrf.componentName" (dict "context" . "suffix" "analyzer") }}
   labels:
     {{- include "vrf.labels" $component | nindent 4 }}
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       {{- include "vrf.selectorLabels" $component | nindent 6 }}
@@ -25,7 +27,7 @@ spec:
         {{- include "vrf.podSecurityContext" . | nindent 8 }}
       containers:
         - name: analyzer
-          image: {{ include "vrf.image" (dict "context" . "image" "simulators") }}
+          image: {{ include "vrf.image" (dict "context" . "image" "simulators") | quote }}
           command:
             - python
             - -m
@@ -33,7 +35,7 @@ spec:
             - --host
             - 0.0.0.0
             - --generator-admin
-            - {{ printf "%s:5125" (include "vrf.generatorAdminService" .) }}
+            - {{ printf "%s:5125" (include "vrf.generatorAdminService" .) | quote }}
           ports:
             - name: scpi
               containerPort: 5025
@@ -48,7 +50,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ $fullname }}-analyzer
+  name: {{ include "vrf.componentName" (dict "context" . "suffix" "analyzer") }}
   labels:
     {{- include "vrf.labels" $component | nindent 4 }}
 spec:
@@ -62,7 +64,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ $fullname }}-analyzer-admin
+  name: {{ include "vrf.componentName" (dict "context" . "suffix" "analyzer-admin") }}
   labels:
     {{- include "vrf.labels" $component | nindent 4 }}
 spec:

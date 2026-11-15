@@ -9,25 +9,24 @@ Egress is left open: triage calls Ollama outside the cluster, at an address that
 from one cluster to the next, and every pod needs cluster DNS.
 */ -}}
 {{- if .Values.networkPolicy.enabled -}}
-{{- $fullname := include "vrf.fullname" . -}}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ $fullname }}-default-deny-ingress
+  name: {{ include "vrf.componentName" (dict "context" . "suffix" "default-deny-ingress") }}
   labels:
     {{- include "vrf.labels" (dict "context" . "component" "network") | nindent 4 }}
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/name: {{ include "vrf.name" . }}
-      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/name: {{ include "vrf.name" . | quote }}
+      app.kubernetes.io/instance: {{ .Release.Name | quote }}
   policyTypes:
     - Ingress
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ $fullname }}-generator
+  name: {{ include "vrf.componentName" (dict "context" . "suffix" "generator") }}
   labels:
     {{- include "vrf.labels" (dict "context" . "component" "generator") | nindent 4 }}
 spec:
@@ -51,7 +50,7 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ $fullname }}-analyzer
+  name: {{ include "vrf.componentName" (dict "context" . "suffix" "analyzer") }}
   labels:
     {{- include "vrf.labels" (dict "context" . "component" "analyzer") | nindent 4 }}
 spec:
@@ -69,7 +68,7 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ $fullname }}-triage
+  name: {{ include "vrf.componentName" (dict "context" . "suffix" "triage") }}
   labels:
     {{- include "vrf.labels" (dict "context" . "component" "triage") | nindent 4 }}
 spec:

@@ -94,7 +94,7 @@ affect bench runs.
 has been deployed with it yet; `make chart-lint` and `tests/unit/charts/` check what it
 renders. A release renders:
 
-| Object | Port | Reached from |
+| Object | Port | The chart's policies allow |
 |---|---|---|
 | `<release>-generator` Deployment and Service | 5025 (SCPI) | any pod in the namespace |
 | `<release>-generator-admin` Service | 5125 (admin) | the analyzer only, when NetworkPolicy is on |
@@ -104,10 +104,24 @@ renders. A release renders:
 | `<release>-triage-history` PersistentVolumeClaim | | the triage pod, at `/data` |
 
 The admin ports carry the fault switches, so they have their own Services and are never part
-of an SCPI Service. Every workload runs one replica; triage uses the `Recreate` strategy
-because its SQLite history is on a ReadWriteOnce volume. Pods run as uid 10001 with a
-read-only root filesystem, no capabilities, no service account token and seccomp
-`RuntimeDefault`, as in compose.
+of an SCPI Service. Every workload runs one replica with the `Recreate` strategy: each
+simulator keeps its instrument state in the process, so a rolling update would put two
+different instruments behind one Service, and triage's SQLite history is on a
+ReadWriteOnce volume. A rollout has a short outage. A simulator proves it is a VirtualRF
+instrument (`*IDN?`) once, at start-up; after that readiness and liveness only open the SCPI
+port, so an injected `SLOW_RESPONSE_S` never takes an instrument out of its Services.
+Pods run as uid 10001 with a read-only root filesystem, no capabilities, no service account
+token and seccomp `RuntimeDefault`, as in compose.
+
+**The history claim outlives the release.** It is annotated `helm.sh/resource-policy:
+keep`, so `helm uninstall`, and an upgrade that turns `triage.persistence.enabled` off,
+leave it in place; Helm stops managing it. Turning persistence off moves `/data` to an
+emptyDir, so the kept claim goes unused and new runs are lost with the pod. To delete the
+history on purpose, back it up first, then, with `NAMESPACE` and `RELEASE` set:
+
+```
+kubectl --namespace "$NAMESPACE" delete pvc "$RELEASE-virtual-rf-testbench-triage-history"
+```
 
 Image tags are empty in `values.yaml` and rendering fails until they are set. Each
 environment's values file in Git pins them to a `<version>-<sha7>` tag the publish job
@@ -122,8 +136,11 @@ helm template vrf charts/virtual-rf-testbench --values charts/virtual-rf-testben
 Nothing else calls out. Egress isn't restricted by the chart.
 
 **NetworkPolicy** is off by default (`networkPolicy.enabled`), since minikube's default
-network doesn't enforce it. When on, every pod of the release denies ingress except the ports
-in the table above.
+network doesn't enforce it. When on, the chart's policies deny ingress to every pod of the
+release except the ports in the table above. That is what these policies allow, not a
+guarantee: NetworkPolicies are additive, so another policy in the namespace that selects
+these pods can open more, and traffic from a pod's own node, such as the kubelet's probes,
+is always allowed.
 
 ## CI chain
 

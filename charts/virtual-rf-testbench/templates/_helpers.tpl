@@ -1,9 +1,9 @@
 {{/*
 The chart's short name: Chart.yaml's name field, or nameOverride, cut to the 63-character
-label limit.
+label limit. toString keeps an override such as --set nameOverride=true a string.
 */}}
 {{- define "vrf.name" -}}
-{{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
+{{- default .Chart.Name .Values.nameOverride | toString | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
@@ -12,15 +12,26 @@ The release-scoped prefix for every resource name. fullnameOverride wins; otherw
 */}}
 {{- define "vrf.fullname" -}}
 {{- if .Values.fullnameOverride }}
-{{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
+{{- .Values.fullnameOverride | toString | trunc 63 | trimSuffix "-" }}
 {{- else }}
-{{- $name := default .Chart.Name .Values.nameOverride }}
+{{- $name := include "vrf.name" . }}
 {{- if contains $name .Release.Name }}
 {{- .Release.Name | trunc 63 | trimSuffix "-" }}
 {{- else }}
 {{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" }}
 {{- end }}
 {{- end }}
+{{- end }}
+
+{{/*
+The name of one of the release's objects: the fullname, cut so that "-<suffix>" still fits
+in 63 characters (the limit for Service names and labels), then "-<suffix>". Every object
+is named through this, so a long release name never makes a name Kubernetes rejects.
+Call with: include "vrf.componentName" (dict "context" . "suffix" "generator-admin")
+*/}}
+{{- define "vrf.componentName" -}}
+{{- $prefix := include "vrf.fullname" .context | trunc (int (sub 62 (len .suffix))) | trimSuffix "-" -}}
+{{- printf "%s-%s" $prefix .suffix -}}
 {{- end }}
 
 {{/*
@@ -32,15 +43,16 @@ allowed in a label value.
 {{- end }}
 
 {{/*
-Selector labels for one component. The component label is part of the selector so the
+Selector labels for one component. Every value is quoted: a release named "true" or "123"
+is valid, and unquoted it would render as a YAML boolean or number, which a label can't be. The component label is part of the selector so the
 generator, analyzer and triage Deployments never select each other's pods; a selector
 can't change after the Deployment is created, so it is set from the first version.
 Call with: include "vrf.selectorLabels" (dict "context" . "component" "generator")
 */}}
 {{- define "vrf.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "vrf.name" .context }}
-app.kubernetes.io/instance: {{ .context.Release.Name }}
-app.kubernetes.io/component: {{ .component }}
+app.kubernetes.io/name: {{ include "vrf.name" .context | quote }}
+app.kubernetes.io/instance: {{ .context.Release.Name | quote }}
+app.kubernetes.io/component: {{ .component | quote }}
 {{- end }}
 
 {{/*
@@ -49,10 +61,10 @@ version and manager.
 Call with: include "vrf.labels" (dict "context" . "component" "generator")
 */}}
 {{- define "vrf.labels" -}}
-helm.sh/chart: {{ include "vrf.chart" .context }}
+helm.sh/chart: {{ include "vrf.chart" .context | quote }}
 {{ include "vrf.selectorLabels" . }}
 app.kubernetes.io/version: {{ .context.Chart.AppVersion | quote }}
-app.kubernetes.io/managed-by: {{ .context.Release.Service }}
+app.kubernetes.io/managed-by: {{ .context.Release.Service | quote }}
 {{- end }}
 
 {{/*
@@ -94,18 +106,25 @@ capabilities:
 {{- end }}
 
 {{/*
-Probes for a simulator container. Readiness runs the image's own healthcheck, which asks
-*IDN? and expects a VirtualRF reply, the same check Docker's HEALTHCHECK runs; liveness
-only opens the SCPI port, so a slow reply under load never restarts the instrument.
-*IDN? changes no state, and the server takes concurrent connections, so a probe never
-blocks or disturbs a test's session.
+Probes for a simulator container. The startup probe runs the image's own healthcheck, the
+same check Docker's HEALTHCHECK runs: *IDN? must get a VirtualRF reply. It runs only while
+the container starts, when every fault switch is still off. Readiness and liveness then
+only open the SCPI port: SLOW_RESPONSE_S delays every SCPI line, *IDN? included, by up to
+30 s, and a long measurement holds the instrument's lock, so an *IDN? check after start-up
+would take a slowed but working instrument out of its Services (the analyzer would then
+read "no signal", a different fault) or restart it and clear the faults.
 */}}
 {{- define "vrf.simulatorProbes" -}}
-readinessProbe:
+startupProbe:
   exec:
     command: ["python", "-m", "simulators.healthcheck", "--port", "5025"]
-  periodSeconds: 5
+  periodSeconds: 2
   timeoutSeconds: 3
+  failureThreshold: 15
+readinessProbe:
+  tcpSocket:
+    port: scpi
+  periodSeconds: 5
 livenessProbe:
   tcpSocket:
     port: scpi
@@ -118,5 +137,5 @@ The generator's admin Service name. It is a bare name: the analyzer's --generato
 takes host:port with no scheme, so pass "<this name>:5125", never "http://...".
 */}}
 {{- define "vrf.generatorAdminService" -}}
-{{- printf "%s-generator-admin" (include "vrf.fullname" .) -}}
+{{- include "vrf.componentName" (dict "context" . "suffix" "generator-admin") -}}
 {{- end }}
