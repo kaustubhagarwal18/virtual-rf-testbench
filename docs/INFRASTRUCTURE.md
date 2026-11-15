@@ -117,10 +117,13 @@ token and seccomp `RuntimeDefault`, as in compose.
 keep`, so `helm uninstall`, and an upgrade that turns `triage.persistence.enabled` off,
 leave it in place; Helm stops managing it. Turning persistence off moves `/data` to an
 emptyDir, so the kept claim goes unused and new runs are lost with the pod. To delete the
-history on purpose, back it up first, then, with `NAMESPACE` and `RELEASE` set:
+history on purpose, back it up first. The claim's name depends on the release name and the
+overrides, so find it by its labels instead: with `NAMESPACE` and `RELEASE` set, list it,
+check it is the one you mean, then delete it with the same selector:
 
 ```
-kubectl --namespace "$NAMESPACE" delete pvc "$RELEASE-virtual-rf-testbench-triage-history"
+kubectl --namespace "$NAMESPACE" get pvc --selector "app.kubernetes.io/instance=$RELEASE,app.kubernetes.io/component=triage"
+kubectl --namespace "$NAMESPACE" delete pvc --selector "app.kubernetes.io/instance=$RELEASE,app.kubernetes.io/component=triage"
 ```
 
 Image tags are empty in `values.yaml` and rendering fails until they are set. Each

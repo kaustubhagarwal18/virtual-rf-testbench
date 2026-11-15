@@ -35,14 +35,15 @@ IMAGE_USER_ID = 10001
 WORKLOADS = ("generator", "analyzer", "triage")
 """Every component that runs as a Deployment."""
 
-SERVICE_PORTS = {
-    f"{PREFIX}-generator": {5025},
-    f"{PREFIX}-generator-admin": {5125},
-    f"{PREFIX}-analyzer": {5025},
-    f"{PREFIX}-analyzer-admin": {5126},
-    f"{PREFIX}-triage": {8000},
+SERVICES = {
+    f"{PREFIX}-generator": ("generator", {5025}),
+    f"{PREFIX}-generator-admin": ("generator", {5125}),
+    f"{PREFIX}-analyzer": ("analyzer", {5025}),
+    f"{PREFIX}-analyzer-admin": ("analyzer", {5126}),
+    f"{PREFIX}-triage": ("triage", {8000}),
 }
-"""Every Service and the only ports it may expose: no admin port in an SCPI Service."""
+"""Every Service, the workload it must route to, and the only ports it may expose: no admin
+port in an SCPI Service."""
 
 MAX_NAME_LENGTH = 63
 """The longest name Kubernetes accepts for a Service (a DNS label) and for a label value."""
@@ -52,6 +53,12 @@ LONGEST_RELEASE = "vrf-" + "a" * 49
 
 MISTYPED_STRINGS = ("true", "false", "123", "null", "on", "yes", "1e3")
 """Valid release names and overrides that unquoted YAML would read as a bool, number or null."""
+
+INVALID_RELEASES = {"123": "vrf-123", "1e3": "vrf-1e3", "vrf.prod": "vrf-prod", "1.2": "vrf-1-2"}
+"""Release names Helm accepts that don't give an RFC 1035 Service name, and the fix offered."""
+
+SHARED_PREFIX = "a" * 48
+"""A long prefix two release names share, so cutting them to fit leaves the same text."""
 
 Manifest = dict[str, Any]
 """One rendered Kubernetes object."""
@@ -239,7 +246,7 @@ def test_the_chart_renders_every_expected_object(manifests: list[Manifest]) -> N
     kinds = sorted((found["kind"], found["metadata"]["name"]) for found in manifests)
     assert kinds == sorted(
         [("Deployment", f"{PREFIX}-{workload}") for workload in WORKLOADS]
-        + [("Service", name) for name in SERVICE_PORTS]
+        + [("Service", name) for name in SERVICES]
         + [("PersistentVolumeClaim", f"{PREFIX}-triage-history")]
     )
 
@@ -255,26 +262,26 @@ def test_each_deployment_selects_only_its_own_pods(
         assert matched == (other == workload), f"{workload} selector vs {other} pods"
 
 
-@pytest.mark.parametrize("service_name", sorted(SERVICE_PORTS))
-def test_each_service_selects_exactly_one_workload(
+@pytest.mark.parametrize("service_name", sorted(SERVICES))
+def test_each_service_selects_exactly_its_own_workload(
     manifests: list[Manifest], service_name: str
 ) -> None:
-    """Every Service routes to the pods of one workload only."""
+    """Every Service routes to the pods of its own workload, and no other."""
     selector = _find(manifests, "Service", service_name)["spec"]["selector"]
     matched = [
         workload
         for workload in WORKLOADS
         if _selects(selector, _pod_labels(_deployment(manifests, workload)))
     ]
-    assert len(matched) == 1, f"{service_name} selects {matched}"
+    assert matched == [SERVICES[service_name][0]], f"{service_name} selects {matched}"
 
 
-@pytest.mark.parametrize("service_name", sorted(SERVICE_PORTS))
+@pytest.mark.parametrize("service_name", sorted(SERVICES))
 def test_services_expose_only_their_own_ports(manifests: list[Manifest], service_name: str) -> None:
     """SCPI Services never carry an admin port, and admin Services only their admin port."""
     service = _find(manifests, "Service", service_name)
     exposed = {port["port"] for port in service["spec"]["ports"]}
-    assert exposed == SERVICE_PORTS[service_name]
+    assert exposed == SERVICES[service_name][1]
 
 
 @pytest.mark.parametrize("workload", WORKLOADS)
@@ -419,8 +426,15 @@ def test_simulators_check_identity_only_at_start_up(
         assert "exec" not in container[probe]
 
 
-@pytest.mark.parametrize("value", MISTYPED_STRINGS)
-@pytest.mark.parametrize("set_as", ["release", "nameOverride", "nameOverride-string"])
+@pytest.mark.parametrize(
+    ("value", "set_as"),
+    [
+        (value, set_as)
+        for value in MISTYPED_STRINGS
+        for set_as in ("release", "nameOverride", "nameOverride-string")
+        if not (set_as == "release" and value in INVALID_RELEASES)
+    ],
+)
 def test_every_label_value_stays_a_string(render: Render, value: str, set_as: str) -> None:
     """A release name or nameOverride YAML would read as bool, number or null stays a string."""
     if set_as == "release":
@@ -470,3 +484,85 @@ def test_the_history_claim_survives_uninstall(manifests: list[Manifest]) -> None
     """The claim is kept by Helm on uninstall, or when persistence is turned off."""
     claim = _find(manifests, "PersistentVolumeClaim", f"{PREFIX}-triage-history")
     assert claim["metadata"]["annotations"] == {"helm.sh/resource-policy": "keep"}
+
+
+@pytest.mark.parametrize("release", sorted(INVALID_RELEASES))
+def test_a_release_name_no_service_could_have_stops_rendering(release: str) -> None:
+    """A digit-first or dotted release name fails with the name and a release name that works."""
+    finished = _run_template(release=release)
+    assert finished.returncode != 0
+    assert f'release name "{release}"' in finished.stderr
+    assert "must start with a letter" in finished.stderr
+    assert f"use a release name such as {INVALID_RELEASES[release]}" in finished.stderr
+
+
+@pytest.mark.parametrize(
+    ("setting", "named"),
+    [
+        ("fullnameOverride=9lives", 'fullnameOverride "9lives"'),
+        ("fullnameOverride=bench.one", 'fullnameOverride "bench.one"'),
+        ("nameOverride=Bench", 'nameOverride "Bench"'),
+    ],
+)
+def test_an_override_no_service_could_have_stops_rendering(setting: str, named: str) -> None:
+    """An override that gives an invalid Service name fails naming that override."""
+    finished = _run_template(setting)
+    assert finished.returncode != 0
+    assert named in finished.stderr
+    assert "must start with a letter" in finished.stderr
+
+
+def test_a_digit_name_override_is_fine_after_the_release_name(render: Render) -> None:
+    """nameOverride=123 follows the release name, so vrf-123-... still starts with a letter."""
+    manifests = render("nameOverride=123")
+    assert _find(manifests, "Service", "vrf-123-generator-admin")
+
+
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [
+        ({"release": SHARED_PREFIX + "x"}, {"release": SHARED_PREFIX + "y"}),
+        (
+            {"settings": ("fullnameOverride=" + "f" * 70 + "x",)},
+            {"settings": ("fullnameOverride=" + "f" * 70 + "y",)},
+        ),
+        ({"release": "vrf-" + "b" * 49}, {"release": "vrf-" + "b" * 48 + "c"}),
+    ],
+    ids=["long-releases", "long-fullnameOverrides", "longest-releases"],
+)
+def test_two_long_releases_never_share_a_name(
+    render: Render, first: dict[str, Any], second: dict[str, Any]
+) -> None:
+    """Two releases cut to the same prefix still get different, valid object names."""
+    names = [
+        {
+            (found["kind"], found["metadata"]["name"])
+            for found in render(
+                "networkPolicy.enabled=true",
+                *setup.get("settings", ()),
+                release=setup.get("release", RELEASE),
+            )
+        }
+        for setup in (first, second)
+    ]
+    assert not names[0] & names[1], names[0] & names[1]
+    for kind, name in names[0] | names[1]:
+        assert len(name) <= MAX_NAME_LENGTH, f"{kind} {name} is {len(name)} characters"
+        assert "--" not in name
+
+
+def test_short_names_carry_no_hash(manifests: list[Manifest]) -> None:
+    """A name that fits is exactly <fullname>-<suffix>, with nothing inserted."""
+    assert _find(manifests, "Service", f"{PREFIX}-generator-admin")
+    assert all(found["metadata"]["name"].startswith(f"{PREFIX}-") for found in manifests)
+
+
+def test_the_documented_selector_finds_only_the_history_claim(manifests: list[Manifest]) -> None:
+    """docs/INFRASTRUCTURE.md deletes the kept claim by instance and component labels."""
+    selector = {"app.kubernetes.io/instance": RELEASE, "app.kubernetes.io/component": "triage"}
+    claims = [
+        found["metadata"]["name"]
+        for found in _of_kind(manifests, "PersistentVolumeClaim")
+        if _selects(selector, found["metadata"]["labels"])
+    ]
+    assert claims == [f"{PREFIX}-triage-history"]

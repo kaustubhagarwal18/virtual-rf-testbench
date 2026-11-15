@@ -18,8 +18,13 @@ it, so the package version moves only with a release.
   to a cluster.
 - **Chart checks:** `make chart-lint` (helm lint and helm template, part of `make lint`) and
   `tests/unit/charts/`, which render the chart and check selectors, Service ports, replicas,
-  hardening, probes, image tags, storage class, NetworkPolicy, label types and name lengths. CI installs Helm 4.3.1,
-  pinned and checksum-verified, in the Lint and Test jobs.
+  hardening, probes, image tags, storage class, NetworkPolicy, label types, name lengths
+  and name collisions. CI installs Helm 4.3.1, pinned and checksum-verified, in the Lint and
+  Test jobs.
+- **Chart names:** a name over 63 characters is cut and gets a short hash of the full
+  prefix, so two long releases never share a name; a release name or override that
+  wouldn't give a valid Service name (such as `123` or `vrf.prod`) stops rendering with the
+  fix.
 - **Triage API container image** (ADR 0028): `triage-runtime` stage in the Dockerfile builds
   a minimal image (fastapi, uvicorn, pydantic, numpy; no pip, rsinstrument or simulators).
   The seed history is baked in; added runs and embedding vectors live on a named volume.

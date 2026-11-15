@@ -16,9 +16,20 @@ those properties, and it has to fail before anything reaches a cluster when one 
 **One chart, three workloads.** `charts/virtual-rf-testbench/` renders a Deployment and a
 Service for the generator, the analyzer and the triage API. The component label is part of
 every selector, so no Deployment or Service can pick up another workload's pods. Every
-label value is quoted, so a valid release name such as `true` or `123` stays a string. Every
-object is named through one helper that cuts the release prefix so `-<suffix>` still fits in
-63 characters, so even Helm's longest release name (53 characters) gives valid names.
+label value is quoted, so a valid release name such as `true` stays a string. Every object
+is named through one helper, `vrf.componentName`:
+- A name longer than 63 characters gets its prefix cut and the first 8 characters of the
+  full prefix's SHA-256 inserted before the suffix, so two long releases that share a
+  prefix never share a name, and short names are unchanged. Even Helm's longest release
+  name (53 characters) gives valid, distinct names.
+- A name that isn't an RFC 1035 label (a lowercase letter first, then lowercase letters,
+  digits and `-`) stops rendering, with an error naming the release name or override and
+  a fix. Services need such names on Kubernetes before 1.36, where the
+  `RelaxedServiceNameValidation` feature gate became on by default. Helm accepts release
+  names that start with a digit or contain dots, such as `123` or `vrf.prod`: the first
+  is rejected by clusters before 1.36, the second by every cluster, since a Service name
+  never contains a dot. Renaming them silently (say, to `vrf-123`) was rejected: the
+  objects would not have the name the user typed.
 
 **Admin ports get their own Services.** The admin ports carry the fault switches, so the
 SCPI Services expose port 5025 only, and `-generator-admin` (5125) and `-analyzer-admin`

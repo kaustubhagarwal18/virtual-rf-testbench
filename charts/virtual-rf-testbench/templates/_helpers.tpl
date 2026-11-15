@@ -7,31 +7,61 @@ label limit. toString keeps an override such as --set nameOverride=true a string
 {{- end }}
 
 {{/*
-The release-scoped prefix for every resource name. fullnameOverride wins; otherwise
-<release>-<name>, or just <release> when the release name already contains the chart name.
+The release-scoped prefix for every resource name, at full length. fullnameOverride wins;
+otherwise <release>-<name>, or just <release> when the release name already contains the
+chart name. It is not shortened here: vrf.componentName shortens it, and hashes what it
+cut, so two long releases never share a name.
 */}}
 {{- define "vrf.fullname" -}}
 {{- if .Values.fullnameOverride }}
-{{- .Values.fullnameOverride | toString | trunc 63 | trimSuffix "-" }}
+{{- .Values.fullnameOverride | toString }}
 {{- else }}
 {{- $name := include "vrf.name" . }}
 {{- if contains $name .Release.Name }}
-{{- .Release.Name | trunc 63 | trimSuffix "-" }}
+{{- .Release.Name }}
 {{- else }}
-{{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" }}
+{{- printf "%s-%s" .Release.Name $name }}
 {{- end }}
 {{- end }}
 {{- end }}
 
 {{/*
-The name of one of the release's objects: the fullname, cut so that "-<suffix>" still fits
-in 63 characters (the limit for Service names and labels), then "-<suffix>". Every object
-is named through this, so a long release name never makes a name Kubernetes rejects.
+The name of one of the release's objects: "<fullname>-<suffix>". Every object is named
+through this.
+- When that is longer than 63 characters (the limit for a Service name), the fullname is
+  cut and the first 8 characters of its SHA-256 go before the suffix:
+  "<cut fullname>-<hash>-<suffix>". Two releases that share a long prefix then still get
+  different names; short names are unchanged.
+- The name must be an RFC 1035 label (lowercase letters, digits and "-", starting with a
+  letter), which Services need on Kubernetes before 1.36 (RelaxedServiceNameValidation is
+  on by default only from 1.36). A name that isn't one stops rendering with the fix,
+  rather than being renamed: a silently prefixed name wouldn't match what the user typed.
 Call with: include "vrf.componentName" (dict "context" . "suffix" "generator-admin")
 */}}
 {{- define "vrf.componentName" -}}
-{{- $prefix := include "vrf.fullname" .context | trunc (int (sub 62 (len .suffix))) | trimSuffix "-" -}}
-{{- printf "%s-%s" $prefix .suffix -}}
+{{- $full := include "vrf.fullname" .context -}}
+{{- $name := printf "%s-%s" $full .suffix -}}
+{{- if gt (len $name) 63 -}}
+{{- $hash := sha256sum $full | trunc 8 -}}
+{{- $cut := $full | trunc (int (sub 63 (add (len .suffix) 10))) -}}
+{{- $prefix := regexReplaceAll "-+$" $cut "" -}}
+{{- $name = printf "%s-%s-%s" $prefix $hash .suffix -}}
+{{- end -}}
+{{- if not (regexMatch "^[a-z]([-a-z0-9]*[a-z0-9])?$" $name) -}}
+{{- $problem := printf "gives the object name %q, which must start with a letter and use only lowercase letters, digits and '-'" $name -}}
+{{- if .context.Values.fullnameOverride -}}
+{{- fail (printf "fullnameOverride %q %s; change fullnameOverride to such a name" (toString .context.Values.fullnameOverride) $problem) -}}
+{{- end -}}
+{{- if regexMatch "^[a-z]([-a-z0-9]*[a-z0-9])?$" .context.Release.Name -}}
+{{- fail (printf "nameOverride %q %s; change nameOverride to such a name" (toString .context.Values.nameOverride) $problem) -}}
+{{- end -}}
+{{- $suggested := replace "." "-" .context.Release.Name -}}
+{{- if not (regexMatch "^[a-z]" $suggested) -}}
+{{- $suggested = printf "vrf-%s" $suggested -}}
+{{- end -}}
+{{- fail (printf "release name %q %s; use a release name such as %s" .context.Release.Name $problem $suggested) -}}
+{{- end -}}
+{{- $name -}}
 {{- end }}
 
 {{/*
@@ -43,9 +73,10 @@ allowed in a label value.
 {{- end }}
 
 {{/*
-Selector labels for one component. Every value is quoted: a release named "true" or "123"
-is valid, and unquoted it would render as a YAML boolean or number, which a label can't be. The component label is part of the selector so the
-generator, analyzer and triage Deployments never select each other's pods; a selector
+Selector labels for one component. Every value is quoted: a release named "true", or a
+nameOverride of "123", is valid, and unquoted it would render as a YAML boolean or number,
+which a label can't be. The component label is part of the selector so the generator,
+analyzer and triage Deployments never select each other's pods; a selector
 can't change after the Deployment is created, so it is set from the first version.
 Call with: include "vrf.selectorLabels" (dict "context" . "component" "generator")
 */}}
