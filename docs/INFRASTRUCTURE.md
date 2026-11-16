@@ -1,7 +1,7 @@
 # Infrastructure
 
 This document covers the container images, how history is stored, running locally with
-Compose, and the CI chain.
+Compose, the Helm chart, and the CI chain.
 
 ## Images
 
@@ -87,6 +87,63 @@ the manual check.
 
 `make bench-up` starts only the simulators. The triage profile is opt-in and does not
 affect bench runs.
+
+## Helm chart
+
+`charts/virtual-rf-testbench/` deploys the same two images to Kubernetes (ADR 0029). Nothing
+has been deployed with it yet; `make chart-lint` and `tests/unit/charts/` check what it
+renders. A release renders:
+
+| Object | Port | The chart's policies allow |
+|---|---|---|
+| `<release>-generator` Deployment and Service | 5025 (SCPI) | any pod in the namespace |
+| `<release>-generator-admin` Service | 5125 (admin) | the analyzer only, when NetworkPolicy is on |
+| `<release>-analyzer` Deployment and Service | 5025 (SCPI) | any pod in the namespace |
+| `<release>-analyzer-admin` Service | 5126 (admin) | nothing in the cluster when NetworkPolicy is on; use port-forward |
+| `<release>-triage` Deployment and Service | 8000 (HTTP) | any pod in the namespace |
+| `<release>-triage-history` PersistentVolumeClaim | | the triage pod, at `/data` |
+
+The admin ports carry the fault switches, so they have their own Services and are never part
+of an SCPI Service. Every workload runs one replica with the `Recreate` strategy: each
+simulator keeps its instrument state in the process, so a rolling update would put two
+different instruments behind one Service, and triage's SQLite history is on a
+ReadWriteOnce volume. A rollout has a short outage. A simulator proves it is a VirtualRF
+instrument (`*IDN?`) once, at start-up; after that readiness and liveness only open the SCPI
+port, so an injected `SLOW_RESPONSE_S` never takes an instrument out of its Services.
+Pods run as uid 10001 with a read-only root filesystem, no capabilities, no service account
+token and seccomp `RuntimeDefault`, as in compose.
+
+**The history claim outlives the release.** It is annotated `helm.sh/resource-policy:
+keep`, so `helm uninstall`, and an upgrade that turns `triage.persistence.enabled` off,
+leave it in place; Helm stops managing it. Turning persistence off moves `/data` to an
+emptyDir, so the kept claim goes unused and new runs are lost with the pod. To delete the
+history on purpose, back it up first. The claim's name depends on the release name and the
+overrides, so find it by its labels instead: with `NAMESPACE` and `RELEASE` set, list it,
+check it is the one you mean, then delete it with the same selector:
+
+```
+kubectl --namespace "$NAMESPACE" get pvc --selector "app.kubernetes.io/instance=$RELEASE,app.kubernetes.io/component=triage"
+kubectl --namespace "$NAMESPACE" delete pvc --selector "app.kubernetes.io/instance=$RELEASE,app.kubernetes.io/component=triage"
+```
+
+Image tags are empty in `values.yaml` and rendering fails until they are set. Each
+environment's values file in Git pins them to a `<version>-<sha7>` tag the publish job
+pushed. To render locally:
+
+```
+helm template vrf charts/virtual-rf-testbench --values charts/virtual-rf-testbench/ci/test-values.yaml
+```
+
+**What leaves the cluster:** the triage pod calls Ollama at `triage.ollamaHost`
+(`http://host.minikube.internal:11434` by default, the Mac's Ollama seen from minikube).
+Nothing else calls out. Egress isn't restricted by the chart.
+
+**NetworkPolicy** is off by default (`networkPolicy.enabled`), since minikube's default
+network doesn't enforce it. When on, the chart's policies deny ingress to every pod of the
+release except the ports in the table above. That is what these policies allow, not a
+guarantee: NetworkPolicies are additive, so another policy in the namespace that selects
+these pods can open more, and traffic from a pod's own node, such as the kubelet's probes,
+is always allowed.
 
 ## CI chain
 

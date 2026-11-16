@@ -1,0 +1,85 @@
+{{- /*
+Ingress rules, rendered only when networkPolicy.enabled. Every pod of the release denies
+ingress by default; then each port is opened to whoever needs it:
+  - SCPI (5025) on both instruments and the triage API (8000): any pod in the namespace.
+  - The generator's admin port (5125): the analyzer only, which reads the generator's state.
+  - The analyzer's admin port (5126): nobody in the cluster yet; its fault switches are
+    reached by port-forward until a bench runner runs in the cluster.
+Egress is left open: triage calls Ollama outside the cluster, at an address that differs
+from one cluster to the next, and every pod needs cluster DNS.
+*/ -}}
+{{- if .Values.networkPolicy.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "vrf.componentName" (dict "context" . "suffix" "default-deny-ingress") }}
+  labels:
+    {{- include "vrf.labels" (dict "context" . "component" "network") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "vrf.name" . | quote }}
+      app.kubernetes.io/instance: {{ .Release.Name | quote }}
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "vrf.componentName" (dict "context" . "suffix" "generator") }}
+  labels:
+    {{- include "vrf.labels" (dict "context" . "component" "generator") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "vrf.selectorLabels" (dict "context" . "component" "generator") | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - port: 5025
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "vrf.selectorLabels" (dict "context" . "component" "analyzer") | nindent 14 }}
+      ports:
+        - port: 5125
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "vrf.componentName" (dict "context" . "suffix" "analyzer") }}
+  labels:
+    {{- include "vrf.labels" (dict "context" . "component" "analyzer") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "vrf.selectorLabels" (dict "context" . "component" "analyzer") | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - port: 5025
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "vrf.componentName" (dict "context" . "suffix" "triage") }}
+  labels:
+    {{- include "vrf.labels" (dict "context" . "component" "triage") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "vrf.selectorLabels" (dict "context" . "component" "triage") | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - port: 8000
+{{- end }}

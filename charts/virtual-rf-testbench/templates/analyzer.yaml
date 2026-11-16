@@ -1,0 +1,76 @@
+{{- /*
+The SA-1 spectrum analyzer: one pod that reads the generator's state over the generator's
+admin Service, an SCPI Service and a separate admin Service for its own fault switches.
+Replaced, not rolled, for the same reason as the generator: its state lives in the process.
+*/ -}}
+{{- $component := dict "context" . "component" "analyzer" -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "vrf.componentName" (dict "context" . "suffix" "analyzer") }}
+  labels:
+    {{- include "vrf.labels" $component | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "vrf.selectorLabels" $component | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "vrf.labels" $component | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "vrf.podSecurityContext" . | nindent 8 }}
+      containers:
+        - name: analyzer
+          image: {{ include "vrf.image" (dict "context" . "image" "simulators") | quote }}
+          command:
+            - python
+            - -m
+            - simulators.spectrum_analyzer
+            - --host
+            - 0.0.0.0
+            - --generator-admin
+            - {{ printf "%s:5125" (include "vrf.generatorAdminService" .) | quote }}
+          ports:
+            - name: scpi
+              containerPort: 5025
+            - name: admin
+              containerPort: 5126
+          {{- include "vrf.simulatorProbes" . | nindent 10 }}
+          securityContext:
+            {{- include "vrf.containerSecurityContext" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.analyzer.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "vrf.componentName" (dict "context" . "suffix" "analyzer") }}
+  labels:
+    {{- include "vrf.labels" $component | nindent 4 }}
+spec:
+  selector:
+    {{- include "vrf.selectorLabels" $component | nindent 4 }}
+  ports:
+    - name: scpi
+      port: 5025
+      targetPort: scpi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "vrf.componentName" (dict "context" . "suffix" "analyzer-admin") }}
+  labels:
+    {{- include "vrf.labels" $component | nindent 4 }}
+spec:
+  selector:
+    {{- include "vrf.selectorLabels" $component | nindent 4 }}
+  ports:
+    - name: admin
+      port: 5126
+      targetPort: admin

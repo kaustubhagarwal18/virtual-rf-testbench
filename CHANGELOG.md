@@ -9,6 +9,22 @@ it, so the package version moves only with a release.
 
 ### Added
 
+- **Helm chart** (`charts/virtual-rf-testbench/`, ADR 0029): Deployments and Services for
+  the generator, analyzer and triage API, separate admin Services, a claim for the triage
+  history that Helm keeps on uninstall, and optional ingress NetworkPolicies. Every
+  workload runs one replica with the `Recreate` strategy, hardened as in compose; simulators
+  check `*IDN?` only at start-up, so an injected slow response never takes one out of its
+  Services. Image tags must be pinned in a values file or rendering fails. Not yet deployed
+  to a cluster.
+- **Chart checks:** `make chart-lint` (helm lint and helm template, part of `make lint`) and
+  `tests/unit/charts/`, which render the chart and check selectors, Service ports, replicas,
+  hardening, probes, image tags, storage class, NetworkPolicy, label types, name lengths
+  and name collisions. CI installs Helm 4.3.1, pinned and checksum-verified, in the Lint and
+  Test jobs.
+- **Chart names:** a name over 63 characters is cut and gets a short hash of the full
+  prefix, so two long releases never share a name; a release name or override that
+  wouldn't give a valid Service name (such as `123` or `vrf.prod`) stops rendering with the
+  fix.
 - **Triage API container image** (ADR 0028): `triage-runtime` stage in the Dockerfile builds
   a minimal image (fastapi, uvicorn, pydantic, numpy; no pip, rsinstrument or simulators).
   The seed history is baked in; added runs and embedding vectors live on a named volume.

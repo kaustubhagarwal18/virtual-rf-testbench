@@ -1,0 +1,119 @@
+{{- /*
+The triage API: one pod with the Recreate strategy, since its SQLite history sits on a
+ReadWriteOnce volume that two pods can't share; a Service on port 8000; and the volume
+claim when persistence is on. The claim carries helm.sh/resource-policy: keep, so neither
+helm uninstall nor turning persistence off deletes the history; delete the claim by hand
+to drop it. With persistence off, /data is an emptyDir: a kept claim goes unused, and runs
+added from then on are lost when the pod goes.
+*/ -}}
+{{- $component := dict "context" . "component" "triage" -}}
+{{- $persistence := .Values.triage.persistence -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "vrf.componentName" (dict "context" . "suffix" "triage") }}
+  labels:
+    {{- include "vrf.labels" $component | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "vrf.selectorLabels" $component | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "vrf.labels" $component | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "vrf.podSecurityContext" . | nindent 8 }}
+      containers:
+        - name: triage
+          image: {{ include "vrf.image" (dict "context" . "image" "triage") | quote }}
+          env:
+            - name: TRIAGE_OLLAMA_HOST
+              value: {{ .Values.triage.ollamaHost | quote }}
+            - name: TRIAGE_MODEL
+              value: {{ .Values.triage.model | quote }}
+            - name: TRIAGE_EMBED_MODEL
+              value: {{ .Values.triage.embedModel | quote }}
+          ports:
+            - name: http
+              containerPort: 8000
+          # Start-up gets up to a minute; liveness then fails only a hung process. Readiness
+          # answers 503 while the history loads in the background, which keeps the pod out
+          # of the Service without restarting it.
+          startupProbe:
+            httpGet:
+              path: /livez
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+          securityContext:
+            {{- include "vrf.containerSecurityContext" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.triage.resources | nindent 12 }}
+          volumeMounts:
+            - name: history
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: history
+          {{- if $persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "vrf.componentName" (dict "context" . "suffix" "triage-history") }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "vrf.componentName" (dict "context" . "suffix" "triage") }}
+  labels:
+    {{- include "vrf.labels" $component | nindent 4 }}
+spec:
+  selector:
+    {{- include "vrf.selectorLabels" $component | nindent 4 }}
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+{{- if $persistence.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "vrf.componentName" (dict "context" . "suffix" "triage-history") }}
+  annotations:
+    helm.sh/resource-policy: keep
+  labels:
+    {{- include "vrf.labels" $component | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- with $persistence.storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ $persistence.size | quote }}
+{{- end }}

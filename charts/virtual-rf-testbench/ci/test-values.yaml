@@ -1,0 +1,7 @@
+# Values for helm lint and helm template in make chart-lint and the chart tests: the
+# required tags set to a well-formed example, as an environment's values file would.
+images:
+  simulators:
+    tag: 0.1.0-a3f8c12
+  triage:
+    tag: 0.1.0-a3f8c12
